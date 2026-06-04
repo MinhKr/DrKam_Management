@@ -188,14 +188,16 @@ audit_logs
 ## 7. LỘ TRÌNH TRIỂN KHAI
 
 ### Giai đoạn 1 — Nền tảng *(đăng nhập + phân quyền)*
-- [ ] Khởi tạo dự án Next.js + DB.
-- [ ] Đăng nhập & phân quyền Admin/Leader/User.
-- [ ] Quản lý nhân viên & nhóm + **màn hình phân quyền**.
+- [x] Khởi tạo dự án Next.js + nền Supabase (schema + RLS). ✅
+- [~] Đăng nhập & phân quyền Admin/Leader/User — *UI xong; còn nối Supabase Auth thật.*
+- [~] Quản lý nhân viên & nhóm + **màn hình phân quyền** — *UI xong; còn nối CRUD Supabase.*
 
 ### Giai đoạn 2 — Lõi nghiệp vụ *(BẮT ĐẦU DÙNG THẬT)*
-- [ ] Quản lý kênh đa loại hình + cờ chỉ số.
-- [ ] Form nhập thông minh (doanh thu + traffic theo loại kênh, nhiều dòng/ngày).
-- [ ] Khóa chỉnh sửa quá khứ + nhập sẵn danh sách kênh thực tế (mục Phụ lục).
+- [~] Quản lý kênh đa loại hình + cờ chỉ số — *UI xong; còn nối Supabase.*
+- [~] Form nhập thông minh (doanh thu + traffic theo loại kênh, nhiều dòng/ngày) — *UI xong; còn nối Supabase.*
+- [ ] Khóa chỉnh sửa quá khứ + nhập sẵn danh sách kênh thực tế *(seed 18 kênh đã có sẵn).*
+
+> Chú thích: `[x]` xong · `[~]` đang dở (UI có rồi, chờ nối dữ liệu thật) · `[ ]` chưa làm.
 
 ### Giai đoạn 3 — Tích hợp TikTok API + Thống kê
 - [ ] **Nghiên cứu & nối API TikTok Shop Seller** (doanh thu; xét traffic).
@@ -234,4 +236,34 @@ audit_logs
 
 ---
 
-*Bước tiếp theo đề xuất: tôi nghiên cứu khả thi & chi phí nối API TikTok Shop Seller (vì đây là phần rủi ro/chưa chắc nhất), sau đó bổ sung đặc tả màn hình chi tiết + mockup rồi bắt đầu Giai đoạn 1.*
+## 10. TIẾN ĐỘ HIỆN TẠI & ĐIỂM BẮT ĐẦU PHIÊN SAU
+
+> 🔖 **Đọc mục này đầu tiên khi mở lại dự án.** Cập nhật: 04/06/2026.
+
+### 10.1. Kho mã nguồn
+- GitHub: **https://github.com/MinhKr/DrKam_Management.git** — nhánh `main` (đã push lần đầu).
+- Thư mục code chính: `drkam-pharma-dashboard/`. Tài liệu kế hoạch + prompt UI + hướng dẫn nằm ở thư mục gốc.
+
+### 10.2. Đã hoàn thành ✅
+1. **Thống nhất nghiệp vụ & phân quyền** (xem mục 1–9): chỉ số Doanh thu + Traffic theo loại kênh; 3 vai trò Admin/Leader/User; cả team xem chung, sửa của mình.
+2. **Thiết kế UI** bằng Stitch AI (prompt ở `PROMPT-UI-STITCH.md`), code sơ bộ qua Google AI Studio (Vite + React 19 + Tailwind v4) — 8 màn hình: Đăng nhập, Tổng quan, Báo cáo ngày, Quản lý kênh, Nhân sự, Chỉ tiêu KPI, Thống kê, Nhật ký.
+3. **Đã GHÉP sang Next.js 15 (App Router) + TypeScript + Tailwind v4**, giữ nguyên 100% UI. Build & chạy thử OK (`npm run build` ✓, server trả HTTP 200 ✓).
+4. **Dựng nền Supabase đầy đủ:** `lib/supabase/{client,server,types}.ts`, `middleware.ts`, schema + RLS phân quyền (`supabase/migrations/0001_init.sql`), seed 18 kênh thật (`supabase/seed.sql`), `.env.example`.
+
+### 10.3. Trạng thái chạy hiện tại
+- App **chạy được ngay** ở chế độ **dữ liệu tạm trên trình duyệt (localStorage)** để demo giao diện.
+- Supabase đã sẵn sàng nhưng **chưa kết nối dữ liệu thật** (chờ tạo project + dán key). Hướng dẫn: `NEXTJS-SUPABASE-SETUP.md`.
+
+### 10.4. 👉 VIỆC TIẾP THEO (theo thứ tự ưu tiên)
+1. **[Chờ user]** Tạo project Supabase → điền `drkam-pharma-dashboard/.env.local` → chạy 2 file SQL → tạo user Admin đầu tiên (đặt `role='Admin'` trong bảng `profiles`).
+2. **Nối Đăng nhập thật** qua Supabase Auth (thay nút "mô phỏng vai trò" trong `LoginComponent`).
+3. **Nối CRUD từng màn hình vào Supabase** (thay localStorage trong `src/App.tsx`): theo thứ tự `daily_reports` → `channels` → `profiles`(nhân sự) → `targets` → `audit_logs`.
+4. Đồng bộ ẩn/hiện & khóa quyền ở UI cho khớp RLS (cả team xem chung, sửa của mình).
+5. Xuất Excel thật (SheetJS) cho màn Thống kê.
+6. **(Giai đoạn 3)** Nghiên cứu & nối **API TikTok Shop Seller** kéo doanh thu tự động.
+
+### 10.5. Lưu ý kỹ thuật cho phiên sau
+- `src/App.tsx` là shell client, nạp qua `next/dynamic` với `ssr:false` → mọi state/persistence nằm ở đây, là nơi thay localStorage bằng lệnh gọi Supabase.
+- Các component trong `src/components/` **không nên đổi giao diện**; chỉ thay nguồn dữ liệu qua props.
+- Map dữ liệu: kiểu TS trong `src/types.ts` ↔ bảng SQL trong `0001_init.sql` (vd `AffiliateChannel` ↔ `channels`, `DailyReport` ↔ `daily_reports`).
+- Đã có credential GitHub trong máy → `git push` chạy thẳng, không cần đăng nhập lại.
