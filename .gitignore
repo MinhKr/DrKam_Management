@@ -1,0 +1,21 @@
+# Dependencies / build
+node_modules/
+.next/
+out/
+dist/
+build/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Claude local settings
+.claude/
+
+# OS / editor
+.DS_Store
+*.log
+
+# Temp files
+_*.tmp
