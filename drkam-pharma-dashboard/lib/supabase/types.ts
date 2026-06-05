@@ -13,6 +13,7 @@ export interface Database {
         Row: { id: string; name: string; leader_id: string | null; created_at: string };
         Insert: { id?: string; name: string; leader_id?: string | null; created_at?: string };
         Update: Partial<Database['public']['Tables']['teams']['Insert']>;
+        Relationships: [];
       };
       profiles: {
         Row: {
@@ -40,6 +41,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
+        Relationships: [];
       };
       channels: {
         Row: {
@@ -64,6 +66,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['channels']['Insert']>;
+        Relationships: [];
       };
       daily_reports: {
         Row: {
@@ -93,6 +96,7 @@ export interface Database {
           'id' | 'created_at' | 'updated_at'
         > & { id?: string; created_at?: string; updated_at?: string };
         Update: Partial<Database['public']['Tables']['daily_reports']['Insert']>;
+        Relationships: [];
       };
       targets: {
         Row: {
@@ -113,6 +117,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['targets']['Insert']>;
+        Relationships: [];
       };
       audit_logs: {
         Row: {
@@ -129,10 +134,12 @@ export interface Database {
           ts?: string;
         };
         Update: Partial<Database['public']['Tables']['audit_logs']['Insert']>;
+        Relationships: [];
       };
     };
-    Views: Record<string, never>;
-    Functions: Record<string, never>;
-    Enums: Record<string, never>;
+    Views: { [_ in never]: never };
+    Functions: { [_ in never]: never };
+    Enums: { [_ in never]: never };
+    CompositeTypes: { [_ in never]: never };
   };
 }

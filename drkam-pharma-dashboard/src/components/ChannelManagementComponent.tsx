@@ -19,15 +19,24 @@ export default function ChannelManagementComponent({ channels, employees, onAddC
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newBrandCategory, setNewBrandCategory] = useState('Mạng lưới AI');
-  const [newPlatform, setNewPlatform] = useState<'TikTok' | 'Facebook' | 'Shopee' | 'YouTube'>('TikTok');
+  const [newPlatform, setNewPlatform] = useState<'TikTok' | 'Facebook'>('TikTok');
   const [newChannelType, setNewChannelType] = useState<'Brand' | 'Real KOC' | 'AI KOC'>('AI KOC');
   const [newManager, setNewManager] = useState(employees[0]?.name || 'Trần Thị Bích');
+  // ID nguồn doanh thu: TikTok = ID kênh; Facebook = ID affiliate của người sở hữu
+  const [newRefId, setNewRefId] = useState('');
 
   // Triggering the channel creation
   const handleCreateChannel = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) {
       alert('Vui lòng nhập tên kênh.');
+      return;
+    }
+
+    if (!newRefId.trim()) {
+      alert(newPlatform === 'Facebook'
+        ? 'Vui lòng nhập ID affiliate của người sở hữu.'
+        : 'Vui lòng nhập ID kênh.');
       return;
     }
 
@@ -39,7 +48,7 @@ export default function ChannelManagementComponent({ channels, employees, onAddC
       platform: newPlatform,
       channelType: newChannelType,
       linkedShop: true,
-      auditId: "#AUD-" + Math.floor(1000 + Math.random() * 900),
+      auditId: newRefId.trim(),
       managerName: matchedEmp ? matchedEmp.name : newManager,
       managerAvatar: matchedEmp ? matchedEmp.avatar : "https://lh3.googleusercontent.com/aida-public/AB6AXuAvqJKpHKezzQeT0c5p9z5xzRq6_R69ArReHe2aFA6ElOEqKZLiWw2-9K9XRRoKxixAAPSJSue43GQJZu_s6ytWBJ3OCCaFy1Q1sScVv-mriaZAlXUBQqFgThiny60AD-MLPfJnuwZVHRC9NRHVp75Hz1of22zCkPsE_UyBaGaAo228gVorilPln-8EjQEe83LKg90YstOEt1mG7epsMzDUrPYX5pnmZN5jd106Tauu0aNwCfsm65fLd-qyRdMZiRqlbBIVKCl3lGbL",
       status: "Đang nuôi",
@@ -49,6 +58,7 @@ export default function ChannelManagementComponent({ channels, employees, onAddC
     onAddChannel(newChan);
     setIsModalOpen(false);
     setNewName('');
+    setNewRefId('');
     alert(`Đã đăng ký kênh affiliate "${newChan.name}" thành công vào nhóm hệ thống!`);
   };
 
@@ -118,7 +128,6 @@ export default function ChannelManagementComponent({ channels, employees, onAddC
             <option value="Tất cả">Tất cả nền tảng</option>
             <option value="TikTok">TikTok</option>
             <option value="Facebook">Facebook</option>
-            <option value="Shopee">Shopee</option>
           </select>
         </div>
 
@@ -185,7 +194,7 @@ export default function ChannelManagementComponent({ channels, employees, onAddC
                 <th className="py-4 px-4">Nền tảng</th>
                 <th className="py-4 px-4">Phân loại</th>
                 <th className="py-4 px-4 text-center">LK Shop</th>
-                <th className="py-4 px-4">Audit ID</th>
+                <th className="py-4 px-4">ID Kênh / Affiliate</th>
                 <th className="py-4 px-4">Mã phụ trách</th>
                 <th className="py-4 px-4">Trạng thái</th>
                 <th className="py-4 px-4">Đồng bộ tracking</th>
@@ -394,15 +403,13 @@ export default function ChannelManagementComponent({ channels, employees, onAddC
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Nền tảng</label>
-                  <select 
+                  <select
                     className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white outline-none"
                     value={newPlatform}
-                    onChange={(e) => setNewPlatform(e.target.value as any)}
+                    onChange={(e) => setNewPlatform(e.target.value as 'TikTok' | 'Facebook')}
                   >
                     <option value="TikTok">TikTok</option>
                     <option value="Facebook">Facebook</option>
-                    <option value="Shopee">Shopee</option>
-                    <option value="YouTube">YouTube</option>
                   </select>
                 </div>
 
@@ -418,6 +425,31 @@ export default function ChannelManagementComponent({ channels, employees, onAddC
                     <option value="Brand">Brand</option>
                   </select>
                 </div>
+              </div>
+
+              {/* ID nguồn doanh thu — đổi nhãn theo nền tảng */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+                  {newPlatform === 'Facebook' ? 'ID Affiliate của người sở hữu' : 'ID Kênh'}
+                </label>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">
+                    {newPlatform === 'Facebook' ? 'badge' : 'tag'}
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder={newPlatform === 'Facebook' ? 'Nhập ID affiliate của KOC sở hữu...' : 'Nhập ID kênh...'}
+                    className="w-full pl-10 pr-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                    value={newRefId}
+                    onChange={(e) => setNewRefId(e.target.value)}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1 italic">
+                  {newPlatform === 'Facebook'
+                    ? 'Dùng để đối chiếu doanh thu từ Shopee Seller theo ID KOC inhouse.'
+                    : 'Dùng để đối chiếu doanh thu từ TikTok Shop Seller theo ID kênh.'}
+                </p>
               </div>
 
               <div>

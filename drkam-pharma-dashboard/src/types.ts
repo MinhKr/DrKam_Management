@@ -43,6 +43,7 @@ export interface DailyReport {
     avgViewDuration: number; // seconds
     followerIncr: number;
   } | null;
+  note?: string | null; // ghi chú (dùng cho nhập tay doanh thu Shopee...)
 }
 
 export interface Employee {
@@ -73,6 +74,15 @@ export interface AuditLog {
   action: string;
   ipAddress: string;
   module: string;
+}
+
+// Kênh Facebook (fanpage) thuộc một ID Shopee KOC inhouse.
+// Mỗi ID Shopee (1 thành viên) sở hữu nhiều fanpage; thành viên tự thêm để kiểm soát.
+export interface FbPage {
+  id: string;
+  shopeeChannelId: string; // = AffiliateChannel.id của nhóm ID Shopee (KOC inhouse)
+  name: string;            // tên / đường dẫn fanpage
+  addedBy: string;         // tên người thêm
 }
 
 // Initial Mock Data
@@ -136,6 +146,73 @@ export const INITIAL_CHANNELS: AffiliateChannel[] = [
     managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuBZtzB81_LDhqXYgNQBc9szCoLFmYk6xtLLvlscmKuC2OODhWGdW83_t5ejWrxhtG2sMVkh8Qyl580Ze2Q9GtQXFWQBlvFIhkgjM-6ZaPp51wqZjhbmC9KNREnbm444X3OZmAaRp9HgEZ7KjRsvPD1PJWMrUJn9BmhhKIa-2rTS_FBHTAiFLI3TmMdlbyj6kCAfoqbJWTBwHXw6YfwiGs-347AiDeCB6eBxaKOdFVHuDqvQa1qon3P9a1fHqSwQ8hyrXy48itp2bems",
     status: "Đã khóa",
     tracking: { revenueActive: false, trafficActive: false }
+  },
+  // Facebook — KOC inhouse (fanpage, theo dõi doanh thu qua ID Affiliate / nguồn Shopee): chỉ doanh thu
+  {
+    id: "5",
+    name: "conghaing",
+    brandCategory: "KOC AI",
+    platform: "Facebook",
+    channelType: "AI KOC",
+    linkedShop: false,
+    auditId: "conghaing",
+    managerName: "Nguyễn Công Hải",
+    managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuD-SRAnv3abFtWFM3gIMsUq0WlWHZvg-5eYjh9Ld5LM3AWxB4Eo_FQFHblzAV9TBdVcCG-qlVo8RvlbI1OAInNjdyEF8Iw1Scrl4i0O3bo4pYKRC6fT-3xQ4kWxOFOYEVfi_W0VyDlonh-1u89UhcB6np2PCenVdOQck1gHjR3ZaHYf0lvTHL9ND7eDIreyH2wTiZiTVB-y7KDX0uSZGr5PZSgetOisUYcb05-K74b9XqgCiUMtaYojKPMnP9Mx91p3_icBtl3e5iT-",
+    status: "Đang nuôi",
+    tracking: { revenueActive: true, trafficActive: false }
+  },
+  {
+    id: "6",
+    name: "ynni1809",
+    brandCategory: "KOC AI",
+    platform: "Facebook",
+    channelType: "AI KOC",
+    linkedShop: false,
+    auditId: "ynni1809",
+    managerName: "Hoàng Yến Nhi",
+    managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCA92GDkUbWvXrn22ZL-2GncLt7Id8ZSDOUJZqHbkIVe-CAKEETqOY0HWsDcQmZCwGn_pKGKFg-nexGWG2fu_xpawe2Gi3p6aAQ4EeEJpkvIDQrWFcobLYGXAEfmrqy4JWO4V-jRu9cYCYspqKYu83glAtBkmA15CEVA6BLuLzI-fYbochgbj3DXz_hAOPzfSKLb8TBzaZDMgBaM-UAwD7T4sO5CD04JuclO-qyumbM97sJh7nudS6RagQMoEmgD2cVYDjyvDuOvy6k",
+    status: "Đang nuôi",
+    tracking: { revenueActive: true, trafficActive: false }
+  },
+  {
+    id: "7",
+    name: "duocsikhanh",
+    brandCategory: "KOC AI",
+    platform: "Facebook",
+    channelType: "AI KOC",
+    linkedShop: false,
+    auditId: "duocsikhanh",
+    managerName: "Đặng Kim Khánh",
+    managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuAnCR8iG2Qiq6hnSHNzrV-US3P6wj8sGPTpTmQi6csB_DinYBNAA5zGVlgVBBDl3tHZBUGGfHiAqrSnBi3VZZDFKeYGEEzvmm_ZxSzrySVVscjnSD3a_N90_luiH_msP__w2dszfDRUuo-eboxCYCBVCy3h8WT4sC4bRkXXycdW3I9D5rW0d6SaISdgLWPrLB7vXsosGdLtZhm-TwNSiJPEnmztVNsuKRFzls9jiTFhD0N9ZkTITorlZuiPkR94HOJnmuCE6KlXtVIp",
+    status: "Đang nuôi",
+    tracking: { revenueActive: true, trafficActive: false }
+  },
+  // Facebook — Kênh thương hiệu: chỉ traffic (không doanh thu)
+  {
+    id: "8",
+    name: "DrKam - Sống khỏe cùng Chuyên gia",
+    brandCategory: "Kênh thương hiệu",
+    platform: "Facebook",
+    channelType: "Brand",
+    linkedShop: false,
+    auditId: "FB-BRAND-01",
+    managerName: "Trần Thị Bích",
+    managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuD-SRAnv3abFtWFM3gIMsUq0WlWHZvg-5eYjh9Ld5LM3AWxB4Eo_FQFHblzAV9TBdVcCG-qlVo8RvlbI1OAInNjdyEF8Iw1Scrl4i0O3bo4pYKRC6fT-3xQ4kWxOFOYEVfi_W0VyDlonh-1u89UhcB6np2PCenVdOQck1gHjR3ZaHYf0lvTHL9ND7eDIreyH2wTiZiTVB-y7KDX0uSZGr5PZSgetOisUYcb05-K74b9XqgCiUMtaYojKPMnP9Mx91p3_icBtl3e5iT-",
+    status: "Đang nuôi",
+    tracking: { revenueActive: false, trafficActive: true }
+  },
+  {
+    id: "9",
+    name: "DrKam - Bác sĩ Răng Miệng Họng của mọi gia đình",
+    brandCategory: "Kênh thương hiệu",
+    platform: "Facebook",
+    channelType: "Brand",
+    linkedShop: false,
+    auditId: "FB-BRAND-02",
+    managerName: "Nguyễn Văn An",
+    managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuAwxcNk3h_dSy-QxPJwh7IZAx4IPd69V4i_4FlgAIlvGpHoE4f-UZIj64GPyBokv3MGwEUuU4DVvOS81ZV1ab3ZbJuSzeY9ZAUh68pyIlXV1GQlhMqsnDe9GgkijJuB1d63sf4q171JOYdQiXM5rFRPd6Hcd38tUF2isSe2BxoOEf3mcf7uun3rlRhQQb-klabcjUgssUIDmF8PD7MnjvbOichafwaOsnBSNFY1RMIRVMTjWYedKiTdu5PPWrflyzqwB9hfglsHmTZ7",
+    status: "Đang nuôi",
+    tracking: { revenueActive: false, trafficActive: true }
   }
 ];
 
@@ -172,7 +249,25 @@ export const INITIAL_REPORTS: DailyReport[] = [
     source: "Nhân viên",
     isEditable: false,
     traffic: null
-  }
+  },
+  // Doanh thu Shopee mẫu cho Facebook KOC inhouse (gộp theo ID)
+  { id: "rfb1", date: "03/06/2026", channelName: "conghaing",   channelType: "Facebook - KOC", revenue: 4200000, views: null, interactions: null, source: "Nhân viên", isEditable: true,  traffic: null, note: "12 đơn" },
+  { id: "rfb2", date: "04/06/2026", channelName: "conghaing",   channelType: "Facebook - KOC", revenue: 5100000, views: null, interactions: null, source: "Nhân viên", isEditable: true,  traffic: null, note: "" },
+  { id: "rfb3", date: "03/06/2026", channelName: "ynni1809",    channelType: "Facebook - KOC", revenue: 2750000, views: null, interactions: null, source: "Nhân viên", isEditable: true,  traffic: null, note: "" },
+  { id: "rfb4", date: "04/06/2026", channelName: "ynni1809",    channelType: "Facebook - KOC", revenue: 3300000, views: null, interactions: null, source: "Nhân viên", isEditable: true,  traffic: null, note: "Chạy quà tặng" },
+  { id: "rfb5", date: "04/06/2026", channelName: "duocsikhanh", channelType: "Facebook - KOC", revenue: 6800000, views: null, interactions: null, source: "Nhân viên", isEditable: true,  traffic: null, note: "" },
+  // Thêm nhiều ngày để xem cuộn (ynni1809 — nhóm của tài khoản demo Nhân viên)
+  { id: "rfb6",  date: "05/06/2026", channelName: "ynni1809",    channelType: "Facebook - KOC", revenue: 3800000, views: null, interactions: null, source: "Nhân viên", isEditable: true, traffic: null, note: "" },
+  { id: "rfb7",  date: "02/06/2026", channelName: "ynni1809",    channelType: "Facebook - KOC", revenue: 2400000, views: null, interactions: null, source: "Nhân viên", isEditable: true, traffic: null, note: "" },
+  { id: "rfb8",  date: "01/06/2026", channelName: "ynni1809",    channelType: "Facebook - KOC", revenue: 1950000, views: null, interactions: null, source: "Nhân viên", isEditable: true, traffic: null, note: "" },
+  { id: "rfb9",  date: "31/05/2026", channelName: "ynni1809",    channelType: "Facebook - KOC", revenue: 2100000, views: null, interactions: null, source: "Nhân viên", isEditable: true, traffic: null, note: "" },
+  { id: "rfb10", date: "30/05/2026", channelName: "ynni1809",    channelType: "Facebook - KOC", revenue: 1700000, views: null, interactions: null, source: "Nhân viên", isEditable: true, traffic: null, note: "" },
+  { id: "rfb11", date: "05/06/2026", channelName: "conghaing",   channelType: "Facebook - KOC", revenue: 4600000, views: null, interactions: null, source: "Nhân viên", isEditable: true, traffic: null, note: "" },
+  { id: "rfb12", date: "02/06/2026", channelName: "conghaing",   channelType: "Facebook - KOC", revenue: 3900000, views: null, interactions: null, source: "Nhân viên", isEditable: true, traffic: null, note: "" },
+  { id: "rfb13", date: "01/06/2026", channelName: "conghaing",   channelType: "Facebook - KOC", revenue: 3100000, views: null, interactions: null, source: "Nhân viên", isEditable: true, traffic: null, note: "" },
+  { id: "rfb14", date: "05/06/2026", channelName: "duocsikhanh", channelType: "Facebook - KOC", revenue: 5200000, views: null, interactions: null, source: "Nhân viên", isEditable: true, traffic: null, note: "" },
+  { id: "rfb15", date: "03/06/2026", channelName: "duocsikhanh", channelType: "Facebook - KOC", revenue: 4800000, views: null, interactions: null, source: "Nhân viên", isEditable: true, traffic: null, note: "" },
+  { id: "rfb16", date: "02/06/2026", channelName: "duocsikhanh", channelType: "Facebook - KOC", revenue: 3500000, views: null, interactions: null, source: "Nhân viên", isEditable: true, traffic: null, note: "" }
 ];
 
 export const INITIAL_EMPLOYEES: Employee[] = [
@@ -282,4 +377,19 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
     ipAddress: "192.168.1.45",
     module: "Hệ thống"
   }
+];
+
+// Fanpage Facebook mẫu, gắn theo ID Shopee KOC inhouse (shopeeChannelId = AffiliateChannel.id)
+export const INITIAL_FB_PAGES: FbPage[] = [
+  // conghaing (id 5) — Nguyễn Công Hải
+  { id: "fp1", shopeeChannelId: "5", name: "DrKam Sức Khỏe Mỗi Ngày", addedBy: "Nguyễn Công Hải" },
+  { id: "fp2", shopeeChannelId: "5", name: "Mẹo Vặt Răng Miệng", addedBy: "Nguyễn Công Hải" },
+  { id: "fp3", shopeeChannelId: "5", name: "Cẩm Nang Nha Khoa DrKam", addedBy: "Nguyễn Công Hải" },
+  // ynni1809 (id 6) — Hoàng Yến Nhi
+  { id: "fp4", shopeeChannelId: "6", name: "Góc Làm Đẹp Ynni", addedBy: "Hoàng Yến Nhi" },
+  { id: "fp5", shopeeChannelId: "6", name: "Ynni Beauty & Health", addedBy: "Hoàng Yến Nhi" },
+  // duocsikhanh (id 7) — Đặng Kim Khánh
+  { id: "fp6", shopeeChannelId: "7", name: "Dược Sĩ Khánh Tư Vấn", addedBy: "Đặng Kim Khánh" },
+  { id: "fp7", shopeeChannelId: "7", name: "Khỏe Đẹp Cùng Khánh", addedBy: "Đặng Kim Khánh" },
+  { id: "fp8", shopeeChannelId: "7", name: "Sống Khỏe 360", addedBy: "Đặng Kim Khánh" }
 ];

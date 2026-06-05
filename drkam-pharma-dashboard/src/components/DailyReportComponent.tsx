@@ -27,6 +27,9 @@ export default function DailyReportComponent({ reports, channels, session, onAdd
 
   const [notification, setNotification] = useState('');
 
+  // Ẩn/hiện form thêm báo cáo (mặc định ẩn, chỉ hiện khi bấm "Thêm báo cáo mới")
+  const [showForm, setShowForm] = useState(false);
+
   // Auto-deduce channel type based on list
   const currentChannel = channels.find(c => c.name === selectedChannel);
   const isBrand = currentChannel ? currentChannel.channelType === 'Brand' : true;
@@ -78,6 +81,7 @@ export default function DailyReportComponent({ reports, channels, session, onAdd
     setAvgDuration('');
     setFollowers('');
 
+    setShowForm(false);
     setNotification('Đã thêm báo cáo mới thành công vào hệ thống!');
     setTimeout(() => setNotification(''), 4000);
   };
@@ -97,7 +101,31 @@ export default function DailyReportComponent({ reports, channels, session, onAdd
         </div>
       )}
 
-      {/* SECTION 1: Adding new daily reports */}
+      {/* Thanh tiêu đề + nút mở form thêm báo cáo */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 font-display flex items-center gap-2">
+            <span className="material-symbols-outlined text-[#D32027] text-2xl">edit_note</span>
+            <span>Báo cáo hằng ngày</span>
+          </h1>
+          <p className="text-xs text-slate-400 mt-1">Nhập số liệu doanh thu &amp; traffic theo từng kênh, từng ngày.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowForm(s => !s)}
+          className={`flex items-center gap-2 px-5 py-2.5 font-bold text-xs rounded-xl shadow-soft transition-colors cursor-pointer ${
+            showForm
+              ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              : 'bg-[#D32027] hover:bg-[#B70F1B] active:bg-red-800 text-white'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[18px]">{showForm ? 'close' : 'add_circle'}</span>
+          <span>{showForm ? 'Đóng form' : 'Thêm báo cáo mới'}</span>
+        </button>
+      </div>
+
+      {/* SECTION 1: Adding new daily reports — chỉ hiện khi bấm "Thêm báo cáo mới" */}
+      {showForm && (
       <section className="bg-white rounded-2xl p-6 lg:p-8 border border-slate-200/60 soft-shadow">
         <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2 font-display">
           <span className="material-symbols-outlined text-[#D32027] text-2xl font-bold">add_circle</span>
@@ -282,8 +310,15 @@ export default function DailyReportComponent({ reports, channels, session, onAdd
               * Kênh KOC chỉ cần nhập Doanh thu. Kênh thương hiệu nhập thêm các chỉ số phễu traffic cụ thể.
             </p>
             <div className="flex gap-3 justify-end w-full sm:w-auto">
-              <button 
-                type="button" 
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="px-5 py-2.5 border border-slate-200 text-slate-600 font-semibold text-xs rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setRevenueStr('18.500.000');
                   setViews('65000');
@@ -294,8 +329,8 @@ export default function DailyReportComponent({ reports, channels, session, onAdd
               >
                 Nhập mẫu giả định
               </button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="px-6 py-2.5 bg-[#D32027] hover:bg-[#B70F1B] active:bg-red-800 text-white font-bold text-xs rounded-xl shadow-soft transition-colors cursor-pointer"
               >
                 Lưu báo cáo
@@ -304,6 +339,7 @@ export default function DailyReportComponent({ reports, channels, session, onAdd
           </div>
         </form>
       </section>
+      )}
 
       {/* SECTION 2: Filter and log tables of reports */}
       <section className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">

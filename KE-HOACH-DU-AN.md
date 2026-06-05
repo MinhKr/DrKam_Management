@@ -256,11 +256,21 @@ audit_logs
 
 ### 10.4. 👉 VIỆC TIẾP THEO (theo thứ tự ưu tiên)
 1. **[Chờ user]** Tạo project Supabase → điền `drkam-pharma-dashboard/.env.local` → chạy 2 file SQL → tạo user Admin đầu tiên (đặt `role='Admin'` trong bảng `profiles`).
-2. **Nối Đăng nhập thật** qua Supabase Auth (thay nút "mô phỏng vai trò" trong `LoginComponent`).
-3. **Nối CRUD từng màn hình vào Supabase** (thay localStorage trong `src/App.tsx`): theo thứ tự `daily_reports` → `channels` → `profiles`(nhân sự) → `targets` → `audit_logs`.
-4. Đồng bộ ẩn/hiện & khóa quyền ở UI cho khớp RLS (cả team xem chung, sửa của mình).
-5. Xuất Excel thật (SheetJS) cho màn Thống kê.
-6. **(Giai đoạn 3)** Nghiên cứu & nối **API TikTok Shop Seller** kéo doanh thu tự động.
+2. ✅ **(05/06/2026) ĐÃ NỐI CODE** Đăng nhập thật + CRUD Supabase cho `daily_reports`, `channels`, `profiles`, `targets`, `audit_logs` — build sạch, tự fallback localStorage khi chưa có key. Lớp dữ liệu: `src/data/{mappers,repositories,auth}.ts`. **Cần test end-to-end khi có Supabase thật.**
+3. Dọn màn **TikTok** về cấu trúc tương tự Facebook (KOC / thương hiệu).
+4. **Nối DB thật cho fbPages + FB KOC** (hiện fbPages chỉ localStorage); làm màn **Admin tạo tài khoản & gắn ID Shopee** cho nhân viên.
+5. Thêm mới **nhân sự** ở chế độ DB (cần Supabase Auth Admin/service role).
+6. Xuất Excel thật (SheetJS) cho màn Thống kê.
+7. **(Giai đoạn 3)** Nghiên cứu & nối **API TikTok Shop Seller** kéo doanh thu tự động.
+
+### 10.4b. ✅ ĐÃ LÀM TRONG PHIÊN 05/06/2026 (UI module báo cáo, demo localStorage)
+- **Tách sidebar TikTok / Facebook** riêng. Form báo cáo TikTok ẩn mặc định (bấm mới hiện). Form Thêm kênh: chỉ TikTok/Facebook + ô ID động (FB="ID Affiliate", TikTok="ID kênh").
+- **Màn Facebook 2 tab con:** KOC inhouse (chỉ doanh thu) & Kênh thương hiệu (8 chỉ số traffic).
+- **FB KOC inhouse chia theo ID Shopee** (mỗi ID = 1 thành viên): bảng thống kê chung cả team + chi tiết từng ID (danh sách fanpage FB do thành viên tự thêm + nhập doanh thu gộp theo ID). Quyền: chỉ sửa nhóm của mình, xem được cả team. Doanh thu sắp xếp mới→cũ, cuộn, có **bộ lọc theo ngày**. Nhóm của mình đẩy lên đầu.
+- 3 ID thật: `conghaing` (Nguyễn Công Hải), `ynni1809` (Hoàng Yến Nhi), `duocsikhanh` (Đặng Kim Khánh).
+- Thêm `ConfirmDialog` (hộp thoại xác nhận giữa màn hình), cơ chế `SEED_VERSION` tự nạp lại dữ liệu mẫu.
+
+> ⚙️ **Kỹ thuật:** đã nâng `@supabase/ssr` 0.5.2 → 0.10.3 cho khớp `supabase-js` 2.107 (bản cũ làm kiểu Insert thành `never`). Đã thêm bộ skill/agent ECC vào `.claude/`. **Lưu ý:** đừng `npm run build` khi đang `npm run dev` (xung đột `.next`) — dùng `npx tsc --noEmit` để kiểm tra kiểu.
 
 ### 10.5. Lưu ý kỹ thuật cho phiên sau
 - `src/App.tsx` là shell client, nạp qua `next/dynamic` với `ssr:false` → mọi state/persistence nằm ở đây, là nơi thay localStorage bằng lệnh gọi Supabase.

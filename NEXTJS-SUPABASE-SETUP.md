@@ -52,15 +52,22 @@
 
 ## 3. Việc còn lại (bước kế tiếp, cần làm sau khi có Supabase)
 
-Hiện màn hình **vẫn đọc/ghi vào localStorage** (để demo chạy ngay). Bước tiếp theo là **nối từng màn hình vào Supabase**:
+**ĐÃ NỐI CODE (05/06/2026)** — lớp truy cập dữ liệu + xác thực Supabase đã viết xong và **build TypeScript sạch**. App tự nhận biết: **chưa có `.env.local` → chạy y hệt demo localStorage**; **có key → tự chuyển sang DB thật**. Cụ thể:
 
-- [ ] Đăng nhập thật qua Supabase Auth (thay nút "mô phỏng vai trò").
-- [ ] `daily_reports`: đọc/thêm/sửa/xóa qua Supabase (thay localStorage).
-- [ ] `channels`, `profiles` (nhân viên), `targets`, `audit_logs`: nối CRUD.
-- [ ] Khóa quyền theo vai trò ở phía giao diện đồng bộ với RLS.
+- [x] **Đăng nhập thật** qua Supabase Auth (`src/data/auth.ts`) — `LoginComponent` ẩn ô "mô phỏng vai trò" khi có key, đăng nhập email/mật khẩu thật, chặn tài khoản `Đã khóa`.
+- [x] **`daily_reports`**: thêm/xóa qua Supabase (`created_by` = user hiện tại để khớp RLS).
+- [x] **`channels`**: thêm/xóa qua Supabase.
+- [x] **`profiles` (nhân sự)**: khóa/mở/xóa qua Supabase. *(Thêm mới nhân sự cần tạo tài khoản qua Auth Admin — để bước sau.)*
+- [x] **`targets` (KPI)**: thêm/cập nhật qua Supabase.
+- [x] **`audit_logs`**: ghi nhật ký vào Supabase mỗi thao tác; chỉ Admin xem (RLS).
+- [ ] Khóa ẩn/hiện theo vai trò ở phía giao diện cho khớp tuyệt đối với RLS (hiện đã chặn tab theo vai trò; cần rà soát nút Sửa/Xóa theo chủ sở hữu).
+- [ ] Thêm mới **nhân sự** ở chế độ DB (cần Supabase Auth Admin / service role — không làm từ trình duyệt).
+- [ ] Xuất Excel thật (SheetJS) cho màn Thống kê.
 - [ ] (Giai đoạn sau) Nối **API TikTok Shop Seller** kéo doanh thu tự động.
 
-> Phần này cần kết nối Supabase thật để test chính xác. Khi bạn đã tạo project và dán key, báo mình — mình sẽ nối dữ liệu thật cho từng màn hình.
+> **Lưu ý kỹ thuật:** đã nâng `@supabase/ssr` 0.5.2 → 0.10.3 để tương thích `@supabase/supabase-js` 2.107 (bản cũ truyền sai vị trí generic làm kiểu Insert thành `never`). Lớp dữ liệu nằm ở `src/data/{mappers,repositories,auth}.ts`.
+>
+> Phần DB thật cần kết nối Supabase để test chạy. Khi bạn đã tạo project + dán key vào `.env.local`, báo mình — mình sẽ chạy thử end-to-end và tinh chỉnh.
 
 ---
 

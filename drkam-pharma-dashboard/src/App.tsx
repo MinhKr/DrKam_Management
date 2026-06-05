@@ -8,33 +8,67 @@ import {
   INITIAL_EMPLOYEES,
   INITIAL_TARGETS,
   INITIAL_AUDIT_LOGS,
+  INITIAL_FB_PAGES,
   UserSession,
   AffiliateChannel,
   DailyReport,
   Employee,
   TeamTarget,
-  AuditLog
+  AuditLog,
+  FbPage
 } from './types';
 
 import LoginComponent from './components/LoginComponent';
 import DashboardComponent from './components/DashboardComponent';
 import DailyReportComponent from './components/DailyReportComponent';
+import FacebookReportComponent from './components/FacebookReportComponent';
 import ChannelManagementComponent from './components/ChannelManagementComponent';
 import EmployeeManagementComponent from './components/EmployeeManagementComponent';
 import TargetKPIComponent from './components/TargetKPIComponent';
 import DetailedStatisticsComponent from './components/DetailedStatisticsComponent';
 import AuditLogsComponent from './components/AuditLogsComponent';
 
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+import * as repo from './data/repositories';
+import { getCurrentSession, getCurrentUserId, signOut } from './data/auth';
+
+// Phiên bản dữ liệu mẫu (demo). Tăng giá trị này mỗi khi đổi dữ liệu INITIAL_* để
+// tự nạp lại trên trình duyệt cũ (xóa localStorage demo cũ), không cần xóa cache thủ công.
+const SEED_VERSION = '2026-06-05-fb-koc-5';
+let demoMigrated = false;
+function migrateDemoData() {
+  if (typeof window === 'undefined') return;
+  try {
+    if (localStorage.getItem('drkam_seed_version') !== SEED_VERSION) {
+      ['drkam_session', 'drkam_channels', 'drkam_reports', 'drkam_employees', 'drkam_targets', 'drkam_logs', 'drkam_fb_pages']
+        .forEach((k) => localStorage.removeItem(k));
+      localStorage.setItem('drkam_seed_version', SEED_VERSION);
+    }
+  } catch {
+    /* bỏ qua */
+  }
+}
+
 export default function App() {
+  // Bật chế độ DB thật khi đã cấu hình .env.local; ngược lại chạy demo localStorage.
+  const cloud = isSupabaseConfigured;
+  // Nạp lại dữ liệu mẫu nếu phiên bản seed thay đổi (chạy 1 lần, trước khi đọc localStorage).
+  if (!demoMigrated) {
+    demoMigrated = true;
+    migrateDemoData();
+  }
   // ----------------------------------------------------
   // Persistent State Handlers (Sync with LocalStorage)
   // ----------------------------------------------------
   const [session, setSession] = useState<UserSession>(() => {
+    // Chế độ DB thật: luôn bắt đầu ở trạng thái chưa đăng nhập, chờ xác thực Supabase.
+    if (cloud) return { ...INITIAL_SESSION, isLoggedIn: false };
+    // Chế độ demo: bắt đầu ở màn đăng nhập; nếu đã đăng nhập trước đó thì khôi phục từ localStorage.
     try {
       const stored = localStorage.getItem('drkam_session');
-      return stored ? JSON.parse(stored) : INITIAL_SESSION;
+      return stored ? JSON.parse(stored) : { ...INITIAL_SESSION, isLoggedIn: false };
     } catch {
-      return INITIAL_SESSION;
+      return { ...INITIAL_SESSION, isLoggedIn: false };
     }
   });
 
@@ -83,42 +117,122 @@ export default function App() {
     }
   });
 
+  // Fanpage Facebook theo ID Shopee KOC inhouse.
+  // (Tạm lưu localStorage; mô hình DB cho phần này sẽ bổ sung cùng bước Admin gắn ID — để sau.)
+  const [fbPages, setFbPages] = useState<FbPage[]>(() => {
+    try {
+      const stored = localStorage.getItem('drkam_fb_pages');
+      return stored ? JSON.parse(stored) : INITIAL_FB_PAGES;
+    } catch {
+      return INITIAL_FB_PAGES;
+    }
+  });
+
   // Active view tab state ("overview", "daily-report", "channels", "employees", "chi-tieu", "stats", "logs")
   const [activeTab, setActiveTab] = useState('overview');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(3);
   const [showNotificationPopup, setShowNotificationPopup] = useState(false);
 
-  // Sync to localStorage
+  // ID user Supabase đang đăng nhập (dùng cho created_by khi ghi dữ liệu).
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Sync to localStorage — chỉ ở chế độ demo (không nối Supabase).
   useEffect(() => {
+    if (cloud) return;
     localStorage.setItem('drkam_session', JSON.stringify(session));
-  }, [session]);
+  }, [session, cloud]);
 
   useEffect(() => {
+    if (cloud) return;
     localStorage.setItem('drkam_channels', JSON.stringify(channels));
-  }, [channels]);
+  }, [channels, cloud]);
 
   useEffect(() => {
+    if (cloud) return;
     localStorage.setItem('drkam_reports', JSON.stringify(reports));
-  }, [reports]);
+  }, [reports, cloud]);
 
   useEffect(() => {
+    if (cloud) return;
     localStorage.setItem('drkam_employees', JSON.stringify(employees));
-  }, [employees]);
+  }, [employees, cloud]);
 
   useEffect(() => {
+    if (cloud) return;
     localStorage.setItem('drkam_targets', JSON.stringify(targets));
-  }, [targets]);
+  }, [targets, cloud]);
 
   useEffect(() => {
+    if (cloud) return;
     localStorage.setItem('drkam_logs', JSON.stringify(logs));
-  }, [logs]);
+  }, [logs, cloud]);
+
+  // fbPages: luôn lưu localStorage (chưa có bảng DB cho phần này).
+  useEffect(() => {
+    localStorage.setItem('drkam_fb_pages', JSON.stringify(fbPages));
+  }, [fbPages]);
+
+  // Chế độ DB thật: khôi phục phiên đăng nhập + nạp toàn bộ dữ liệu khi mở app.
+  useEffect(() => {
+    if (!cloud) return;
+    let active = true;
+    (async () => {
+      try {
+        const restored = await getCurrentSession();
+        if (active && restored) setSession(restored);
+        else if (active) setSession({ ...INITIAL_SESSION, isLoggedIn: false });
+        setCurrentUserId(await getCurrentUserId());
+      } catch {
+        if (active) setSession({ ...INITIAL_SESSION, isLoggedIn: false });
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [cloud]);
+
+  // Tải dữ liệu từ Supabase mỗi khi đăng nhập thành công (chế độ cloud).
+  useEffect(() => {
+    if (!cloud || !session.isLoggedIn) return;
+    let active = true;
+    (async () => {
+      try {
+        // Đảm bảo có ID người dùng (dùng cho created_by khi ghi dữ liệu).
+        const uid = await getCurrentUserId();
+        if (active) setCurrentUserId(uid);
+        const [ch, rp, emp, tg] = await Promise.all([
+          repo.loadChannels(),
+          repo.loadReports(),
+          repo.loadEmployees(),
+          repo.loadTargets(),
+        ]);
+        if (!active) return;
+        setChannels(ch);
+        setReports(rp);
+        setEmployees(emp);
+        setTargets(tg);
+        // Nhật ký chỉ Admin xem được (RLS) — bỏ qua lỗi với vai trò khác.
+        try {
+          const lg = await repo.loadLogs();
+          if (active) setLogs(lg);
+        } catch {
+          if (active) setLogs([]);
+        }
+      } catch (err) {
+        console.error('Tải dữ liệu Supabase thất bại:', err);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [cloud, session.isLoggedIn]);
 
   // Handle Logout
-  const handleLogout = () => {
-    const updatedSession = { ...session, isLoggedIn: false };
-    setSession(updatedSession);
+  const handleLogout = async () => {
     addAuditLog('Bảo mật', `Nhân sự ${session.name} đăng xuất khỏi hệ thống.`);
+    if (cloud) await signOut();
+    setSession({ ...session, isLoggedIn: false });
   };
 
   // Login Success
@@ -129,12 +243,18 @@ export default function App() {
 
   // Helper helper to write audit logs cleanly
   const addAuditLog = (module: string, action: string) => {
+    const operator = session ? session.name : 'Unknown User';
+    // Chế độ DB thật: ghi nhật ký vào Supabase (RLS cho phép mọi user INSERT).
+    if (cloud) {
+      void repo.insertLog({ operator, operatorId: currentUserId, action, module });
+      return;
+    }
     const now = new Date();
     const formattedTimestamp = now.toISOString().replace('T', ' ').substring(0, 19);
     const newLog: AuditLog = {
       id: "lg_" + Date.now() + "_" + Math.floor(Math.random() * 100),
       timestamp: formattedTimestamp,
-      operator: session ? session.name : 'Unknown User',
+      operator,
       action,
       ipAddress: '192.168.1.' + Math.floor(10 + Math.random() * 90),
       module
@@ -146,14 +266,36 @@ export default function App() {
   // Action handlers passed to child components
   // ----------------------------------------------------
 
+  // Thông báo lỗi gọn
+  const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
   // Reports
-  const handleAddReport = (newRep: DailyReport) => {
+  const handleAddReport = async (newRep: DailyReport) => {
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        const saved = await repo.createReport(newRep, currentUserId);
+        setReports(prev => [saved, ...prev]);
+        addAuditLog('Báo cáo', `Đã thêm báo cáo ngày ${saved.date} cho kênh "${saved.channelName}" (Doanh thu: ${saved.revenue.toLocaleString('vi-VN')} đ)`);
+      } catch (e) {
+        alert('Lưu báo cáo thất bại: ' + errMsg(e));
+      }
+      return;
+    }
     setReports(prev => [newRep, ...prev]);
     addAuditLog('Báo cáo', `Đã thêm báo cáo ngày ${newRep.date} cho kênh "${newRep.channelName}" (Doanh thu: ${newRep.revenue.toLocaleString('vi-VN')} đ)`);
   };
 
-  const handleDeleteReport = (id: string) => {
+  const handleDeleteReport = async (id: string) => {
     const target = reports.find(r => r.id === id);
+    if (cloud) {
+      try {
+        await repo.deleteReport(id);
+      } catch (e) {
+        alert('Xóa báo cáo thất bại: ' + errMsg(e));
+        return;
+      }
+    }
     setReports(prev => prev.filter(r => r.id !== id));
     if (target) {
       addAuditLog('Báo cáo', `Đã xóa báo cáo ngày ${target.date} của kênh "${target.channelName}"`);
@@ -161,7 +303,17 @@ export default function App() {
   };
 
   // Channels
-  const handleAddChannel = (newChan: AffiliateChannel) => {
+  const handleAddChannel = async (newChan: AffiliateChannel) => {
+    if (cloud) {
+      try {
+        const saved = await repo.createChannel(newChan);
+        setChannels(prev => [saved, ...prev]);
+        addAuditLog('Hệ thống', `Đăng ký kênh affiliate mới: "${saved.name}" phân loại [${saved.channelType}] do ${saved.managerName} phụ trách.`);
+      } catch (e) {
+        alert('Tạo kênh thất bại: ' + errMsg(e));
+      }
+      return;
+    }
     setChannels(prev => [newChan, ...prev]);
     // update manager's channelCount
     setEmployees(prev => prev.map(emp => {
@@ -173,8 +325,19 @@ export default function App() {
     addAuditLog('Hệ thống', `Đăng ký kênh affiliate mới: "${newChan.name}" phân loại [${newChan.channelType}] do ${newChan.managerName} phụ trách.`);
   };
 
-  const handleDeleteChannel = (id: string) => {
+  const handleDeleteChannel = async (id: string) => {
     const target = channels.find(c => c.id === id);
+    if (cloud) {
+      try {
+        await repo.deleteChannel(id);
+      } catch (e) {
+        alert('Xóa kênh thất bại: ' + errMsg(e));
+        return;
+      }
+      setChannels(prev => prev.filter(c => c.id !== id));
+      if (target) addAuditLog('Hệ thống', `Hủy liên kết kênh affiliate: "${target.name}" khỏi hệ thống DrKam.`);
+      return;
+    }
     setChannels(prev => prev.filter(c => c.id !== id));
     if (target) {
       setEmployees(prev => prev.map(emp => {
@@ -189,23 +352,42 @@ export default function App() {
 
   // Employees
   const handleAddEmployee = (newEmp: Employee) => {
+    if (cloud) {
+      // Tạo nhân sự mới cần tạo tài khoản qua Supabase Auth (quyền admin/service role),
+      // không thực hiện trực tiếp từ trình duyệt — sẽ bổ sung ở bước sau.
+      alert('Thêm nhân sự ở chế độ DB thật cần tạo tài khoản qua Supabase Auth (Admin). Tính năng này sẽ được bổ sung sau.');
+      return;
+    }
     setEmployees(prev => [...prev, newEmp]);
     addAuditLog('Bảo mật', `Đã tuyển dụng/phân quyền tài khoản mới cho: "${newEmp.name}" (${newEmp.role})`);
   };
 
-  const handleToggleEmployeeStatus = (empId: string) => {
-    setEmployees(prev => prev.map(emp => {
-      if (emp.id === empId) {
-        const nextStatus = emp.status === 'Hoạt động' ? 'Đã khóa' : 'Hoạt động';
-        addAuditLog('Bảo mật', `Cập nhật trạng thái nhân viên "${emp.name}" chuyển sang: ${nextStatus}.`);
-        return { ...emp, status: nextStatus };
+  const handleToggleEmployeeStatus = async (empId: string) => {
+    const emp = employees.find(e => e.id === empId);
+    if (!emp) return;
+    const nextStatus = emp.status === 'Hoạt động' ? 'Đã khóa' : 'Hoạt động';
+    if (cloud) {
+      try {
+        await repo.setEmployeeStatus(empId, nextStatus);
+      } catch (e) {
+        alert('Cập nhật trạng thái thất bại: ' + errMsg(e));
+        return;
       }
-      return emp;
-    }));
+    }
+    setEmployees(prev => prev.map(x => (x.id === empId ? { ...x, status: nextStatus } : x)));
+    addAuditLog('Bảo mật', `Cập nhật trạng thái nhân viên "${emp.name}" chuyển sang: ${nextStatus}.`);
   };
 
-  const handleDeleteEmployee = (empId: string) => {
+  const handleDeleteEmployee = async (empId: string) => {
     const target = employees.find(e => e.id === empId);
+    if (cloud) {
+      try {
+        await repo.deleteEmployee(empId);
+      } catch (e) {
+        alert('Xóa nhân sự thất bại: ' + errMsg(e));
+        return;
+      }
+    }
     setEmployees(prev => prev.filter(e => e.id !== empId));
     if (target) {
       addAuditLog('Bảo mật', `Xóa vĩnh viễn quyền truy cập tài khoản của: "${target.name}".`);
@@ -213,25 +395,59 @@ export default function App() {
   };
 
   // KPI Targets
-  const handleUpdateTarget = (id: string, newTarget: number, newAchieved: number) => {
-    setTargets(prev => prev.map(t => {
-      if (t.id === id) {
-        addAuditLog('Chỉ tiêu', `Cập nhật KPI ${t.employeeName}: Chỉ tiêu mới: ${newTarget.toLocaleString('vi-VN')} đ, Đạt được: ${newAchieved.toLocaleString('vi-VN')} đ`);
-        return { ...t, targetRevenue: newTarget, achievedRevenue: newAchieved };
+  const handleUpdateTarget = async (id: string, newTarget: number, newAchieved: number) => {
+    const t = targets.find(x => x.id === id);
+    if (cloud) {
+      try {
+        await repo.updateTarget(id, newTarget, newAchieved);
+      } catch (e) {
+        alert('Cập nhật KPI thất bại: ' + errMsg(e));
+        return;
       }
-      return t;
-    }));
+    }
+    setTargets(prev => prev.map(x => (x.id === id ? { ...x, targetRevenue: newTarget, achievedRevenue: newAchieved } : x)));
+    if (t) addAuditLog('Chỉ tiêu', `Cập nhật KPI ${t.employeeName}: Chỉ tiêu mới: ${newTarget.toLocaleString('vi-VN')} đ, Đạt được: ${newAchieved.toLocaleString('vi-VN')} đ`);
   };
 
-  const handleAddTarget = (newTarget: TeamTarget) => {
+  const handleAddTarget = async (newTarget: TeamTarget) => {
+    if (cloud) {
+      try {
+        const saved = await repo.createTarget(newTarget, currentUserId);
+        setTargets(prev => [...prev, saved]);
+        addAuditLog('Chỉ tiêu', `Thiết lập KPI mục tiêu mới cho ${saved.employeeName} nhóm ${saved.department}: ${saved.targetRevenue.toLocaleString('vi-VN')} đ`);
+      } catch (e) {
+        alert('Tạo KPI thất bại: ' + errMsg(e));
+      }
+      return;
+    }
     setTargets(prev => [...prev, newTarget]);
     addAuditLog('Chỉ tiêu', `Thiết lập KPI mục tiêu mới cho ${newTarget.employeeName} nhóm ${newTarget.department}: ${newTarget.targetRevenue.toLocaleString('vi-VN')} đ`);
   };
 
   // Clear log history
-  const handleClearLogs = () => {
+  const handleClearLogs = async () => {
+    if (cloud) {
+      try {
+        await repo.clearLogs();
+      } catch (e) {
+        alert('Xóa nhật ký thất bại: ' + errMsg(e));
+        return;
+      }
+    }
     setLogs([]);
     addAuditLog('Bảo mật', 'Người vận hành xóa sạch nhật ký dấu vết rà soát hệ thống.');
+  };
+
+  // Fanpage Facebook (theo ID Shopee KOC inhouse)
+  const handleAddFbPage = (page: FbPage) => {
+    setFbPages(prev => [...prev, page]);
+    addAuditLog('Hệ thống', `Thêm fanpage Facebook "${page.name}" vào nhóm ID Shopee.`);
+  };
+
+  const handleDeleteFbPage = (id: string) => {
+    const target = fbPages.find(p => p.id === id);
+    setFbPages(prev => prev.filter(p => p.id !== id));
+    if (target) addAuditLog('Hệ thống', `Gỡ fanpage Facebook "${target.name}" khỏi nhóm ID Shopee.`);
   };
 
   // Role permissions checking helper
@@ -271,6 +487,19 @@ export default function App() {
             session={session}
             onAddReport={handleAddReport}
             onDeleteReport={handleDeleteReport}
+          />
+        );
+      case 'fb-report':
+        return (
+          <FacebookReportComponent
+            reports={reports}
+            channels={channels}
+            session={session}
+            fbPages={fbPages}
+            onAddReport={handleAddReport}
+            onDeleteReport={handleDeleteReport}
+            onAddFbPage={handleAddFbPage}
+            onDeleteFbPage={handleDeleteFbPage}
           />
         );
       case 'channels':
@@ -492,16 +721,28 @@ export default function App() {
                 <span>Tổng quan</span>
               </button>
 
-              <button 
+              <button
                 onClick={() => navigateToTab('daily-report')}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                  activeTab === 'daily-report' 
-                    ? 'bg-rose-50 text-[#D32027]' 
+                  activeTab === 'daily-report'
+                    ? 'bg-rose-50 text-[#D32027]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`}
               >
-                <span className="material-symbols-outlined text-[18px]">add_task</span>
-                <span>Báo cáo ngày mới</span>
+                <span className="material-symbols-outlined text-[18px]">music_note</span>
+                <span>TikTok</span>
+              </button>
+
+              <button
+                onClick={() => navigateToTab('fb-report')}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                  activeTab === 'fb-report'
+                    ? 'bg-rose-50 text-[#D32027]'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">dns</span>
+                <span>Facebook</span>
               </button>
 
               <button 

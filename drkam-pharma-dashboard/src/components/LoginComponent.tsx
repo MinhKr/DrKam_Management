@@ -1,27 +1,46 @@
 import React, { useState } from 'react';
 import { UserSession } from '../types';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { signIn } from '../data/auth';
 
 interface LoginComponentProps {
   onLoginSuccess: (session: UserSession) => void;
 }
 
 export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) {
-  const [email, setEmail] = useState('an.nguyen@drkam.vn');
-  const [password, setPassword] = useState('••••••••');
+  const cloud = isSupabaseConfigured;
+  const [email, setEmail] = useState(cloud ? '' : 'an.nguyen@drkam.vn');
+  const [password, setPassword] = useState(cloud ? '' : '••••••••');
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<'Admin' | 'Leader' | 'Nhân viên'>('Admin');
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
       setError('Vui lòng điền đầy đủ email và mật khẩu.');
       return;
     }
 
-    // Auto-login with chosen role
-    const avatar = role === 'Admin' 
+    // Chế độ DB thật: đăng nhập qua Supabase Auth
+    if (cloud) {
+      setLoading(true);
+      setError('');
+      try {
+        const session = await signIn(email.trim(), password);
+        onLoginSuccess(session);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Đăng nhập thất bại.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Chế độ demo: tự đăng nhập theo vai trò đã chọn
+    const avatar = role === 'Admin'
       ? "https://lh3.googleusercontent.com/aida-public/AB6AXuAwxcNk3h_dSy-QxPJwh7IZAx4IPd69V4i_4FlgAIlvGpHoE4f-UZIj64GPyBokv3MGwEUuU4DVvOS81ZV1ab3ZbJuSzeY9ZAUh68pyIlXV1GQlhMqsnDe9GgkijJuB1d63sf4q171JOYdQiXM5rFRPd6Hcd38tUF2isSe2BxoOEf3mcf7uun3rlRhQQb-klabcjUgssUIDmF8PD7MnjvbOichafwaOsnBSNFY1RMIRVMTjWYedKiTdu5PPWrflyzqwB9hfglsHmTZ7"
       : role === 'Leader'
       ? "https://lh3.googleusercontent.com/aida-public/AB6AXuA7hJqbL0fQIqlo1FE3j4-WZeqTHw9cn0ga5_nxJXHO3hwKU5C-XJqfMIYYWJjYkI9UnaG4W_mmJ7z8QUlbxQ7YEow_HLbhZYA3FV3w2VgxdzlqIp4oB7TXAhzNG7620ml3yJ0apWRP7ynDUgBVvDzYSXMjoVtTM4bxOMGeXu7QNgwLsznEorRWpcXV-0H0Dh86o59C4oVRi4urL_DCGG9BRqyHPxMAIIs4AOuvVPY6FamKTifQkXK5OQbA2dIPyVLhtinhe2InKOon"
@@ -29,7 +48,7 @@ export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) 
 
     onLoginSuccess({
       isLoggedIn: true,
-      name: role === 'Admin' ? 'Nguyễn Văn An' : role === 'Leader' ? 'Trần Thị Bích' : 'Phạm Minh Tâm',
+      name: role === 'Admin' ? 'Nguyễn Văn An' : role === 'Leader' ? 'Trần Thị Bích' : 'Hoàng Yến Nhi',
       email: email,
       role: role,
       avatar: avatar
@@ -169,7 +188,8 @@ export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) 
               </div>
             </div>
 
-            {/* Role Simulation Sandbox */}
+            {/* Role Simulation Sandbox — chỉ hiện ở chế độ demo (chưa nối Supabase) */}
+            {!cloud && (
             <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 mt-6">
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                 Mô phỏng phân quyền đăng nhập:
@@ -207,7 +227,7 @@ export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) 
                   type="button"
                   onClick={() => {
                     setRole('Nhân viên');
-                    setEmail('tam.pham@drkam.vn');
+                    setEmail('nhi.hoang@drkam.vn');
                   }}
                   className={`py-2 px-2 text-xs font-bold rounded-lg border transition-all ${
                     role === 'Nhân viên'
@@ -222,6 +242,7 @@ export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) 
                 * Click chọn nút vai trò ở trên để tự động điền email mô phỏng thích hợp
               </p>
             </div>
+            )}
 
             {/* Remember Me Toggle */}
             <div className="flex items-center">
@@ -240,9 +261,10 @@ export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) 
             {/* Submit */}
             <button
               type="submit"
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md font-bold text-white bg-[#D32027] hover:bg-[#B70F1B] active:bg-red-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#D32027] transition-colors cursor-pointer text-sm"
+              disabled={loading}
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md font-bold text-white bg-[#D32027] hover:bg-[#B70F1B] active:bg-red-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#D32027] transition-colors cursor-pointer text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Đăng nhập hệ thống
+              {loading ? 'Đang đăng nhập...' : 'Đăng nhập hệ thống'}
             </button>
           </form>
 
