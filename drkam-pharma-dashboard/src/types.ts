@@ -95,59 +95,28 @@ export const INITIAL_SESSION: UserSession = {
   avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuDzgK9VTO2bMndoGRi5mpAZPKXzXULAxwsv563Xs8ZXMdcrW3-Pbna8vcc8U__VMqWD6VaE8O6VdcWbnLWyxo8frk-2LmgwvK16JVQFKQ2D5rSsAfo51L4RdAdhfNgtiTlf6ETiigQxpYA4XcbDd944S4bWW9FZad5psxK0RQuSmIyEi7uUPGH8orkJCTm43znGIfidVW5rx6PepxvxD4tXRRUzCf7YyiGkpryh7D0IGB0pGfYKBi483cKVOTVEiTazotM1Ye5jvtUx"
 };
 
+// Avatar dùng chung cho các kênh demo (rút gọn seed).
+const AV = "https://lh3.googleusercontent.com/aida-public/AB6AXuD-SRAnv3abFtWFM3gIMsUq0WlWHZvg-5eYjh9Ld5LM3AWxB4Eo_FQFHblzAV9TBdVcCG-qlVo8RvlbI1OAInNjdyEF8Iw1Scrl4i0O3bo4pYKRC6fT-3xQ4kWxOFOYEVfi_W0VyDlonh-1u89UhcB6np2PCenVdOQck1gHjR3ZaHYf0lvTHL9ND7eDIreyH2wTiZiTVB-y7KDX0uSZGr5PZSgetOisUYcb05-K74b9XqgCiUMtaYojKPMnP9Mx91p3_icBtl3e5iT-";
+
 export const INITIAL_CHANNELS: AffiliateChannel[] = [
-  {
-    id: "1",
-    name: "drkampharmaofficial",
-    brandCategory: "Brand Chính thức",
-    platform: "TikTok",
-    channelType: "Brand",
-    linkedShop: true,
-    auditId: "#AUD-1042",
-    managerName: "Trần Thị B",
-    managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuD-SRAnv3abFtWFM3gIMsUq0WlWHZvg-5eYjh9Ld5LM3AWxB4Eo_FQFHblzAV9TBdVcCG-qlVo8RvlbI1OAInNjdyEF8Iw1Scrl4i0O3bo4pYKRC6fT-3xQ4kWxOFOYEVfi_W0VyDlonh-1u89UhcB6np2PCenVdOQck1gHjR3ZaHYf0lvTHL9ND7eDIreyH2wTiZiTVB-y7KDX0uSZGr5PZSgetOisUYcb05-K74b9XqgCiUMtaYojKPMnP9Mx91p3_icBtl3e5iT-",
-    status: "Đã ra số",
-    tracking: { revenueActive: true, trafficActive: true }
-  },
-  {
-    id: "2",
-    name: "drkam.vn",
-    brandCategory: "Fanpage FB",
-    platform: "Facebook",
-    channelType: "Real KOC",
-    linkedShop: false,
-    auditId: "#AUD-1055",
-    managerName: "Lê Văn C",
-    managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuD5BzNWZZeWZK9cuI4Pn6-fFYq43ihqelT5Yrk2ghXnhWStSgVUDvkRlW_MibCSkImIJC6FCkw4tbVLg0IatueQvhoh9i8f_WrngqiEUXzyQqRIjX8cqSvJVak8tmxm6qL4QIXbtwAYVPKyVRLkk3WZa0Jxf2kbzPZZoIcfPvKWVScof-5BHcigdatm6XwoZiKAenqQyKPITsBb8Ra7hrNtoxhvmxb9gJGsbFHgsw6L0EdCWf0R3pZn2tdEeMtijZmfkA_ROIQl3xdf",
-    status: "Đang nuôi",
-    tracking: { revenueActive: false, trafficActive: true }
-  },
-  {
-    id: "3",
-    name: "happyy.daily",
-    brandCategory: "Mạng lưới AI",
-    platform: "TikTok",
-    channelType: "AI KOC",
-    linkedShop: true,
-    auditId: "#AUD-1088",
-    managerName: "Nguyễn Văn A",
-    managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuCgXxpvZh2n-qg_DKJNGb8jhEagTdnZ53WDSCsc6c0jk2Zqq1iAg8NrQoQeEVHNT8yABGn09jjlR4BaTJ7u_noFnakJMjIy08kAT-RkIRD2DLj66tV63L9dizNNZ9q9EsOhIkA7yzJ9SM4hp6IXz4wckurQJn98ZZIVDKn3Oe2PpvSgEDJvETYJd_PR4zJycjIAirppC0TvvYJwVyIcJ0HhltemmIgHdPtAKCZHzq3ZZVP7LOvs6cTwwX0of5y9H6TJyIlz10CD8s96",
-    status: "Bóp TT",
-    tracking: { revenueActive: true, trafficActive: false }
-  },
-  {
-    id: "4",
-    name: "spam_clone_01",
-    brandCategory: "Clone Hàng loạt",
-    platform: "TikTok",
-    channelType: "AI KOC",
-    linkedShop: "disconnected",
-    auditId: "#AUD-0912",
-    managerName: "Trần Thị B",
-    managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuBZtzB81_LDhqXYgNQBc9szCoLFmYk6xtLLvlscmKuC2OODhWGdW83_t5ejWrxhtG2sMVkh8Qyl580Ze2Q9GtQXFWQBlvFIhkgjM-6ZaPp51wqZjhbmC9KNREnbm444X3OZmAaRp9HgEZ7KjRsvPD1PJWMrUJn9BmhhKIa-2rTS_FBHTAiFLI3TmMdlbyj6kCAfoqbJWTBwHXw6YfwiGs-347AiDeCB6eBxaKOdFVHuDqvQa1qon3P9a1fHqSwQ8hyrXy48itp2bems",
-    status: "Đã khóa",
-    tracking: { revenueActive: false, trafficActive: false }
-  },
+  // ── TIKTOK — Kênh thương hiệu (gắn shop): doanh thu + traffic ──
+  { id: "1",  name: "drkampharmaofficial", brandCategory: "Kênh thương hiệu", platform: "TikTok", channelType: "Brand", linkedShop: true, auditId: "drkampharmaofficial", managerName: "Trần Thị Bích", managerAvatar: AV, status: "Đã ra số", tracking: { revenueActive: true, trafficActive: true } },
+  { id: "t2", name: "drkamvn",             brandCategory: "Kênh thương hiệu", platform: "TikTok", channelType: "Brand", linkedShop: true, auditId: "drkamvn",             managerName: "Trần Thị Bích", managerAvatar: AV, status: "Đã ra số", tracking: { revenueActive: true, trafficActive: true } },
+  { id: "t3", name: "drkamvnofficial",     brandCategory: "Kênh thương hiệu", platform: "TikTok", channelType: "Brand", linkedShop: true, auditId: "drkamvnofficial",     managerName: "Nguyễn Văn An", managerAvatar: AV, status: "Đã ra số", tracking: { revenueActive: true, trafficActive: true } },
+  // ── TIKTOK — KOC inhouse (không gắn shop) · Người thật: chỉ doanh thu ──
+  { id: "t4", name: "happyy.daily",    brandCategory: "KOC Người thật", platform: "TikTok", channelType: "Real KOC", linkedShop: false, auditId: "happyy.daily",    managerName: "Nguyễn Văn An", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true, trafficActive: false } },
+  { id: "t5", name: "giadinhminhhee",  brandCategory: "KOC Người thật", platform: "TikTok", channelType: "Real KOC", linkedShop: false, auditId: "giadinhminhhee",  managerName: "Phạm Minh Tâm", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true, trafficActive: false } },
+  { id: "t6", name: "nhacuacamcam",    brandCategory: "KOC Người thật", platform: "TikTok", channelType: "Real KOC", linkedShop: false, auditId: "nhacuacamcam",    managerName: "Phạm Minh Tâm", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true, trafficActive: false } },
+  { id: "t7", name: "bao_chau_day",    brandCategory: "KOC Người thật", platform: "TikTok", channelType: "Real KOC", linkedShop: false, auditId: "bao_chau_day",    managerName: "Trần Thị Bích", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true, trafficActive: false } },
+  // ── TIKTOK — KOC inhouse (không gắn shop) · Kênh AI: chỉ doanh thu ──
+  { id: "t8",  name: "koi_928tramtram", brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "koi_928tramtram", managerName: "Nguyễn Văn An", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true,  trafficActive: false } },
+  { id: "t9",  name: "tinh642002",     brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "tinh642002",     managerName: "Nguyễn Văn An", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true,  trafficActive: false } },
+  { id: "t10", name: "doisongsuckhoe86", brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "doisongsuckhoe86", managerName: "Phạm Minh Tâm", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: false, trafficActive: false } },
+  { id: "t11", name: "ngoc.huong259",  brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "ngoc.huong259",  managerName: "Phạm Minh Tâm", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true,  trafficActive: false } },
+  { id: "t12", name: "haidang0136",    brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "haidang0136",    managerName: "Trần Thị Bích", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true,  trafficActive: false } },
+  { id: "t13", name: "minhquan8046",   brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "minhquan8046",   managerName: "Trần Thị Bích", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true,  trafficActive: false } },
+  { id: "t14", name: "quinchana82",    brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "quinchana82",    managerName: "Nguyễn Văn An", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true,  trafficActive: false } },
+  { id: "t15", name: "anhquan9684",    brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "anhquan9684",    managerName: "Nguyễn Văn An", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true,  trafficActive: false } },
   // Facebook — KOC inhouse (fanpage, theo dõi doanh thu qua ID Affiliate / nguồn Shopee): chỉ doanh thu
   {
     id: "5",
@@ -217,40 +186,86 @@ export const INITIAL_CHANNELS: AffiliateChannel[] = [
   }
 ];
 
-export const INITIAL_REPORTS: DailyReport[] = [
-  {
-    id: "r1",
-    date: "24/10/2023",
-    channelName: "drkamvn",
-    channelType: "TikTok - Thương hiệu",
-    revenue: 15000000,
-    views: 50000,
-    interactions: 1200,
-    source: "Admin",
-    isEditable: true,
-    traffic: {
-      viewsReach: 50000,
-      comment: 450,
-      like: 1200,
-      share: 80,
-      save: 110,
-      viewAllRate: 48.2,
-      avgViewDuration: 24.5,
-      followerIncr: 150
+// Sinh báo cáo TikTok mẫu nhiều ngày (để xem UI khi danh sách lịch sử dài).
+// Số liệu tất định theo (seed, i) — trông thật mà không cần Math.random, ổn định giữa các lần tải.
+function genTikTokSampleReports(): DailyReport[] {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateBack = (days: number) => {
+    const d = new Date(2026, 5, 8); // mốc 08/06/2026 lùi dần
+    d.setDate(d.getDate() - days);
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  };
+  const wave = (seed: number, i: number, base: number, amp: number) =>
+    Math.max(0, Math.round(base + amp * Math.sin((i + seed) * 1.3) + amp * 0.4 * ((i * (seed + 3)) % 5)));
+
+  const out: DailyReport[] = [];
+
+  // Kênh thương hiệu: doanh thu + 8 chỉ số traffic
+  const brand = [
+    { name: 'drkamvn',             days: 20, seed: 1, rev: 14_000_000, views: 52_000 },
+    { name: 'drkampharmaofficial', days: 17, seed: 4, rev: 11_000_000, views: 41_000 },
+    { name: 'drkamvnofficial',     days: 13, seed: 7, rev: 8_500_000,  views: 33_000 },
+  ];
+  brand.forEach((ch) => {
+    for (let i = 0; i < ch.days; i++) {
+      const views = wave(ch.seed, i, ch.views, ch.views * 0.22);
+      const like = wave(ch.seed, i, ch.views * 0.03, ch.views * 0.008);
+      const comment = wave(ch.seed, i, 120, 60);
+      const share = wave(ch.seed, i, 60, 35);
+      const save = wave(ch.seed, i, 90, 45);
+      out.push({
+        id: `r_tt_${ch.name.replace(/\W+/g, '')}_${i}`,
+        date: dateBack(i),
+        channelName: ch.name,
+        channelType: 'TikTok - Thương hiệu',
+        revenue: wave(ch.seed, i, ch.rev, ch.rev * 0.3),
+        views,
+        interactions: like + comment + share,
+        source: i % 3 === 0 ? 'Admin' : 'Nhân viên',
+        isEditable: true,
+        traffic: {
+          viewsReach: views, comment, like, share, save,
+          viewAllRate: Math.round((38 + (i % 7) * 1.6) * 10) / 10,
+          avgViewDuration: Math.round((18 + (i % 5) * 1.4) * 10) / 10,
+          followerIncr: wave(ch.seed, i, 140, 90),
+        },
+        note: null,
+      });
     }
-  },
-  {
-    id: "r2",
-    date: "20/10/2023",
-    channelName: "happyy.daily",
-    channelType: "TikTok - KOC",
-    revenue: 8000000,
-    views: null,
-    interactions: null,
-    source: "Nhân viên",
-    isEditable: false,
-    traffic: null
-  },
+  });
+
+  // KOC inhouse (Người thật + AI): chỉ doanh thu
+  const koc = [
+    { name: 'happyy.daily',    days: 16, seed: 2, rev: 5_200_000 },
+    { name: 'giadinhminhhee',  days: 13, seed: 5, rev: 3_800_000 },
+    { name: 'nhacuacamcam',    days: 11, seed: 8, rev: 2_900_000 },
+    { name: 'koi_928tramtram', days: 14, seed: 3, rev: 4_100_000 },
+    { name: 'tinh642002',      days: 12, seed: 6, rev: 3_300_000 },
+    { name: 'ngoc.huong259',   days: 9,  seed: 9, rev: 2_400_000 },
+  ];
+  koc.forEach((ch) => {
+    for (let i = 0; i < ch.days; i++) {
+      out.push({
+        id: `r_tt_${ch.name.replace(/\W+/g, '')}_${i}`,
+        date: dateBack(i),
+        channelName: ch.name,
+        channelType: 'TikTok - KOC',
+        revenue: wave(ch.seed, i, ch.rev, ch.rev * 0.35),
+        views: null,
+        interactions: null,
+        source: i % 4 === 0 ? 'Admin' : 'Nhân viên',
+        isEditable: true,
+        traffic: null,
+        note: null,
+      });
+    }
+  });
+
+  return out;
+}
+
+export const INITIAL_REPORTS: DailyReport[] = [
+  ...genTikTokSampleReports(),
   // Doanh thu Shopee mẫu cho Facebook KOC inhouse (gộp theo ID)
   { id: "rfb1", date: "03/06/2026", channelName: "conghaing",   channelType: "Facebook - KOC", revenue: 4200000, views: null, interactions: null, source: "Nhân viên", isEditable: true,  traffic: null, note: "12 đơn" },
   { id: "rfb2", date: "04/06/2026", channelName: "conghaing",   channelType: "Facebook - KOC", revenue: 5100000, views: null, interactions: null, source: "Nhân viên", isEditable: true,  traffic: null, note: "" },

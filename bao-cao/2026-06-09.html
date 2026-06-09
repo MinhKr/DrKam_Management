@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 14mm 14mm 12mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1f2937; font-size: 11px; line-height: 1.45; margin: 0; }
+  .head { border-bottom: 3px solid #D32027; padding-bottom: 10px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .brand { font-size: 20px; font-weight: 800; color: #111827; letter-spacing: -0.3px; }
+  .brand span { color: #D32027; }
+  .sub { font-size: 10px; color: #6b7280; margin-top: 2px; }
+  .meta { text-align: right; font-size: 10px; color: #6b7280; }
+  .meta b { color: #D32027; font-size: 13px; }
+  h2 { font-size: 12px; color: #D32027; text-transform: uppercase; letter-spacing: 0.4px; margin: 14px 0 5px; padding-left: 7px; border-left: 3px solid #D32027; }
+  .grp { font-weight: 700; color: #111827; margin: 7px 0 2px; font-size: 11px; }
+  ul { margin: 2px 0 6px; padding-left: 16px; }
+  li { margin: 1.5px 0; }
+  .tag { display: inline-block; background: #fef2f2; color: #D32027; border: 1px solid #fecaca; border-radius: 4px; padding: 0 5px; font-size: 9px; font-weight: 700; }
+  .next { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 8px 12px; margin-top: 4px; }
+  .next h2 { color: #c2410c; border-color: #c2410c; margin-top: 0; }
+  .foot { margin-top: 16px; border-top: 1px solid #e5e7eb; padding-top: 6px; font-size: 9px; color: #9ca3af; display: flex; justify-content: space-between; }
+  .pill { display:inline-block; background:#111827; color:#fff; border-radius:4px; padding:0 5px; font-size:9px; font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div>
+      <div class="brand">DRKAM <span>Pharma</span> — Báo cáo công việc</div>
+      <div class="sub">Hệ thống quản trị kênh affiliate · Web nội bộ</div>
+    </div>
+    <div class="meta">
+      <div>Phiên ngày</div>
+      <b>09/06/2026</b>
+      <div>Người làm: NhatMinh</div>
+    </div>
+  </div>
+
+  <h2>Nền tảng (đã có trước phiên)</h2>
+  <ul>
+    <li>Dashboard Next.js 15 + Supabase: schema <span class="pill">channels · reports · profiles · targets · logs</span> kèm RLS phân quyền.</li>
+    <li>Module Facebook: KOC inhouse (doanh thu theo ID Shopee) + Kênh thương hiệu (traffic, tự lấy 6/8 chỉ số qua Graph API).</li>
+  </ul>
+
+  <h2>Phiên hôm nay — đã hoàn thành</h2>
+
+  <div class="grp">1. Module TikTok (mới) <span class="tag">CHÍNH</span></div>
+  <ul>
+    <li>Sidebar TikTok thành dropdown 3 loại hình: Kênh thương hiệu · KOC Người thật · KOC AI.</li>
+    <li>Báo cáo <b>nhập tay qua popup</b>: brand = doanh thu + 8 chỉ số traffic; KOC = chỉ doanh thu.</li>
+    <li>Bố cục <b>mỗi kênh 1 dòng</b> + bộ lọc ngày (Hôm nay/Hôm qua/7/30/Tùy chọn); lọc nhiều ngày = <b>cộng dồn</b> (số đếm cộng tổng, tỷ lệ lấy trung bình); dòng tổng + header dính.</li>
+    <li>Seed ~85 báo cáo mẫu nhiều ngày để kiểm thử giao diện.</li>
+  </ul>
+
+  <div class="grp">2. Dashboard phân tích (mới — thư viện Recharts) <span class="tag">CHÍNH</span></div>
+  <ul>
+    <li>TikTok Thương hiệu: 6 KPI (kèm % so kỳ trước) + 4 biểu đồ — DT theo ngày, Views &amp; Tương tác, DT theo kênh, phễu tương tác.</li>
+    <li>TikTok KOC (Người thật/AI): 4 KPI + 3 biểu đồ — DT theo ngày, DT theo kênh, tỷ trọng đóng góp.</li>
+    <li>Tách lớp <b>analytics</b> + <b>dashboardKit</b> dùng chung (tái dùng cho Facebook &amp; Tổng quan sau).</li>
+    <li>Vị trí: bảng ở trên, dashboard ngay dưới, chung 1 bộ lọc ngày.</li>
+  </ul>
+
+  <div class="grp">3. Phân quyền &amp; sửa lỗi</div>
+  <ul>
+    <li>Mở quyền: mọi vai trò (gồm Nhân viên) báo cáo được mọi kênh.</li>
+    <li>Sửa lỗi múi giờ "hôm nay" (UTC → GMT+7) ở cả TikTok &amp; Facebook.</li>
+    <li>Dọn giao diện: xóa dead code, bỏ ô "Thời gian máy chủ", nhãn "Của bạn", chú thích thừa.</li>
+  </ul>
+
+  <div class="grp">4. Tài liệu</div>
+  <ul>
+    <li>Viết <b>bản nháp kế hoạch Database</b> (DATABASE_PLAN_DRAFT.md): rà schema sẵn có, nêu khoảng cách (upsert theo ngày, fb_pages, RLS), hiệu năng, chi phí (Free đủ dùng nhiều năm).</li>
+  </ul>
+
+  <div class="next">
+    <h2>Việc tiếp theo</h2>
+    <ul>
+      <li>Dashboard Facebook + làm lại Tổng quan bằng số thật (hiện hardcode).</li>
+      <li>Chốt 4 quyết định DB → viết migration 0002 + đẩy số thật lên UI.</li>
+    </ul>
+  </div>
+
+  <div class="foot">
+    <span>DrKam Pharma Portal · Báo cáo nội bộ</span>
+    <span>09/06/2026</span>
+  </div>
+</body>
+</html>

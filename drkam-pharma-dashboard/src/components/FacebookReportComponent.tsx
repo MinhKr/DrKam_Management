@@ -29,6 +29,13 @@ const numFormat = (val: number) =>
     .format(val)
     .replace('₫', 'đ');
 
+// Ngày hôm nay theo MÚI GIỜ MÁY (GMT+7 ở VN), KHÔNG dùng toISOString() vì nó trả UTC
+// → tránh lệch 1 ngày trong khung 00:00–07:00 sáng giờ Việt Nam.
+const isoTodayLocal = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 /**
  * Mục Facebook — 2 chế độ xem toàn màn hình:
  *  • Kênh KOC inhouse  → chia theo ID Shopee (mỗi thành viên): kênh FB + doanh thu (nhập tay)
@@ -63,9 +70,9 @@ function KocInhouseView({
       c.tracking.revenueActive,
   );
 
-  const isAdmin = session.role === 'Admin';
   const isMine = (g: AffiliateChannel) => g.managerName === session.name;
-  const canEdit = (g: AffiliateChannel) => isAdmin || isMine(g);
+  // Chính sách: mọi vai trò (gồm Nhân viên) được báo cáo mọi nhóm ID.
+  const canEdit = (_g: AffiliateChannel) => true;
 
   // Đưa nhóm của chính mình lên đầu cho dễ nhìn
   const sortedGroups = [...idGroups].sort((a, b) => Number(isMine(b)) - Number(isMine(a)));
@@ -100,7 +107,7 @@ function KocInhouseView({
 
   // ── Form thêm báo cáo doanh thu ──
   const [showReportForm, setShowReportForm] = useState(false);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(isoTodayLocal);
   const [revenueStr, setRevenueStr] = useState('');
 
   // ── Form thêm fanpage ──
@@ -472,7 +479,7 @@ function BrandView({ reports, channels, session, onDeleteReport, onReportDay, on
     (c) => c.platform === 'Facebook' && c.channelType === 'Brand' && c.tracking.trafficActive,
   );
 
-  const isoToday = () => new Date().toISOString().slice(0, 10);
+  const isoToday = isoTodayLocal;
   const toDdmmyyyy = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
   const toIso = (d: string) => { const [dd, mm, yy] = d.split('/'); return `${yy}-${mm}-${dd}`; };
   const todayDdmmyyyy = toDdmmyyyy(isoToday());
@@ -699,7 +706,7 @@ function BrandReportModal({ channel, initialDate, accentIndex, existing, onClose
   const accent = accentIndex === 1
     ? { btn: 'bg-teal-600 hover:bg-teal-700', text: 'text-teal-700', soft: 'bg-teal-50', bar: 'from-[#0F766E] to-[#115E59]' }
     : { btn: 'bg-[#D32027] hover:bg-[#B70F1B]', text: 'text-[#D32027]', soft: 'bg-rose-50', bar: 'from-[#D32027] to-[#B70F1B]' };
-  const maxDate = new Date().toISOString().slice(0, 10);
+  const maxDate = isoTodayLocal();
 
   const [date, setDate] = useState(initialDate);
   const [refresh, setRefresh] = useState(0);

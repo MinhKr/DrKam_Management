@@ -20,7 +20,7 @@ import {
 
 import LoginComponent from './components/LoginComponent';
 import DashboardComponent from './components/DashboardComponent';
-import DailyReportComponent from './components/DailyReportComponent';
+import TikTokReportComponent, { TikTokDayRecord, TikTokView } from './components/TikTokReportComponent';
 import FacebookReportComponent from './components/FacebookReportComponent';
 import ChannelManagementComponent from './components/ChannelManagementComponent';
 import EmployeeManagementComponent from './components/EmployeeManagementComponent';
@@ -34,7 +34,7 @@ import { getCurrentSession, getCurrentUserId, signOut } from './data/auth';
 
 // Phiên bản dữ liệu mẫu (demo). Tăng giá trị này mỗi khi đổi dữ liệu INITIAL_* để
 // tự nạp lại trên trình duyệt cũ (xóa localStorage demo cũ), không cần xóa cache thủ công.
-const SEED_VERSION = '2026-06-06-fb-brand-pageids';
+const SEED_VERSION = '2026-06-09-tiktok-sample-reports';
 let demoMigrated = false;
 function migrateDemoData() {
   if (typeof window === 'undefined') return;
@@ -128,8 +128,9 @@ export default function App() {
     }
   });
 
-  // Active view tab state ("overview", "daily-report", "channels", "employees", "chi-tieu", "stats", "logs")
+  // Active view tab state ("overview", "tiktok-brand"/"tiktok-real-koc"/"tiktok-ai-koc", "fb-koc"/"fb-brand", "channels", "employees", "chi-tieu", "stats", "logs")
   const [activeTab, setActiveTab] = useState('overview');
+  const [ttMenuOpen, setTtMenuOpen] = useState(false); // dropdown TikTok ở sidebar
   const [fbMenuOpen, setFbMenuOpen] = useState(false); // dropdown Facebook ở sidebar
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(3);
@@ -340,6 +341,33 @@ export default function App() {
     addAuditLog('Báo cáo', `Báo cáo traffic Facebook ngày ${rec.date} — kênh "${channelName}"`);
   };
 
+  // Báo cáo TikTok 1 NGÀY cho 1 kênh (nhập tay): upsert theo (kênh + ngày).
+  // Kênh thương hiệu ghi doanh thu + 8 chỉ số traffic; KOC chỉ ghi doanh thu.
+  const handleTikTokReportDay = (channelName: string, channelType: string, rec: TikTokDayRecord) => {
+    const interactions = rec.traffic
+      ? (rec.traffic.like + rec.traffic.comment + rec.traffic.share) || null
+      : null;
+    setReports(prev => {
+      const idx = prev.findIndex(r => r.channelName === channelName && r.date === rec.date);
+      const base = {
+        date: rec.date, channelName, channelType, revenue: rec.revenue,
+        views: rec.traffic ? (rec.traffic.viewsReach || null) : null,
+        interactions, traffic: rec.traffic, note: null as string | null,
+      };
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...base };
+        return next;
+      }
+      return [{
+        id: 'r_tt_' + channelName.replace(/\W+/g, '') + '_' + rec.date.replace(/\//g, ''),
+        source: session.role === 'Admin' ? 'Admin' : 'Nhân viên',
+        isEditable: true, ...base,
+      }, ...prev];
+    });
+    addAuditLog('Báo cáo', `Báo cáo TikTok ngày ${rec.date} — kênh "${channelName}" (Doanh thu: ${rec.revenue.toLocaleString('vi-VN')} đ)`);
+  };
+
   // Channels
   const handleAddChannel = async (newChan: AffiliateChannel) => {
     if (cloud) {
@@ -517,16 +545,22 @@ export default function App() {
     switch (activeTab) {
       case 'overview':
         return <DashboardComponent reports={reports} targets={targets} onNavigateToTab={navigateToTab} />;
-      case 'daily-report':
+      case 'tiktok-brand':
+      case 'tiktok-real-koc':
+      case 'tiktok-ai-koc': {
+        const ttView: TikTokView =
+          activeTab === 'tiktok-brand' ? 'brand' : activeTab === 'tiktok-real-koc' ? 'real-koc' : 'ai-koc';
         return (
-          <DailyReportComponent
+          <TikTokReportComponent
             reports={reports}
             channels={channels}
             session={session}
-            onAddReport={handleAddReport}
+            onReportDay={handleTikTokReportDay}
             onDeleteReport={handleDeleteReport}
+            view={ttView}
           />
         );
+      }
       case 'fb-koc':
       case 'fb-brand':
         return (
@@ -739,15 +773,6 @@ export default function App() {
           
           <div className="space-y-6">
             
-            {/* Quick overview of channels / status indicator */}
-            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Thời gian máy chủ</p>
-              <p className="text-xs font-mono font-bold text-slate-800 mt-0.5 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">schedule</span>
-                <span>04/06/2026 14:20 GMT+7</span>
-              </p>
-            </div>
-
             {/* Navigation Tab options */}
             <nav className="flex flex-col gap-1">
               
@@ -763,17 +788,55 @@ export default function App() {
                 <span>Tổng quan</span>
               </button>
 
-              <button
-                onClick={() => navigateToTab('daily-report')}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                  activeTab === 'daily-report'
-                    ? 'bg-rose-50 text-[#D32027]'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">music_note</span>
-                <span>TikTok</span>
-              </button>
+              {/* TikTok — nhóm dropdown 3 loại hình kênh */}
+              <div>
+                <button
+                  onClick={() => setTtMenuOpen((o) => !o)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                    activeTab.startsWith('tiktok-')
+                      ? 'bg-rose-50 text-[#D32027]'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-[18px]">music_note</span>
+                    <span>TikTok</span>
+                  </div>
+                  <span className={`material-symbols-outlined text-[18px] transition-transform ${ttMenuOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                </button>
+
+                {ttMenuOpen && (
+                  <div className="mt-1 ml-4 pl-3 border-l border-slate-200 flex flex-col gap-1">
+                    <button
+                      onClick={() => navigateToTab('tiktok-brand')}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-left cursor-pointer ${
+                        activeTab === 'tiktok-brand' ? 'bg-rose-50 text-[#D32027]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">verified</span>
+                      <span>Kênh thương hiệu</span>
+                    </button>
+                    <button
+                      onClick={() => navigateToTab('tiktok-real-koc')}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-left cursor-pointer ${
+                        activeTab === 'tiktok-real-koc' ? 'bg-rose-50 text-[#D32027]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">face</span>
+                      <span>KOC inhouse · Người thật</span>
+                    </button>
+                    <button
+                      onClick={() => navigateToTab('tiktok-ai-koc')}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-left cursor-pointer ${
+                        activeTab === 'tiktok-ai-koc' ? 'bg-rose-50 text-[#D32027]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">smart_toy</span>
+                      <span>KOC inhouse · Kênh AI</span>
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {/* Facebook — nhóm dropdown 2 mục con */}
               <div>
