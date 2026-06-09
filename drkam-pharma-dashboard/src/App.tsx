@@ -34,7 +34,7 @@ import { getCurrentSession, getCurrentUserId, signOut } from './data/auth';
 
 // Phiên bản dữ liệu mẫu (demo). Tăng giá trị này mỗi khi đổi dữ liệu INITIAL_* để
 // tự nạp lại trên trình duyệt cũ (xóa localStorage demo cũ), không cần xóa cache thủ công.
-const SEED_VERSION = '2026-06-05-fb-koc-5';
+const SEED_VERSION = '2026-06-06-fb-brand-pageids';
 let demoMigrated = false;
 function migrateDemoData() {
   if (typeof window === 'undefined') return;
@@ -130,6 +130,7 @@ export default function App() {
 
   // Active view tab state ("overview", "daily-report", "channels", "employees", "chi-tieu", "stats", "logs")
   const [activeTab, setActiveTab] = useState('overview');
+  const [fbMenuOpen, setFbMenuOpen] = useState(false); // dropdown Facebook ở sidebar
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(3);
   const [showNotificationPopup, setShowNotificationPopup] = useState(false);
@@ -300,6 +301,43 @@ export default function App() {
     if (target) {
       addAuditLog('Báo cáo', `Đã xóa báo cáo ngày ${target.date} của kênh "${target.channelName}"`);
     }
+  };
+
+  // Cập nhật kênh (dùng để gắn Page ID Facebook cho kênh thương hiệu)
+  const handleUpdateChannel = (id: string, patch: Partial<AffiliateChannel>) => {
+    setChannels(prev => prev.map(c => (c.id === id ? { ...c, ...patch } : c)));
+    // (Chế độ DB: lưu lên Supabase sẽ bổ sung sau — hiện chạy demo localStorage.)
+  };
+
+  // Báo cáo traffic 1 NGÀY cho 1 kênh thương hiệu (modal): upsert theo (kênh + ngày).
+  // Ghi đủ 8 chỉ số (6 tự động + Views & Lưu nhập tay).
+  type BrandDayRecord = {
+    date: string; viewsReach: number; like: number; comment: number; share: number;
+    save: number; completionRate: number; avgDuration: number; followerIncr: number;
+  };
+  const handleReportDay = (channelName: string, rec: BrandDayRecord) => {
+    const traffic = {
+      viewsReach: rec.viewsReach, comment: rec.comment, like: rec.like, share: rec.share,
+      save: rec.save, viewAllRate: rec.completionRate, avgViewDuration: rec.avgDuration,
+      followerIncr: rec.followerIncr,
+    };
+    const interactions = rec.like + rec.comment + rec.share || null;
+    setReports(prev => {
+      const idx = prev.findIndex(r => r.channelName === channelName && r.date === rec.date);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], synced: true, views: rec.viewsReach || null, interactions, traffic };
+        return next;
+      }
+      return [{
+        id: 'r_fbbrand_' + channelName.replace(/\s+/g, '') + '_' + rec.date.replace(/\//g, ''),
+        date: rec.date, channelName, channelType: 'Facebook - Thương hiệu', revenue: 0,
+        views: rec.viewsReach || null, interactions,
+        source: session.role === 'Admin' ? 'Admin' : 'Nhân viên',
+        isEditable: true, synced: true, traffic, note: null,
+      }, ...prev];
+    });
+    addAuditLog('Báo cáo', `Báo cáo traffic Facebook ngày ${rec.date} — kênh "${channelName}"`);
   };
 
   // Channels
@@ -489,7 +527,8 @@ export default function App() {
             onDeleteReport={handleDeleteReport}
           />
         );
-      case 'fb-report':
+      case 'fb-koc':
+      case 'fb-brand':
         return (
           <FacebookReportComponent
             reports={reports}
@@ -500,6 +539,9 @@ export default function App() {
             onDeleteReport={handleDeleteReport}
             onAddFbPage={handleAddFbPage}
             onDeleteFbPage={handleDeleteFbPage}
+            onReportDay={handleReportDay}
+            onUpdateChannel={handleUpdateChannel}
+            view={activeTab === 'fb-brand' ? 'brand' : 'koc'}
           />
         );
       case 'channels':
@@ -733,17 +775,50 @@ export default function App() {
                 <span>TikTok</span>
               </button>
 
-              <button
-                onClick={() => navigateToTab('fb-report')}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                  activeTab === 'fb-report'
-                    ? 'bg-rose-50 text-[#D32027]'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">dns</span>
-                <span>Facebook</span>
-              </button>
+              {/* Facebook — nhóm dropdown 2 mục con */}
+              <div>
+                <button
+                  onClick={() => setFbMenuOpen((o) => !o)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                    activeTab === 'fb-koc' || activeTab === 'fb-brand'
+                      ? 'bg-rose-50 text-[#D32027]'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-[18px]">dns</span>
+                    <span>Facebook</span>
+                  </div>
+                  <span className={`material-symbols-outlined text-[18px] transition-transform ${fbMenuOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                </button>
+
+                {fbMenuOpen && (
+                  <div className="mt-1 ml-4 pl-3 border-l border-slate-200 flex flex-col gap-1">
+                    <button
+                      onClick={() => navigateToTab('fb-koc')}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-left cursor-pointer ${
+                        activeTab === 'fb-koc'
+                          ? 'bg-rose-50 text-[#D32027]'
+                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">groups</span>
+                      <span>KOC inhouse</span>
+                    </button>
+                    <button
+                      onClick={() => navigateToTab('fb-brand')}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-left cursor-pointer ${
+                        activeTab === 'fb-brand'
+                          ? 'bg-rose-50 text-[#D32027]'
+                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">verified</span>
+                      <span>Kênh thương hiệu</span>
+                    </button>
+                  </div>
+                )}
+              </div>
 
               <button 
                 onClick={() => navigateToTab('channels')}

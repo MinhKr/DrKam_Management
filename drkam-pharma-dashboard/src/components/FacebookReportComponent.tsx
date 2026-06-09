@@ -1,8 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DailyReport, AffiliateChannel, UserSession, FbPage } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 
 type ConfirmState = { message: string; onConfirm: () => void } | null;
+
+export type BrandDayRecord = {
+  date: string; // dd/mm/yyyy
+  viewsReach: number; like: number; comment: number; share: number;
+  save: number; completionRate: number; avgDuration: number; followerIncr: number;
+};
 
 interface FacebookReportComponentProps {
   reports: DailyReport[];
@@ -13,6 +19,9 @@ interface FacebookReportComponentProps {
   onDeleteReport: (reportId: string) => void;
   onAddFbPage: (page: FbPage) => void;
   onDeleteFbPage: (id: string) => void;
+  onReportDay: (channelName: string, rec: BrandDayRecord) => void;
+  onUpdateChannel: (id: string, patch: Partial<AffiliateChannel>) => void;
+  view: 'koc' | 'brand'; // chọn từ dropdown sidebar
 }
 
 const numFormat = (val: number) =>
@@ -26,34 +35,9 @@ const numFormat = (val: number) =>
  *  • Kênh thương hiệu  → chỉ TRAFFIC (8 chỉ số, không doanh thu)
  */
 export default function FacebookReportComponent(props: FacebookReportComponentProps) {
-  const [view, setView] = useState<'koc' | 'brand'>('koc');
-
   return (
     <div className="max-w-[1400px] mx-auto space-y-6 text-slate-800">
-      <div className="flex items-center gap-2 bg-white border border-slate-200/60 rounded-2xl p-1.5 soft-shadow w-full sm:w-fit">
-        <button
-          type="button"
-          onClick={() => setView('koc')}
-          className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
-            view === 'koc' ? 'bg-[#D32027] text-white shadow-soft' : 'text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          <span className="material-symbols-outlined text-[18px]">groups</span>
-          <span>Kênh KOC inhouse</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setView('brand')}
-          className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
-            view === 'brand' ? 'bg-[#D32027] text-white shadow-soft' : 'text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          <span className="material-symbols-outlined text-[18px]">verified</span>
-          <span>Kênh thương hiệu</span>
-        </button>
-      </div>
-
-      {view === 'koc' ? <KocInhouseView {...props} /> : <BrandView {...props} />}
+      {props.view === 'koc' ? <KocInhouseView {...props} /> : <BrandView {...props} />}
     </div>
   );
 }
@@ -481,72 +465,41 @@ function KocInhouseView({
 }
 
 /* ════════════════════════════════════════════════════════════════
-   VIEW 2 — KÊNH THƯƠNG HIỆU (chỉ traffic, không doanh thu)
+   VIEW 2 — KÊNH THƯƠNG HIỆU: mỗi page 1 khối riêng, báo cáo theo NGÀY qua modal
    ════════════════════════════════════════════════════════════════ */
-function BrandView({ reports, channels, session, onAddReport, onDeleteReport }: FacebookReportComponentProps) {
+function BrandView({ reports, channels, session, onDeleteReport, onReportDay, onUpdateChannel }: FacebookReportComponentProps) {
   const fbBrandChannels = channels.filter(
     (c) => c.platform === 'Facebook' && c.channelType === 'Brand' && c.tracking.trafficActive,
   );
 
-  const [showForm, setShowForm] = useState(false);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [channelName, setChannelName] = useState(fbBrandChannels[0]?.name || '');
-  const [views, setViews] = useState('');
-  const [comments, setComments] = useState('');
-  const [likes, setLikes] = useState('');
-  const [shares, setShares] = useState('');
-  const [saves, setSaves] = useState('');
-  const [completionRate, setCompletionRate] = useState('');
-  const [avgDuration, setAvgDuration] = useState('');
-  const [followers, setFollowers] = useState('');
-  const [note, setNote] = useState('');
+  const isoToday = () => new Date().toISOString().slice(0, 10);
+  const toDdmmyyyy = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+  const toIso = (d: string) => { const [dd, mm, yy] = d.split('/'); return `${yy}-${mm}-${dd}`; };
+  const todayDdmmyyyy = toDdmmyyyy(isoToday());
+
+  const [modal, setModal] = useState<{ channel: AffiliateChannel; date: string } | null>(null);
   const [notification, setNotification] = useState('');
   const [dialog, setDialog] = useState<ConfirmState>(null);
+  const notify = (m: string) => { setNotification(m); setTimeout(() => setNotification(''), 4000); };
 
-  const selectedChannel = fbBrandChannels.find((c) => c.name === channelName);
-  const numInt = (v: string) => (v ? parseInt(v, 10) : 0);
+  // Báo cáo của 1 kênh (mới → cũ)
+  const reportsOf = (ch: AffiliateChannel) =>
+    reports
+      .filter((r) => r.channelName === ch.name && (r.channelType === 'Facebook - Thương hiệu' || !!r.traffic))
+      .sort((a, b) => toIso(b.date).localeCompare(toIso(a.date)));
+  const reportedToday = (ch: AffiliateChannel) => reportsOf(ch).some((r) => r.date === todayDdmmyyyy);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!channelName) {
-      alert('Vui lòng chọn kênh Facebook thương hiệu.');
-      return;
-    }
-    const [y, m, d] = date.split('-');
-    const formattedDate = y && m && d ? `${d}/${m}/${y}` : date;
-
-    onAddReport({
-      id: 'r_fbbrand_' + Date.now(),
-      date: formattedDate,
-      channelName,
-      channelType: 'Facebook - Thương hiệu',
-      revenue: 0,
-      views: views ? numInt(views) : null,
-      interactions: numInt(likes) + numInt(comments) + numInt(shares) || null,
-      source: session.role === 'Admin' ? 'Admin' : 'Nhân viên',
-      isEditable: true,
-      traffic: {
-        viewsReach: numInt(views),
-        comment: numInt(comments),
-        like: numInt(likes),
-        share: numInt(shares),
-        save: numInt(saves),
-        viewAllRate: completionRate ? parseFloat(completionRate) : 0,
-        avgViewDuration: avgDuration ? parseFloat(avgDuration) : 0,
-        followerIncr: numInt(followers),
-      },
-      note: note.trim() || null,
-    });
-
-    setViews(''); setComments(''); setLikes(''); setShares(''); setSaves('');
-    setCompletionRate(''); setAvgDuration(''); setFollowers(''); setNote('');
-    setShowForm(false);
-    setNotification('Đã lưu chỉ số traffic cho kênh thương hiệu!');
-    setTimeout(() => setNotification(''), 4000);
+  const handleSubmit = (channelName: string, rec: BrandDayRecord) => {
+    onReportDay(channelName, rec);
+    setModal(null);
+    notify(`Đã lưu báo cáo ngày ${rec.date}!`);
   };
 
-  const fbNames = new Set(fbBrandChannels.map((c) => c.name));
-  const brandReports = reports.filter((r) => fbNames.has(r.channelName) || r.channelType === 'Facebook - Thương hiệu');
+  // 2 màu nhận diện để TÁCH BIỆT 2 page (đỏ DrKam & teal)
+  const ACCENTS = [
+    { bar: 'from-[#D32027] to-[#B70F1B]', soft: 'bg-rose-50', text: 'text-[#D32027]', btn: 'bg-[#D32027] hover:bg-[#B70F1B]' },
+    { bar: 'from-[#0F766E] to-[#115E59]', soft: 'bg-teal-50', text: 'text-teal-700', btn: 'bg-teal-600 hover:bg-teal-700' },
+  ];
 
   return (
     <div className="space-y-6">
@@ -557,164 +510,168 @@ function BrandView({ reports, channels, session, onAddReport, onDeleteReport }: 
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900 font-display flex items-center gap-2">
             <span className="material-symbols-outlined text-blue-600 text-2xl">verified</span>
             <span>Facebook — Kênh thương hiệu</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Theo dõi <span className="font-semibold text-blue-600">8 chỉ số traffic</span> (không có doanh thu). Nhập tay theo ngày.
+            Báo cáo traffic <span className="font-semibold text-blue-600">theo từng page, mỗi ngày</span> (thường 17:00). 6 chỉ số tự lấy từ Facebook; Views &amp; Lưu nhập tay.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowForm((s) => !s)}
-          disabled={fbBrandChannels.length === 0}
-          className={`flex items-center gap-2 px-5 py-2.5 font-bold text-xs rounded-xl shadow-soft transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-            showForm ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-[#D32027] hover:bg-[#B70F1B] text-white'
-          }`}
-        >
-          <span className="material-symbols-outlined text-[18px]">{showForm ? 'close' : 'add_circle'}</span>
-          <span>{showForm ? 'Đóng form' : 'Thêm chỉ số traffic'}</span>
-        </button>
+        <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200/60 rounded-xl soft-shadow text-slate-600 self-start">
+          <span className="material-symbols-outlined text-[18px] text-[#D32027]">event</span>
+          <span className="text-sm font-bold">Hôm nay {todayDdmmyyyy}</span>
+        </div>
       </div>
 
-      {showForm && (
-        <section className="bg-white rounded-2xl p-6 lg:p-8 border border-slate-200/60 soft-shadow">
-          <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2 font-display">
-            <span className="material-symbols-outlined text-[#D32027] text-2xl">add_circle</span>
-            <span>Thêm chỉ số traffic (Facebook thương hiệu)</span>
-          </h2>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Ngày báo cáo</label>
-                <input
-                  type="date"
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#D32027]/20 focus:border-[#D32027] outline-none text-sm font-medium bg-slate-50/30"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Kênh thương hiệu</label>
-                <select
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#D32027]/20 focus:border-[#D32027] outline-none text-sm bg-slate-50/30 cursor-pointer"
-                  value={channelName}
-                  onChange={(e) => setChannelName(e.target.value)}
-                >
-                  {fbBrandChannels.map((c) => (
-                    <option key={c.id} value={c.name}>{c.name}</option>
-                  ))}
-                </select>
-                {selectedChannel && (
-                  <p className="text-[11px] text-slate-400 mt-1">Phụ trách: {selectedChannel.managerName}</p>
+      {fbBrandChannels.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow py-12 text-center text-slate-400 font-medium px-6">
+          Chưa có kênh Facebook thương hiệu nào bật theo dõi traffic. Tạo kênh Facebook (Brand) ở mục <b>Quản lý kênh</b>.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {fbBrandChannels.map((ch, i) => {
+            const accent = ACCENTS[i % ACCENTS.length];
+            const list = reportsOf(ch);
+            const latest = list[0];
+            const done = reportedToday(ch);
+            const linked = /^\d+$/.test(ch.auditId);
+            const fmt = (n: number | undefined) => (n != null ? n.toLocaleString('vi-VN') : '—');
+            return (
+              <section key={ch.id} className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden flex flex-col">
+                <div className={`h-1.5 bg-gradient-to-r ${accent.bar}`} />
+
+                {/* Nhận diện page */}
+                <div className="p-5 flex items-start gap-3 border-b border-slate-100">
+                  <div className={`w-12 h-12 rounded-xl ${accent.soft} ${accent.text} flex items-center justify-center flex-shrink-0`}>
+                    <span className="material-symbols-outlined">verified</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-bold text-slate-900 font-display text-base truncate" title={ch.name}>{ch.name}</h2>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-[11px] text-slate-400">Phụ trách {ch.managerName}</span>
+                      {linked ? (
+                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">ID {ch.auditId}</span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">chưa gắn Page ID</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Trạng thái hôm nay + CTA */}
+                <div className="px-5 py-4 flex items-center justify-between gap-3 bg-slate-50/40">
+                  <div className="flex items-center gap-2">
+                    {done ? (
+                      <>
+                        <span className="material-symbols-outlined text-green-600 text-xl">task_alt</span>
+                        <span className="text-sm font-semibold text-green-700">Đã báo cáo hôm nay</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-amber-500 text-xl">pending_actions</span>
+                        <span className="text-sm font-semibold text-amber-600">Chưa báo cáo hôm nay</span>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setModal({ channel: ch, date: isoToday() })}
+                    className={`flex items-center gap-1.5 px-4 py-2 text-white font-bold text-xs rounded-xl shadow-soft transition-colors ${accent.btn}`}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">{done ? 'edit' : 'add_chart'}</span>
+                    <span>{done ? 'Cập nhật' : 'Báo cáo hôm nay'}</span>
+                  </button>
+                </div>
+
+                {/* Tóm tắt ngày gần nhất */}
+                {latest?.traffic && (
+                  <div className="px-5 py-3 border-b border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Gần nhất · {latest.date}</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      <Stat label="Views" value={fmt(latest.traffic.viewsReach)} accent={accent.text} />
+                      <Stat label="Like" value={fmt(latest.traffic.like)} />
+                      <Stat label="Cmt" value={fmt(latest.traffic.comment)} />
+                      <Stat label="Share" value={fmt(latest.traffic.share)} />
+                      <Stat label="Lưu" value={fmt(latest.traffic.save)} accent={accent.text} />
+                      <Stat label="Xem hết" value={(latest.traffic.viewAllRate ?? 0) + '%'} />
+                      <Stat label="TG xem" value={(latest.traffic.avgViewDuration ?? 0) + 's'} />
+                      <Stat label="Follow+" value={fmt(latest.traffic.followerIncr)} />
+                    </div>
+                  </div>
                 )}
-              </div>
-            </div>
 
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-5">
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <span className="material-symbols-outlined text-blue-600 text-lg">analytics</span>
-                <span>Chỉ số traffic</span>
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <TrafficField label="Views/Reach" placeholder="VD: 50000" value={views} onChange={setViews} />
-                <TrafficField label="Comment" placeholder="VD: 15" value={comments} onChange={setComments} />
-                <TrafficField label="Like" placeholder="VD: 150" value={likes} onChange={setLikes} />
-                <TrafficField label="Share" placeholder="VD: 5" value={shares} onChange={setShares} />
-                <TrafficField label="Lưu" placeholder="VD: 20" value={saves} onChange={setSaves} />
-                <TrafficField label="Tỷ lệ xem hết (%)" placeholder="VD: 45.2" step="0.1" value={completionRate} onChange={setCompletionRate} />
-                <TrafficField label="TG xem TB (giây)" placeholder="VD: 18.2" step="0.1" value={avgDuration} onChange={setAvgDuration} />
-                <TrafficField label="Số follow tăng" placeholder="VD: 45" value={followers} onChange={setFollowers} />
-              </div>
-            </div>
+                {/* Lịch sử */}
+                <div className="flex-1 flex flex-col">
+                  <div className="px-5 pt-4 pb-2 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-slate-400 text-[18px]">history</span>
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lịch sử ({list.length})</h3>
+                  </div>
+                  <div className="overflow-y-auto max-h-[260px]">
+                    {list.length === 0 ? (
+                      <p className="py-8 text-center text-slate-400 text-sm">Chưa có báo cáo nào.</p>
+                    ) : (
+                      <table className="w-full text-left text-xs">
+                        <thead className="sticky top-0 bg-slate-100 text-slate-400 uppercase tracking-wider">
+                          <tr>
+                            <th className="px-5 py-2">Ngày</th>
+                            <th className="px-2 py-2 text-right">Views</th>
+                            <th className="px-2 py-2 text-right">Tương tác</th>
+                            <th className="px-2 py-2 text-right">Follow+</th>
+                            <th className="px-3 py-2 text-center"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {list.map((r) => {
+                            const t = r.traffic;
+                            const eng = (t?.like || 0) + (t?.comment || 0) + (t?.share || 0);
+                            return (
+                              <tr key={r.id} className="hover:bg-slate-50/50">
+                                <td className="px-5 py-2 font-medium text-slate-700 whitespace-nowrap">{r.date}</td>
+                                <td className="px-2 py-2 text-right font-mono text-slate-700">{fmt(t?.viewsReach)}</td>
+                                <td className="px-2 py-2 text-right font-mono text-slate-500">{eng.toLocaleString('vi-VN')}</td>
+                                <td className="px-2 py-2 text-right font-mono text-green-700">{fmt(t?.followerIncr)}</td>
+                                <td className="px-3 py-2 text-center whitespace-nowrap">
+                                  <button onClick={() => setModal({ channel: ch, date: toIso(r.date) })} className="text-slate-300 hover:text-blue-600 transition-colors align-middle" title="Sửa">
+                                    <span className="material-symbols-outlined text-[16px]">edit</span>
+                                  </button>
+                                  <button onClick={() => setDialog({ message: `Xóa báo cáo ngày ${r.date} của "${ch.name}"?`, onConfirm: () => onDeleteReport(r.id) })} className="text-slate-300 hover:text-rose-600 transition-colors align-middle ml-1" title="Xóa">
+                                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Ghi chú (tùy chọn)</label>
-              <input
-                type="text"
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#D32027]/20 focus:border-[#D32027] outline-none text-sm bg-slate-50/30"
-                placeholder="VD: bài viral, chiến dịch..."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t border-slate-100 gap-4">
-              <p className="text-xs text-slate-400 italic">* Kênh thương hiệu chỉ theo dõi traffic, không nhập doanh thu.</p>
-              <div className="flex gap-3 justify-end">
-                <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2.5 border border-slate-200 text-slate-600 font-semibold text-xs rounded-xl hover:bg-slate-50">Hủy</button>
-                <button type="submit" className="px-6 py-2.5 bg-[#D32027] hover:bg-[#B70F1B] text-white font-bold text-xs rounded-xl shadow-soft cursor-pointer">Lưu chỉ số</button>
-              </div>
-            </div>
-          </form>
-        </section>
+                {/* Page ID */}
+                <div className="px-5 py-3 border-t border-slate-100 flex items-center gap-2 bg-slate-50/30">
+                  <span className="material-symbols-outlined text-slate-400 text-[14px]">key</span>
+                  <span className="text-[11px] text-slate-500">Page ID</span>
+                  <EditablePageId value={ch.auditId} onSave={(v) => onUpdateChannel(ch.id, { auditId: v })} />
+                </div>
+              </section>
+            );
+          })}
+        </div>
       )}
 
-      <section className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center gap-2">
-          <span className="material-symbols-outlined text-blue-600 text-2xl font-bold">list_alt</span>
-          <h2 className="text-lg font-bold text-slate-900 font-display">Traffic đã nhập</h2>
-        </div>
-        {fbBrandChannels.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 font-medium px-6">
-            Chưa có kênh Facebook thương hiệu nào bật theo dõi traffic. Hãy tạo kênh Facebook (Brand) ở mục <b>Quản lý kênh</b>.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1100px]">
-              <thead>
-                <tr className="bg-slate-50/50 border-b border-slate-100 text-xs text-slate-400 font-semibold uppercase tracking-wider">
-                  <th className="px-5 py-4">Ngày</th>
-                  <th className="px-5 py-4">Kênh</th>
-                  <th className="px-5 py-4 text-right">Views/Reach</th>
-                  <th className="px-5 py-4 text-right">Like</th>
-                  <th className="px-5 py-4 text-right">Comment</th>
-                  <th className="px-5 py-4 text-right">Share</th>
-                  <th className="px-5 py-4 text-right">Lưu</th>
-                  <th className="px-5 py-4 text-right">Xem hết %</th>
-                  <th className="px-5 py-4 text-right">TG xem</th>
-                  <th className="px-5 py-4 text-right">Follow+</th>
-                  <th className="px-5 py-4 text-center">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
-                {brandReports.length === 0 ? (
-                  <tr><td colSpan={11} className="py-12 text-center text-slate-400 font-medium">Chưa có dữ liệu. Bấm “Thêm chỉ số traffic” để nhập.</td></tr>
-                ) : (
-                  brandReports.map((r) => {
-                    const t = r.traffic;
-                    const fmt = (n: number | undefined) => (n != null ? n.toLocaleString('vi-VN') : '-');
-                    return (
-                      <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-5 py-4 text-slate-600 font-medium">{r.date}</td>
-                        <td className="px-5 py-4 font-bold text-[#D32027] max-w-[220px] truncate" title={r.channelName}>{r.channelName}</td>
-                        <td className="px-5 py-4 text-right font-mono text-slate-700">{fmt(t?.viewsReach)}</td>
-                        <td className="px-5 py-4 text-right font-mono text-slate-500">{fmt(t?.like)}</td>
-                        <td className="px-5 py-4 text-right font-mono text-slate-500">{fmt(t?.comment)}</td>
-                        <td className="px-5 py-4 text-right font-mono text-slate-500">{fmt(t?.share)}</td>
-                        <td className="px-5 py-4 text-right font-mono text-slate-500">{fmt(t?.save)}</td>
-                        <td className="px-5 py-4 text-right font-mono text-slate-500">{t?.viewAllRate != null ? t.viewAllRate + '%' : '-'}</td>
-                        <td className="px-5 py-4 text-right font-mono text-slate-500">{t?.avgViewDuration != null ? t.avgViewDuration + 's' : '-'}</td>
-                        <td className="px-5 py-4 text-right font-mono text-green-700 font-semibold">{fmt(t?.followerIncr)}</td>
-                        <td className="px-5 py-4 text-center">
-                          <button className="text-slate-400 hover:text-rose-600 transition-colors" title="Xóa bản ghi"
-                            onClick={() => setDialog({ message: `Xóa traffic ngày ${r.date} của kênh "${r.channelName}"?`, onConfirm: () => onDeleteReport(r.id) })}>
-                            <span className="material-symbols-outlined text-[18px]">delete</span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      {modal && (
+        <BrandReportModal
+          channel={modal.channel}
+          initialDate={modal.date}
+          accentIndex={fbBrandChannels.findIndex((c) => c.id === modal.channel.id) % 2}
+          existing={reportsOf(modal.channel).find((r) => r.date === toDdmmyyyy(modal.date))}
+          onClose={() => setModal(null)}
+          onSubmit={handleSubmit}
+        />
+      )}
 
       <ConfirmDialog
         open={!!dialog}
@@ -730,31 +687,218 @@ function BrandView({ reports, channels, session, onAddReport, onDeleteReport }: 
   );
 }
 
-/* Ô nhập 1 chỉ số traffic */
-function TrafficField({
-  label,
-  placeholder,
-  value,
-  onChange,
-  step,
-}: {
-  label: string;
-  placeholder: string;
-  value: string;
-  onChange: (v: string) => void;
-  step?: string;
+/* Modal báo cáo traffic 1 ngày cho 1 page: tự lấy 6 chỉ số, bắt nhập Views & Lưu */
+function BrandReportModal({ channel, initialDate, accentIndex, existing, onClose, onSubmit }: {
+  channel: AffiliateChannel;
+  initialDate: string;
+  accentIndex: number;
+  existing?: DailyReport;
+  onClose: () => void;
+  onSubmit: (channelName: string, rec: BrandDayRecord) => void;
 }) {
+  const accent = accentIndex === 1
+    ? { btn: 'bg-teal-600 hover:bg-teal-700', text: 'text-teal-700', soft: 'bg-teal-50', bar: 'from-[#0F766E] to-[#115E59]' }
+    : { btn: 'bg-[#D32027] hover:bg-[#B70F1B]', text: 'text-[#D32027]', soft: 'bg-rose-50', bar: 'from-[#D32027] to-[#B70F1B]' };
+  const maxDate = new Date().toISOString().slice(0, 10);
+
+  const [date, setDate] = useState(initialDate);
+  const [refresh, setRefresh] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [postsScanned, setPostsScanned] = useState<number | null>(null);
+  // Chỉ số tự động (page-level, cả ngày cả kênh) — điền sẵn, SỬA ĐƯỢC
+  const [viewsReach, setViewsReach] = useState('');
+  const [like, setLike] = useState('');
+  const [comment, setComment] = useState('');
+  const [share, setShare] = useState('');
+  const [completionRate, setCompletionRate] = useState('');
+  const [avgDuration, setAvgDuration] = useState('');
+  const [followerIncr, setFollowerIncr] = useState('');
+  // Bắt buộc nhập tay
+  const [save, setSave] = useState('');
+
+  // Sửa bản ghi đã có → prefill Lưu (giữ giá trị cũ)
+  useEffect(() => {
+    if (existing?.traffic) setSave(existing.traffic.save ? String(existing.traffic.save) : '');
+  }, [existing]);
+
+  // Tự lấy số cả-ngày-cả-kênh mỗi khi đổi ngày / bấm thử lại
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError('');
+    fetch(`/api/sync-facebook?pageId=${encodeURIComponent(channel.auditId)}&from=${date}&to=${date}`)
+      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (!alive) return;
+        if (!ok) throw new Error(d.error || 'Lỗi không rõ');
+        const rec = (d.records || [])[0] || {};
+        setViewsReach(String(rec.viewsReach ?? 0));
+        setLike(String(rec.like ?? 0));
+        setComment(String(rec.comment ?? 0));
+        setShare(String(rec.share ?? 0));
+        setCompletionRate(String(rec.completionRate ?? 0));
+        setAvgDuration(String(rec.avgDuration ?? 0));
+        setFollowerIncr(String(rec.followerIncr ?? 0));
+        setPostsScanned(typeof d.postsScanned === 'number' ? d.postsScanned : null);
+        setLoading(false);
+      })
+      .catch((e) => { if (!alive) return; setError(e instanceof Error ? e.message : String(e)); setLoading(false); });
+    return () => { alive = false; };
+  }, [date, channel.auditId, refresh]);
+
+  const toDdmmyyyy = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+  const intF = (s: string) => parseInt(s.replace(/\D/g, ''), 10) || 0;
+  const numF = (s: string) => parseFloat(s.replace(/[^\d.]/g, '')) || 0;
+  const canSubmit = !loading && !error && save.trim() !== '';
+
+  const submit = () => {
+    if (!canSubmit) return;
+    onSubmit(channel.name, {
+      date: toDdmmyyyy(date),
+      viewsReach: intF(viewsReach),
+      like: intF(like), comment: intF(comment), share: intF(share),
+      save: intF(save),
+      completionRate: numF(completionRate), avgDuration: numF(avgDuration), followerIncr: intF(followerIncr),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className={`h-1.5 bg-gradient-to-r ${accent.bar}`} />
+        <div className="p-6">
+          <div className="flex items-start justify-between gap-3 mb-5">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Báo cáo traffic ngày</p>
+              <h2 className="text-lg font-bold text-slate-900 font-display truncate" title={channel.name}>{channel.name}</h2>
+            </div>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-700 flex-shrink-0">
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
+
+          <div className="mb-5">
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Ngày báo cáo</label>
+            <input type="date" value={date} max={maxDate} onChange={(e) => setDate(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-[#D32027] bg-slate-50/30" />
+          </div>
+
+          {/* Chỉ số tự động — cả ngày cả kênh, sửa được nếu cần */}
+          <div className={`rounded-xl p-4 mb-5 ${accent.soft}`}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`material-symbols-outlined text-[18px] ${accent.text} ${loading ? 'animate-spin' : ''}`}>{loading ? 'progress_activity' : 'cloud_done'}</span>
+              <span className="text-xs font-bold text-slate-700">{loading ? 'Đang lấy số cả ngày từ Facebook...' : 'Số tự động (cả ngày cả kênh) — sửa được nếu cần'}</span>
+            </div>
+            {error ? (
+              <div className="text-xs bg-white/70 rounded-lg p-3">
+                <p className="font-semibold text-rose-600 mb-1">⚠️ Không lấy được số tự động</p>
+                <p className="text-rose-500 mb-2 break-words">{error}</p>
+                <button onClick={() => setRefresh((x) => x + 1)} className="px-3 py-1.5 bg-slate-800 text-white font-bold rounded-lg text-[11px]">Thử lại</button>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <NumField label="Views (cả ngày)" value={viewsReach} onChange={setViewsReach} disabled={loading} />
+                  <NumField label="Like (reactions)" value={like} onChange={setLike} disabled={loading} />
+                  <NumField label="Follow+" value={followerIncr} onChange={setFollowerIncr} disabled={loading} />
+                  <NumField label="Comment" value={comment} onChange={setComment} disabled={loading} />
+                  <NumField label="Share" value={share} onChange={setShare} disabled={loading} />
+                  <NumField label="Xem hết (%)" value={completionRate} onChange={setCompletionRate} disabled={loading} decimal />
+                  <NumField label="TG xem (s)" value={avgDuration} onChange={setAvgDuration} disabled={loading} decimal />
+                </div>
+                {!loading && postsScanned !== null && (
+                  <p className="text-[11px] mt-2 text-slate-500">
+                    {postsScanned === 0
+                      ? 'Hôm nay chưa đăng bài → Comment/Share = 0; Views/Like/Follow vẫn tính cả ngày.'
+                      : `Comment & Share lấy từ ${postsScanned} bài đăng trong ngày; còn lại tính cả ngày cả kênh.`}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Bắt buộc nhập tay */}
+          <div className="mb-5">
+            <p className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[16px] text-amber-500">edit</span>
+              Nhập tay — bắt buộc
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <NumField label="Lưu (Save)" value={save} onChange={setSave} required />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <p className="text-[11px] text-amber-600 font-medium">
+              {!loading && !error && !canSubmit ? 'Điền ô Lưu để gửi.' : ''}
+            </p>
+            <div className="flex gap-2 flex-shrink-0">
+              <button onClick={onClose} className="px-4 py-2 text-xs font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">Hủy</button>
+              <button onClick={submit} disabled={!canSubmit}
+                className={`flex items-center gap-1.5 px-5 py-2 text-white text-xs font-bold rounded-xl shadow-soft transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${accent.btn}`}>
+                <span className="material-symbols-outlined text-[16px]">send</span>
+                Gửi báo cáo
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Ô tóm tắt 1 chỉ số (card mỗi page) */
+function Stat({ label, value, accent }: { label: string; value: string | number; accent?: string }) {
+  return (
+    <div className="text-center">
+      <p className="text-[9px] text-slate-400 font-medium uppercase tracking-wide truncate">{label}</p>
+      <p className={`text-sm font-bold font-mono ${accent || 'text-slate-700'}`}>{value}</p>
+    </div>
+  );
+}
+
+/* Ô số trong modal: auto điền sẵn (sửa được) hoặc bắt buộc nhập tay (required) */
+function NumField({ label, value, onChange, disabled, required, decimal }: {
+  label: string; value: string; onChange: (v: string) => void;
+  disabled?: boolean; required?: boolean; decimal?: boolean;
+}) {
+  const empty = value.trim() === '';
+  const clean = (s: string) => (decimal ? s.replace(/[^\d.]/g, '') : s.replace(/\D/g, ''));
   return (
     <div>
-      <label className="block text-[11px] font-medium text-slate-500 mb-1">{label}</label>
+      <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+        {label}{required && <span className="text-rose-500"> *</span>}
+      </label>
       <input
-        type="number"
-        step={step}
-        placeholder={placeholder}
-        className="w-full px-3 py-1.5 text-xs text-slate-800 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#D32027] outline-none bg-white"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        type="text"
+        inputMode={decimal ? 'decimal' : 'numeric'}
+        value={disabled ? (value || '…') : value}
+        disabled={disabled}
+        placeholder="Nhập số..."
+        onChange={(e) => onChange(clean(e.target.value))}
+        className={`w-full px-3 py-2 text-sm text-right font-mono rounded-lg border outline-none transition-colors disabled:opacity-60 disabled:cursor-wait ${
+          required && empty ? 'border-amber-300 bg-amber-50/50' : 'border-slate-200 bg-white'
+        } focus:ring-1 focus:ring-[#D32027] focus:border-[#D32027]`}
       />
     </div>
+  );
+}
+
+/* Ô nhập Page ID Facebook cho 1 kênh thương hiệu */
+function EditablePageId({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [v, setV] = useState(value);
+  useEffect(() => { setV(value); }, [value]);
+  const commit = () => { const t = v.trim(); if (t !== value) onSave(t); };
+  return (
+    <input
+      type="text"
+      value={v}
+      placeholder="Page ID (số)..."
+      onChange={(e) => setV(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+      className="w-44 px-2 py-1 text-xs font-mono rounded-md border border-slate-200 bg-white text-slate-800 outline-none focus:ring-1 focus:ring-[#D32027] focus:border-[#D32027]"
+    />
   );
 }

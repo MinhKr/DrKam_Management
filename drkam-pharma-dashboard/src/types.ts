@@ -44,6 +44,7 @@ export interface DailyReport {
     followerIncr: number;
   } | null;
   note?: string | null; // ghi chú (dùng cho nhập tay doanh thu Shopee...)
+  synced?: boolean; // true = 6 chỉ số traffic lấy tự động từ Facebook (Views/Lưu vẫn nhập tay)
 }
 
 export interface Employee {
@@ -190,12 +191,12 @@ export const INITIAL_CHANNELS: AffiliateChannel[] = [
   // Facebook — Kênh thương hiệu: chỉ traffic (không doanh thu)
   {
     id: "8",
-    name: "DrKam - Sống khỏe cùng Chuyên gia",
+    name: "Sức khoẻ lên tiếng",
     brandCategory: "Kênh thương hiệu",
     platform: "Facebook",
     channelType: "Brand",
     linkedShop: false,
-    auditId: "FB-BRAND-01",
+    auditId: "1029716813565392",
     managerName: "Trần Thị Bích",
     managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuD-SRAnv3abFtWFM3gIMsUq0WlWHZvg-5eYjh9Ld5LM3AWxB4Eo_FQFHblzAV9TBdVcCG-qlVo8RvlbI1OAInNjdyEF8Iw1Scrl4i0O3bo4pYKRC6fT-3xQ4kWxOFOYEVfi_W0VyDlonh-1u89UhcB6np2PCenVdOQck1gHjR3ZaHYf0lvTHL9ND7eDIreyH2wTiZiTVB-y7KDX0uSZGr5PZSgetOisUYcb05-K74b9XqgCiUMtaYojKPMnP9Mx91p3_icBtl3e5iT-",
     status: "Đang nuôi",
@@ -203,12 +204,12 @@ export const INITIAL_CHANNELS: AffiliateChannel[] = [
   },
   {
     id: "9",
-    name: "DrKam - Bác sĩ Răng Miệng Họng của mọi gia đình",
+    name: "Khoẻ mạnh sống lâu",
     brandCategory: "Kênh thương hiệu",
     platform: "Facebook",
     channelType: "Brand",
     linkedShop: false,
-    auditId: "FB-BRAND-02",
+    auditId: "1048478565015781",
     managerName: "Nguyễn Văn An",
     managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuAwxcNk3h_dSy-QxPJwh7IZAx4IPd69V4i_4FlgAIlvGpHoE4f-UZIj64GPyBokv3MGwEUuU4DVvOS81ZV1ab3ZbJuSzeY9ZAUh68pyIlXV1GQlhMqsnDe9GgkijJuB1d63sf4q171JOYdQiXM5rFRPd6Hcd38tUF2isSe2BxoOEf3mcf7uun3rlRhQQb-klabcjUgssUIDmF8PD7MnjvbOichafwaOsnBSNFY1RMIRVMTjWYedKiTdu5PPWrflyzqwB9hfglsHmTZ7",
     status: "Đang nuôi",
