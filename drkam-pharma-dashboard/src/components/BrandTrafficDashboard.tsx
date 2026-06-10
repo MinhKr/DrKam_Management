@@ -8,8 +8,10 @@ import { DailyReport } from '../types';
 import { kpiTotals, dailySeries, byChannel, prevRange, pctDelta } from '../lib/analytics';
 import { numFormat, compact, BAR_COLORS, tooltipStyle, Delta, ChartCard, Empty } from './dashboardKit';
 
-export default function BrandTrafficDashboard({ reports, from, to }: {
+export default function BrandTrafficDashboard({ reports, from, to, showRevenue = true }: {
   reports: DailyReport[]; from: string; to: string;
+  // FB Kênh thương hiệu chỉ có traffic → tắt mọi phần doanh thu, đổi sang lấy Views làm trục chính.
+  showRevenue?: boolean;
 }) {
   const kpi = kpiTotals(reports, from, to);
   const prev = prevRange(from, to);
@@ -17,8 +19,13 @@ export default function BrandTrafficDashboard({ reports, from, to }: {
   const series = dailySeries(reports, from, to);
   const channels = byChannel(reports, from, to);
 
-  const cards = [
-    { label: 'Doanh thu', value: numFormat(kpi.revenue), delta: pctDelta(kpi.revenue, kpiPrev.revenue), icon: 'payments', accent: 'text-[#D32027] bg-rose-50' },
+  // Thẻ đầu: doanh thu (TikTok) hoặc Lưu (FB traffic-only) — giữ luôn 6 thẻ cho lưới 6 cột.
+  type CardT = { label: string; value: string; icon: string; accent: string; delta?: number | null; deltaPts?: number };
+  const firstCard: CardT = showRevenue
+    ? { label: 'Doanh thu', value: numFormat(kpi.revenue), delta: pctDelta(kpi.revenue, kpiPrev.revenue), icon: 'payments', accent: 'text-[#D32027] bg-rose-50' }
+    : { label: 'Lưu (Save)', value: compact(kpi.save), delta: pctDelta(kpi.save, kpiPrev.save), icon: 'bookmark', accent: 'text-rose-600 bg-rose-50' };
+  const cards: CardT[] = [
+    firstCard,
     { label: 'Views / Reach', value: compact(kpi.views), delta: pctDelta(kpi.views, kpiPrev.views), icon: 'visibility', accent: 'text-blue-600 bg-blue-50' },
     { label: 'Tương tác', value: compact(kpi.engagement), delta: pctDelta(kpi.engagement, kpiPrev.engagement), icon: 'favorite', accent: 'text-pink-600 bg-pink-50' },
     { label: 'Follow tăng', value: '+' + compact(kpi.followerIncr), delta: pctDelta(kpi.followerIncr, kpiPrev.followerIncr), icon: 'group_add', accent: 'text-green-600 bg-green-50' },
@@ -62,7 +69,7 @@ export default function BrandTrafficDashboard({ reports, from, to }: {
 
       {/* Biểu đồ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Doanh thu theo ngày" icon="show_chart">
+        <ChartCard title={showRevenue ? 'Doanh thu theo ngày' : 'Views / Reach theo ngày'} icon="show_chart">
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={series} margin={{ top: 6, right: 8, left: -8, bottom: 0 }}>
               <defs>
@@ -74,8 +81,11 @@ export default function BrandTrafficDashboard({ reports, from, to }: {
               <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} minTickGap={16} />
               <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={(v) => compact(v as number)} width={44} />
-              <Tooltip formatter={(v) => [numFormat(v as number), 'Doanh thu']} labelFormatter={(l) => 'Ngày ' + l} contentStyle={tooltipStyle} />
-              <Area type="monotone" dataKey="revenue" stroke="#D32027" strokeWidth={2.4} fill="url(#rev)" />
+              <Tooltip
+                formatter={(v) => (showRevenue ? [numFormat(v as number), 'Doanh thu'] : [compact(v as number), 'Views/Reach'])}
+                labelFormatter={(l) => 'Ngày ' + l} contentStyle={tooltipStyle}
+              />
+              <Area type="monotone" dataKey={showRevenue ? 'revenue' : 'views'} stroke="#D32027" strokeWidth={2.4} fill="url(#rev)" />
             </AreaChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -97,15 +107,18 @@ export default function BrandTrafficDashboard({ reports, from, to }: {
           </div>
         </ChartCard>
 
-        <ChartCard title="Doanh thu theo kênh" icon="leaderboard">
+        <ChartCard title={showRevenue ? 'Doanh thu theo kênh' : 'Views theo kênh'} icon="leaderboard">
           {channels.length === 0 ? <Empty /> : (
             <ResponsiveContainer width="100%" height={Math.max(160, channels.length * 44)}>
               <BarChart data={channels} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={(v) => compact(v as number)} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#475569' }} tickLine={false} axisLine={false} width={130} />
-                <Tooltip formatter={(v) => [numFormat(v as number), 'Doanh thu']} contentStyle={tooltipStyle} cursor={{ fill: '#f8fafc' }} />
-                <Bar dataKey="revenue" radius={[0, 6, 6, 0]} barSize={20}>
+                <Tooltip
+                  formatter={(v) => (showRevenue ? [numFormat(v as number), 'Doanh thu'] : [compact(v as number), 'Views/Reach'])}
+                  contentStyle={tooltipStyle} cursor={{ fill: '#f8fafc' }}
+                />
+                <Bar dataKey={showRevenue ? 'revenue' : 'views'} radius={[0, 6, 6, 0]} barSize={20}>
                   {channels.map((_, i) => <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />)}
                 </Bar>
               </BarChart>
