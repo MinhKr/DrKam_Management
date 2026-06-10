@@ -160,7 +160,7 @@ export const INITIAL_CHANNELS: AffiliateChannel[] = [
   // Facebook — Kênh thương hiệu: chỉ traffic (không doanh thu)
   {
     id: "8",
-    name: "Sức khoẻ lên tiếng",
+    name: "DrKam - Sống khỏe cùng Chuyên gia",
     brandCategory: "Kênh thương hiệu",
     platform: "Facebook",
     channelType: "Brand",
@@ -173,7 +173,7 @@ export const INITIAL_CHANNELS: AffiliateChannel[] = [
   },
   {
     id: "9",
-    name: "Khoẻ mạnh sống lâu",
+    name: "DrKam - Bác sĩ Răng Miệng Họng của mọi gia đình",
     brandCategory: "Kênh thương hiệu",
     platform: "Facebook",
     channelType: "Brand",
@@ -234,14 +234,23 @@ function genTikTokSampleReports(): DailyReport[] {
     }
   });
 
-  // KOC inhouse (Người thật + AI): chỉ doanh thu
+  // KOC inhouse (Người thật + AI): chỉ doanh thu.
+  // Phủ HẾT kênh (trừ doisongsuckhoe86 — cố ý để trống thể hiện trạng thái "Chưa bật DT")
+  // để xem bảng + dashboard khi nhiều kênh có dễ nhìn không.
   const koc = [
-    { name: 'happyy.daily',    days: 16, seed: 2, rev: 5_200_000 },
-    { name: 'giadinhminhhee',  days: 13, seed: 5, rev: 3_800_000 },
-    { name: 'nhacuacamcam',    days: 11, seed: 8, rev: 2_900_000 },
-    { name: 'koi_928tramtram', days: 14, seed: 3, rev: 4_100_000 },
-    { name: 'tinh642002',      days: 12, seed: 6, rev: 3_300_000 },
-    { name: 'ngoc.huong259',   days: 9,  seed: 9, rev: 2_400_000 },
+    // ── Người thật ──
+    { name: 'happyy.daily',    days: 16, seed: 2,  rev: 5_200_000 },
+    { name: 'giadinhminhhee',  days: 13, seed: 5,  rev: 3_800_000 },
+    { name: 'nhacuacamcam',    days: 11, seed: 8,  rev: 2_900_000 },
+    { name: 'bao_chau_day',    days: 15, seed: 10, rev: 4_600_000 },
+    // ── Kênh AI ──
+    { name: 'koi_928tramtram', days: 14, seed: 3,  rev: 4_100_000 },
+    { name: 'tinh642002',      days: 12, seed: 6,  rev: 3_300_000 },
+    { name: 'ngoc.huong259',   days: 9,  seed: 9,  rev: 2_400_000 },
+    { name: 'haidang0136',     days: 13, seed: 11, rev: 3_100_000 },
+    { name: 'minhquan8046',    days: 10, seed: 12, rev: 2_050_000 },
+    { name: 'quinchana82',     days: 14, seed: 13, rev: 3_700_000 },
+    { name: 'anhquan9684',     days: 8,  seed: 14, rev: 1_500_000 },
   ];
   koc.forEach((ch) => {
     for (let i = 0; i < ch.days; i++) {
@@ -264,8 +273,56 @@ function genTikTokSampleReports(): DailyReport[] {
   return out;
 }
 
+// Sinh báo cáo TRAFFIC mẫu cho Facebook — Kênh thương hiệu (nhập tay, KHÔNG doanh thu).
+// Cùng cách dựng sóng tất định như TikTok để dashboard có dữ liệu xem ngay.
+function genFacebookBrandSampleReports(): DailyReport[] {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateBack = (days: number) => {
+    const d = new Date(2026, 5, 9); // mốc 09/06/2026 lùi dần
+    d.setDate(d.getDate() - days);
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  };
+  const wave = (seed: number, i: number, base: number, amp: number) =>
+    Math.max(0, Math.round(base + amp * Math.sin((i + seed) * 1.3) + amp * 0.4 * ((i * (seed + 3)) % 5)));
+
+  const pages = [
+    { name: 'DrKam - Sống khỏe cùng Chuyên gia', days: 18, seed: 2, views: 26_000 },
+    { name: 'DrKam - Bác sĩ Răng Miệng Họng của mọi gia đình', days: 15, seed: 6, views: 19_000 },
+  ];
+  const out: DailyReport[] = [];
+  pages.forEach((pg) => {
+    for (let i = 0; i < pg.days; i++) {
+      const viewsReach = wave(pg.seed, i, pg.views, pg.views * 0.25);
+      const like = wave(pg.seed, i, pg.views * 0.025, pg.views * 0.007);
+      const comment = wave(pg.seed, i, 80, 45);
+      const share = wave(pg.seed, i, 40, 25);
+      const save = wave(pg.seed, i, 55, 30);
+      out.push({
+        id: `r_fbbrand_${pg.name.replace(/\s+/g, '')}_${i}`,
+        date: dateBack(i),
+        channelName: pg.name,
+        channelType: 'Facebook - Thương hiệu',
+        revenue: 0,
+        views: viewsReach,
+        interactions: like + comment + share,
+        source: i % 3 === 0 ? 'Admin' : 'Nhân viên',
+        isEditable: true,
+        traffic: {
+          viewsReach, comment, like, share, save,
+          viewAllRate: Math.round((34 + (i % 7) * 1.5) * 10) / 10,
+          avgViewDuration: Math.round((12 + (i % 5) * 1.2) * 10) / 10,
+          followerIncr: wave(pg.seed, i, 90, 60),
+        },
+        note: null,
+      });
+    }
+  });
+  return out;
+}
+
 export const INITIAL_REPORTS: DailyReport[] = [
   ...genTikTokSampleReports(),
+  ...genFacebookBrandSampleReports(),
   // Doanh thu Shopee mẫu cho Facebook KOC inhouse (gộp theo ID)
   { id: "rfb1", date: "03/06/2026", channelName: "conghaing",   channelType: "Facebook - KOC", revenue: 4200000, views: null, interactions: null, source: "Nhân viên", isEditable: true,  traffic: null, note: "12 đơn" },
   { id: "rfb2", date: "04/06/2026", channelName: "conghaing",   channelType: "Facebook - KOC", revenue: 5100000, views: null, interactions: null, source: "Nhân viên", isEditable: true,  traffic: null, note: "" },

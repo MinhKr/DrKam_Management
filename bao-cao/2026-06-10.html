@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 14mm 14mm 12mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1f2937; font-size: 11px; line-height: 1.45; margin: 0; }
+  .head { border-bottom: 3px solid #D32027; padding-bottom: 10px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .brand { font-size: 20px; font-weight: 800; color: #111827; letter-spacing: -0.3px; }
+  .brand span { color: #D32027; }
+  .sub { font-size: 10px; color: #6b7280; margin-top: 2px; }
+  .meta { text-align: right; font-size: 10px; color: #6b7280; }
+  .meta b { color: #D32027; font-size: 13px; }
+  h2 { font-size: 12px; color: #D32027; text-transform: uppercase; letter-spacing: 0.4px; margin: 14px 0 5px; padding-left: 7px; border-left: 3px solid #D32027; }
+  .grp { font-weight: 700; color: #111827; margin: 7px 0 2px; font-size: 11px; }
+  ul { margin: 2px 0 6px; padding-left: 16px; }
+  li { margin: 1.5px 0; }
+  .tag { display: inline-block; background: #fef2f2; color: #D32027; border: 1px solid #fecaca; border-radius: 4px; padding: 0 5px; font-size: 9px; font-weight: 700; }
+  .next { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 8px 12px; margin-top: 4px; }
+  .next h2 { color: #c2410c; border-color: #c2410c; margin-top: 0; }
+  .foot { margin-top: 16px; border-top: 1px solid #e5e7eb; padding-top: 6px; font-size: 9px; color: #9ca3af; display: flex; justify-content: space-between; }
+  .pill { display:inline-block; background:#111827; color:#fff; border-radius:4px; padding:0 5px; font-size:9px; font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div>
+      <div class="brand">DRKAM <span>Pharma</span> — Báo cáo công việc</div>
+      <div class="sub">Hệ thống quản trị kênh affiliate · Web nội bộ</div>
+    </div>
+    <div class="meta">
+      <div>Phiên ngày</div>
+      <b>10/06/2026</b>
+      <div>Người làm: NhatMinh</div>
+    </div>
+  </div>
+
+  <h2>Phiên hôm nay — đã hoàn thành</h2>
+
+  <div class="grp">1. Facebook — Kênh thương hiệu: chuyển về NHẬP TAY + dashboard <span class="tag">CHÍNH</span></div>
+  <ul>
+    <li>Bỏ tự lấy số qua Graph API → <b>nhập tay toàn bộ 8 chỉ số</b> (Views, Like, Comment, Share, Lưu, Xem hết, TG xem, Follow+).</li>
+    <li>Dựng lại giao diện <b>theo format TikTok</b>: bảng các page cộng dồn theo khoảng + bộ lọc ngày (Hôm nay/Hôm qua/7/30/Tùy chọn) + dòng tổng.</li>
+    <li>Dashboard phân tích đặt ngay dưới bảng — dùng chung dashboard với TikTok qua cờ mới <b>showRevenue</b> (FB chỉ traffic nên ẩn doanh thu, lấy Views làm trục chính).</li>
+    <li>Thêm dữ liệu mẫu 2 page để xem ngay.</li>
+  </ul>
+
+  <div class="grp">2. Facebook — KOC inhouse: dashboard "Đua doanh thu" <span class="tag">CHÍNH</span></div>
+  <ul>
+    <li>Thêm dashboard <b>so sánh độ cạnh tranh 3 thành viên</b>: 4 KPI (tổng nhóm, người dẫn đầu, cách biệt top 1–2, TB/người).</li>
+    <li><b>Đường đua doanh thu theo ngày</b> (mỗi thành viên 1 đường) + <b>bảng xếp hạng</b> huy chương kèm % &amp; tăng/giảm + donut tỷ trọng.</li>
+    <li>Màu <b>cố định theo từng thành viên</b> (không đổi theo thứ hạng) để theo dõi nhất quán.</li>
+  </ul>
+
+  <div class="grp">3. Giao diện &amp; màu sắc</div>
+  <ul>
+    <li>Icon sidebar: chuyển sang <b>chip nền màu + glyph màu</b>, mỗi mục một màu nhận diện riêng (đổi vài icon cho hợp nghĩa).</li>
+    <li>Đổi bảng màu biểu đồ cột/donut: 3 tông đỏ/cam liền nhau (khó nhìn) → <b>đỏ · xanh dương · xanh lá · cam · tím…</b> tách bạch.</li>
+    <li>Ô tên page (tên dài): gọn 1 dòng mặc định, <b>hover thì giãn xuống dòng hiện đủ tên</b> (không tooltip che khuất).</li>
+  </ul>
+
+  <div class="grp">4. Phân quyền &amp; dữ liệu mẫu</div>
+  <ul>
+    <li><b>Tạm khoá</b> mọi mục ngoài TikTok &amp; Facebook cho mọi vai trò (ổ khoá + disabled) — <b>giữ nguyên code</b>, mở lại bằng 1 dòng danh sách cho phép.</li>
+    <li>Phủ hết kênh TikTok KOC còn trống (thêm 5 kênh) để kiểm thử giao diện khi nhiều kênh; chừa 1 kênh "Chưa bật DT" làm mẫu.</li>
+    <li>Đổi tên 2 page Facebook thương hiệu theo danh sách thực tế.</li>
+  </ul>
+
+  <div class="next">
+    <h2>Việc tiếp theo</h2>
+    <ul>
+      <li>Làm lại <b>Tổng quan</b> bằng số thật (đang khoá tạm) rồi mở lại các mục đã khoá.</li>
+      <li>Chốt phương án Database → viết migration + đẩy số thật lên UI.</li>
+    </ul>
+  </div>
+
+  <div class="foot">
+    <span>DrKam Pharma Portal · Báo cáo nội bộ</span>
+    <span>10/06/2026</span>
+  </div>
+</body>
+</html>

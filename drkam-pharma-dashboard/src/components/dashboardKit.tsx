@@ -11,7 +11,9 @@ export const compact = (n: number) => {
   return n.toLocaleString('vi-VN');
 };
 
-export const BAR_COLORS = ['#D32027', '#E0563B', '#C2410C', '#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#16A34A'];
+// Bảng màu cho cột/donut: các hue cách xa nhau để các phần tử CẠNH NHAU dễ phân biệt
+// (giữ đỏ DrKam đứng đầu). Tránh để 3 tông đỏ/cam liền nhau như trước.
+export const BAR_COLORS = ['#D32027', '#2563EB', '#16A34A', '#F59E0B', '#7C3AED', '#0891B2', '#DB2777', '#64748B'];
 
 export const tooltipStyle = { borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' } as const;
 

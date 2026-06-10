@@ -34,7 +34,7 @@ import { getCurrentSession, getCurrentUserId, signOut } from './data/auth';
 
 // Phiên bản dữ liệu mẫu (demo). Tăng giá trị này mỗi khi đổi dữ liệu INITIAL_* để
 // tự nạp lại trên trình duyệt cũ (xóa localStorage demo cũ), không cần xóa cache thủ công.
-const SEED_VERSION = '2026-06-09-tiktok-sample-reports';
+const SEED_VERSION = '2026-06-10-koc-fill-channels-v2';
 let demoMigrated = false;
 function migrateDemoData() {
   if (typeof window === 'undefined') return;
@@ -129,8 +129,9 @@ export default function App() {
   });
 
   // Active view tab state ("overview", "tiktok-brand"/"tiktok-real-koc"/"tiktok-ai-koc", "fb-koc"/"fb-brand", "channels", "employees", "chi-tieu", "stats", "logs")
-  const [activeTab, setActiveTab] = useState('overview');
-  const [ttMenuOpen, setTtMenuOpen] = useState(false); // dropdown TikTok ở sidebar
+  // Mặc định vào TikTok — Kênh thương hiệu (Tổng quan đang tạm khoá, xem canAccessTab).
+  const [activeTab, setActiveTab] = useState('tiktok-brand');
+  const [ttMenuOpen, setTtMenuOpen] = useState(true); // dropdown TikTok ở sidebar (mở sẵn)
   const [fbMenuOpen, setFbMenuOpen] = useState(false); // dropdown Facebook ở sidebar
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(3);
@@ -327,7 +328,7 @@ export default function App() {
       const idx = prev.findIndex(r => r.channelName === channelName && r.date === rec.date);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = { ...next[idx], synced: true, views: rec.viewsReach || null, interactions, traffic };
+        next[idx] = { ...next[idx], synced: false, views: rec.viewsReach || null, interactions, traffic };
         return next;
       }
       return [{
@@ -335,7 +336,7 @@ export default function App() {
         date: rec.date, channelName, channelType: 'Facebook - Thương hiệu', revenue: 0,
         views: rec.viewsReach || null, interactions,
         source: session.role === 'Admin' ? 'Admin' : 'Nhân viên',
-        isEditable: true, synced: true, traffic, note: null,
+        isEditable: true, synced: false, traffic, note: null,
       }, ...prev];
     });
     addAuditLog('Báo cáo', `Báo cáo traffic Facebook ngày ${rec.date} — kênh "${channelName}"`);
@@ -518,10 +519,15 @@ export default function App() {
 
   // Role permissions checking helper
   const canAccessTab = (tab: string) => {
-    if (session.role === 'Nhân viên') {
-      // Employees cannot access logs, employee target listing, or modify employees
-      return !['employees', 'chi-tieu', 'logs'].includes(tab);
-    }
+    // TẠM KHOÁ mọi mục ngoài TikTok & Facebook cho MỌI vai trò (giữ nguyên code, chỉ chặn truy cập).
+    // Mở lại sau: thêm tab vào ALLOWED_TABS hoặc bỏ chặn này.
+    const ALLOWED_TABS = ['tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand'];
+    if (!ALLOWED_TABS.includes(tab)) return false;
+
+    // (Phân quyền theo vai trò trước đây — giữ lại để khôi phục khi mở khoá:)
+    // if (session.role === 'Nhân viên') {
+    //   return !['employees', 'chi-tieu', 'logs'].includes(tab);
+    // }
     return true;
   };
 
@@ -776,16 +782,24 @@ export default function App() {
             {/* Navigation Tab options */}
             <nav className="flex flex-col gap-1">
               
-              <button 
+              <button
                 onClick={() => navigateToTab('overview')}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                  activeTab === 'overview' 
-                    ? 'bg-rose-50 text-[#D32027]' 
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                  !canAccessTab('overview') ? 'opacity-50 cursor-not-allowed' : ''
+                } ${
+                  activeTab === 'overview'
+                    ? 'bg-rose-50 text-[#D32027]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`}
+                disabled={!canAccessTab('overview')}
               >
-                <span className="material-symbols-outlined text-[18px]">dashboard</span>
-                <span>Tổng quan</span>
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-lg flex items-center justify-center text-indigo-600 bg-indigo-50 flex-shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">space_dashboard</span>
+                  </span>
+                  <span>Tổng quan</span>
+                </div>
+                {!canAccessTab('overview') && <span className="material-symbols-outlined text-[14px]">lock</span>}
               </button>
 
               {/* TikTok — nhóm dropdown 3 loại hình kênh */}
@@ -799,7 +813,9 @@ export default function App() {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-[18px]">music_note</span>
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-fuchsia-600 bg-fuchsia-50 flex-shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">music_note</span>
+                    </span>
                     <span>TikTok</span>
                   </div>
                   <span className={`material-symbols-outlined text-[18px] transition-transform ${ttMenuOpen ? 'rotate-180' : ''}`}>expand_more</span>
@@ -813,7 +829,7 @@ export default function App() {
                         activeTab === 'tiktok-brand' ? 'bg-rose-50 text-[#D32027]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[16px]">verified</span>
+                      <span className="material-symbols-outlined text-[16px] text-fuchsia-500">verified</span>
                       <span>Kênh thương hiệu</span>
                     </button>
                     <button
@@ -822,7 +838,7 @@ export default function App() {
                         activeTab === 'tiktok-real-koc' ? 'bg-rose-50 text-[#D32027]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[16px]">face</span>
+                      <span className="material-symbols-outlined text-[16px] text-fuchsia-500">face</span>
                       <span>KOC inhouse · Người thật</span>
                     </button>
                     <button
@@ -831,7 +847,7 @@ export default function App() {
                         activeTab === 'tiktok-ai-koc' ? 'bg-rose-50 text-[#D32027]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[16px]">smart_toy</span>
+                      <span className="material-symbols-outlined text-[16px] text-fuchsia-500">smart_toy</span>
                       <span>KOC inhouse · Kênh AI</span>
                     </button>
                   </div>
@@ -849,7 +865,9 @@ export default function App() {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-[18px]">dns</span>
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-blue-600 bg-blue-50 flex-shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">public</span>
+                    </span>
                     <span>Facebook</span>
                   </div>
                   <span className={`material-symbols-outlined text-[18px] transition-transform ${fbMenuOpen ? 'rotate-180' : ''}`}>expand_more</span>
@@ -865,7 +883,7 @@ export default function App() {
                           : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[16px]">groups</span>
+                      <span className="material-symbols-outlined text-[16px] text-blue-500">groups</span>
                       <span>KOC inhouse</span>
                     </button>
                     <button
@@ -876,35 +894,51 @@ export default function App() {
                           : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[16px]">verified</span>
+                      <span className="material-symbols-outlined text-[16px] text-blue-500">verified</span>
                       <span>Kênh thương hiệu</span>
                     </button>
                   </div>
                 )}
               </div>
 
-              <button 
+              <button
                 onClick={() => navigateToTab('channels')}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                  activeTab === 'channels' 
-                    ? 'bg-rose-50 text-[#D32027]' 
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                  !canAccessTab('channels') ? 'opacity-50 cursor-not-allowed' : ''
+                } ${
+                  activeTab === 'channels'
+                    ? 'bg-rose-50 text-[#D32027]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`}
+                disabled={!canAccessTab('channels')}
               >
-                <span className="material-symbols-outlined text-[18px]">hub</span>
-                <span>Quản lý kênh</span>
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-lg flex items-center justify-center text-teal-600 bg-teal-50 flex-shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">hub</span>
+                  </span>
+                  <span>Quản lý kênh</span>
+                </div>
+                {!canAccessTab('channels') && <span className="material-symbols-outlined text-[14px]">lock</span>}
               </button>
 
-              <button 
+              <button
                 onClick={() => navigateToTab('stats')}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                  activeTab === 'stats' 
-                    ? 'bg-rose-50 text-[#D32027]' 
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                  !canAccessTab('stats') ? 'opacity-50 cursor-not-allowed' : ''
+                } ${
+                  activeTab === 'stats'
+                    ? 'bg-rose-50 text-[#D32027]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`}
+                disabled={!canAccessTab('stats')}
               >
-                <span className="material-symbols-outlined text-[18px]">bar_chart</span>
-                <span>Thống kê chi tiết</span>
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-lg flex items-center justify-center text-amber-600 bg-amber-50 flex-shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">insights</span>
+                  </span>
+                  <span>Thống kê chi tiết</span>
+                </div>
+                {!canAccessTab('stats') && <span className="material-symbols-outlined text-[14px]">lock</span>}
               </button>
 
               {/* Protected HR Tabs for Admin / Leader roles */}
@@ -923,7 +957,9 @@ export default function App() {
                   disabled={!canAccessTab('employees')}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-[18px]">contacts</span>
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-violet-600 bg-violet-50 flex-shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">badge</span>
+                    </span>
                     <span>Quản lý nhân sự</span>
                   </div>
                   {!canAccessTab('employees') && <span className="material-symbols-outlined text-[14px]">lock</span>}
@@ -941,7 +977,9 @@ export default function App() {
                   disabled={!canAccessTab('chi-tieu')}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-[18px]">target</span>
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-600 bg-emerald-50 flex-shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">target</span>
+                    </span>
                     <span>Thiết lập KPI</span>
                   </div>
                   {!canAccessTab('chi-tieu') && <span className="material-symbols-outlined text-[14px]">lock</span>}
@@ -959,7 +997,9 @@ export default function App() {
                   disabled={!canAccessTab('logs')}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-[18px]">security</span>
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-600 bg-cyan-50 flex-shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">security</span>
+                    </span>
                     <span>Nhật ký hệ thống</span>
                   </div>
                   {!canAccessTab('logs') && <span className="material-symbols-outlined text-[14px]">lock</span>}
