@@ -777,8 +777,8 @@ export default function App() {
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `} style={{ height: 'calc(100vh - 61px)' }}>
           
-          <div className="space-y-6">
-            
+          <div className="space-y-6 flex-1 overflow-y-auto min-h-0 -mr-3 pr-3">
+
             {/* Navigation Tab options */}
             <nav className="flex flex-col gap-1">
               
@@ -1010,19 +1010,6 @@ export default function App() {
             </nav>
           </div>
 
-          {/* Quick Stats Summary Footer in Sidebar */}
-          <div className="pt-4 border-t border-slate-100 flex flex-col gap-2">
-            <div className="flex justify-between items-center text-[11px] font-semibold text-slate-500">
-              <span>Đang kết nối:</span>
-              <span className="text-green-600 font-bold flex items-center gap-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                <span>{channels.filter(c => c.linkedShop === true).length}/{channels.length} Kênh</span>
-              </span>
-            </div>
-            <div className="text-[10px] text-slate-400 text-center">
-              Bảo mật SSL 256-bit hoạt động
-            </div>
-          </div>
         </aside>
 
         {/* Backdrop filter overlay for mobile menu drawer */}

@@ -8,6 +8,20 @@ import { DailyReport } from '../types';
 import { kpiTotals, dailySeries, byChannel, prevRange, pctDelta } from '../lib/analytics';
 import { numFormat, compact, BAR_COLORS, tooltipStyle, Delta, ChartCard, Empty } from './dashboardKit';
 
+// Nhãn trục Y cho biểu đồ ngang: 1 dòng, cắt gọn bằng "…" để không bị tràn/mất nét chữ.
+// Tên đầy đủ vẫn xem được khi rê chuột (native <title>).
+const ChannelTick = ({ x, y, payload }: { x?: number; y?: number; payload?: { value?: string } }) => {
+  const full = payload?.value ?? '';
+  const MAX = 26;
+  const text = full.length > MAX ? full.slice(0, MAX - 1).trimEnd() + '…' : full;
+  return (
+    <text x={x} y={y} dy={4} textAnchor="end" fontSize={11} fontWeight={500} fill="#475569">
+      <title>{full}</title>
+      {text}
+    </text>
+  );
+};
+
 export default function BrandTrafficDashboard({ reports, from, to, showRevenue = true }: {
   reports: DailyReport[]; from: string; to: string;
   // FB Kênh thương hiệu chỉ có traffic → tắt mọi phần doanh thu, đổi sang lấy Views làm trục chính.
@@ -109,11 +123,11 @@ export default function BrandTrafficDashboard({ reports, from, to, showRevenue =
 
         <ChartCard title={showRevenue ? 'Doanh thu theo kênh' : 'Views theo kênh'} icon="leaderboard">
           {channels.length === 0 ? <Empty /> : (
-            <ResponsiveContainer width="100%" height={Math.max(160, channels.length * 44)}>
-              <BarChart data={channels} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
+            <ResponsiveContainer width="100%" height={Math.max(160, channels.length * 52)}>
+              <BarChart data={channels} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={(v) => compact(v as number)} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#475569' }} tickLine={false} axisLine={false} width={130} />
+                <YAxis type="category" dataKey="name" tick={<ChannelTick />} tickLine={false} axisLine={false} width={180} interval={0} />
                 <Tooltip
                   formatter={(v) => (showRevenue ? [numFormat(v as number), 'Doanh thu'] : [compact(v as number), 'Views/Reach'])}
                   contentStyle={tooltipStyle} cursor={{ fill: '#f8fafc' }}
