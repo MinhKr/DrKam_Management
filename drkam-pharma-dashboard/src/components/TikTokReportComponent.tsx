@@ -211,7 +211,6 @@ export default function TikTokReportComponent({
                     </>
                   ) : (
                     <>
-                      <th className={`${thNum} bg-slate-100 border-b border-slate-200`}>Số ngày</th>
                       <th className="px-3 py-2.5 font-bold text-left bg-slate-100 border-b border-slate-200 whitespace-nowrap">Gần nhất</th>
                     </>
                   )}
@@ -247,7 +246,6 @@ export default function TikTokReportComponent({
                         </>
                       ) : (
                         <>
-                          <td className={`${tdNum} ${has ? 'text-slate-600' : muted}`}>{has ? agg.days : '—'}</td>
                           <td className={`px-3 py-2.5 whitespace-nowrap tabular-nums ${has ? 'text-slate-500' : 'text-slate-300'}`}>{has ? rs[0].date : '—'}</td>
                         </>
                       )}
@@ -283,7 +281,6 @@ export default function TikTokReportComponent({
                     </>
                   ) : (
                     <>
-                      <td className={`${tdNum} font-bold text-slate-600 bg-slate-50 border-t-2 border-slate-200`}>{totals.days}</td>
                       <td className="bg-slate-50 border-t-2 border-slate-200"></td>
                     </>
                   )}

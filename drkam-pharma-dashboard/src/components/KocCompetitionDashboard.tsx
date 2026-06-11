@@ -38,8 +38,6 @@ export default function KocCompetitionDashboard({ reports, from, to, members }: 
     .sort((a, b) => b.revenue - a.revenue);
 
   const totalRev = ranked.reduce((s, m) => s + m.revenue, 0);
-  const activeCount = ranked.filter((m) => m.revenue > 0).length;
-  const avgPerMember = members.length ? Math.round(totalRev / members.length) : 0;
   const leader = ranked[0];
   const runnerUp = ranked[1];
   const leaderShare = leader && totalRev ? Math.round((leader.revenue / totalRev) * 100) : 0;
@@ -80,7 +78,7 @@ export default function KocCompetitionDashboard({ reports, from, to, members }: 
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <KpiBox label="Tổng DT cả nhóm" value={numFormat(totalRev)} icon="payments" accent="text-[#D32027] bg-rose-50">
           <Delta delta={pctDelta(totalRev, ranked.reduce((s, m) => s + m.prevRevenue, 0))} />
         </KpiBox>
@@ -93,9 +91,6 @@ export default function KocCompetitionDashboard({ reports, from, to, members }: 
           {leader && runnerUp
             ? <span className="text-[11px] font-semibold text-slate-500">{leader.managerName} hơn {runnerUp.managerName}</span>
             : <span className="text-[11px] text-slate-300 font-medium">cần ≥ 2 người ra số</span>}
-        </KpiBox>
-        <KpiBox label="DT trung bình / người" value={numFormat(avgPerMember)} icon="equalizer" accent="text-teal-600 bg-teal-50">
-          <span className="text-[11px] text-slate-400 font-medium">{activeCount}/{members.length} người ra số</span>
         </KpiBox>
       </div>
 
