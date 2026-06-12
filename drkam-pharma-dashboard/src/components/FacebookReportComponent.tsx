@@ -23,6 +23,7 @@ interface FacebookReportComponentProps {
   onDeleteFbPage: (id: string) => void;
   onReportDay: (channelName: string, rec: BrandDayRecord) => void;
   onUpdateChannel: (id: string, patch: Partial<AffiliateChannel>) => void;
+  onAddChannel: (chan: AffiliateChannel) => void; // thành viên tự thêm ID Shopee của mình
   view: 'koc' | 'brand'; // chọn từ dropdown sidebar
 }
 
@@ -77,6 +78,7 @@ function KocInhouseView({
   onDeleteReport,
   onAddFbPage,
   onDeleteFbPage,
+  onAddChannel,
 }: FacebookReportComponentProps) {
   // Mỗi "nhóm" = 1 ID Shopee KOC inhouse (1 thành viên)
   const idGroups = channels.filter(
@@ -87,8 +89,9 @@ function KocInhouseView({
   );
 
   const isMine = (g: AffiliateChannel) => g.managerName === session.name;
-  // Chính sách: mọi vai trò (gồm Nhân viên) được báo cáo mọi nhóm ID.
-  const canEdit = (_g: AffiliateChannel) => true;
+  // Chính sách (đã chốt 12/06): mỗi người chỉ sửa nhóm ID của MÌNH; Admin toàn quyền.
+  // Người khác chỉ XEM (RLS Supabase ép cùng quy tắc qua manager_id).
+  const canEdit = (g: AffiliateChannel) => session.role === 'Admin' || isMine(g);
 
   // Đưa nhóm của chính mình lên đầu cho dễ nhìn
   const sortedGroups = [...idGroups].sort((a, b) => Number(isMine(b)) - Number(isMine(a)));
@@ -137,6 +140,10 @@ function KocInhouseView({
   // ── Form thêm fanpage ──
   const [showPageForm, setShowPageForm] = useState(false);
   const [pageName, setPageName] = useState('');
+
+  // ── Form thêm ID Shopee của chính mình (tự phục vụ) ──
+  const [showIdForm, setShowIdForm] = useState(false);
+  const [newShopeeId, setNewShopeeId] = useState('');
 
   const [notification, setNotification] = useState('');
   const [dialog, setDialog] = useState<ConfirmState>(null);
@@ -190,10 +197,68 @@ function KocInhouseView({
     notify('Đã thêm fanpage Facebook!');
   };
 
+  // Thành viên tự thêm ID Shopee của mình → kênh tạo ra tự gắn chủ = chính họ
+  // (managerName = session.name; ở chế độ DB, manager_id = người đăng nhập qua RLS).
+  const handleAddShopeeId = (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = newShopeeId.trim();
+    if (!id) { alert('Vui lòng nhập ID Shopee.'); return; }
+    if (idGroups.some((g) => g.auditId === id || g.name === id)) {
+      alert(`ID Shopee "${id}" đã tồn tại trong danh sách.`);
+      return;
+    }
+    onAddChannel({
+      id: 'ch_fb_' + Date.now(),
+      name: id,
+      brandCategory: 'KOC inhouse',
+      platform: 'Facebook',
+      channelType: 'Real KOC',
+      linkedShop: false,
+      auditId: id,
+      managerName: session.name,
+      managerAvatar: session.avatar,
+      status: 'Đang nuôi',
+      tracking: { revenueActive: true, trafficActive: false },
+    });
+    setNewShopeeId('');
+    setShowIdForm(false);
+    notify('Đã thêm ID Shopee của bạn!');
+  };
+
+  // Thanh "Thêm ID Shopee của tôi" — chỉ 1 nút bên phải; bấm mới hiện form.
+  const addIdBar = (
+    <div className="flex flex-col items-end gap-3">
+      <button
+        type="button"
+        onClick={() => setShowIdForm((s) => !s)}
+        className="flex items-center gap-1.5 px-4 py-2.5 bg-[#D32027] hover:bg-[#B70F1B] text-white font-bold text-xs rounded-xl shadow-soft transition-colors"
+      >
+        <span className="material-symbols-outlined text-[18px]">{showIdForm ? 'close' : 'add'}</span>
+        <span>{showIdForm ? 'Đóng' : 'Thêm ID Shopee của tôi'}</span>
+      </button>
+      {showIdForm && (
+        <form onSubmit={handleAddShopeeId} className="w-full bg-white border border-slate-200/60 rounded-2xl p-4 soft-shadow flex flex-wrap gap-2 items-center">
+          <input
+            type="text"
+            placeholder="Nhập ID Shopee Affiliate của bạn (vd: conghaing)..."
+            className="flex-1 min-w-[220px] px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-[#D32027] bg-white"
+            value={newShopeeId}
+            onChange={(e) => setNewShopeeId(e.target.value)}
+          />
+          <button type="submit" className="px-4 py-2 bg-[#D32027] hover:bg-[#B70F1B] text-white text-xs font-bold rounded-lg">Lưu</button>
+          <p className="w-full text-[11px] text-slate-400">ID này sẽ tự động thuộc về bạn — người khác chỉ xem, không sửa được.</p>
+        </form>
+      )}
+    </div>
+  );
+
   if (idGroups.length === 0) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow py-12 text-center text-slate-400 font-medium px-6">
-        Chưa có ID Shopee KOC inhouse nào. Admin sẽ gắn ID Shopee cho từng thành viên (sẽ bổ sung sau).
+      <div className="space-y-4">
+        {addIdBar}
+        <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow py-12 text-center text-slate-400 font-medium px-6">
+          Bạn chưa có ID Shopee nào. Bấm <b>“Thêm ID Shopee của tôi”</b> ở trên để bắt đầu — ID sẽ tự động thuộc về bạn.
+        </div>
       </div>
     );
   }
@@ -213,6 +278,8 @@ function KocInhouseView({
           <span>Facebook — KOC inhouse (theo ID Shopee)</span>
         </h1>
       </div>
+
+      {addIdBar}
 
       {/* ── BỘ LỌC DOANH THU THEO NGÀY ── */}
       <div className="bg-white border border-slate-200/60 rounded-2xl p-4 soft-shadow flex flex-wrap items-end gap-4">
@@ -521,11 +588,13 @@ function aggregate(rs: DailyReport[]): BrandAgg {
   };
 }
 
-function BrandView({ reports, channels, session, onReportDay }: FacebookReportComponentProps) {
+function BrandView({ reports, channels, session, onReportDay, onAddChannel }: FacebookReportComponentProps) {
   const list = channels.filter(
     (c) => c.platform === 'Facebook' && c.channelType === 'Brand' && c.tracking.trafficActive,
   );
   const isMine = (ch: AffiliateChannel) => ch.managerName === session.name;
+  // Kênh thương hiệu FB là kênh DÙNG CHUNG → cả team content báo cáo được (khớp RLS
+  // can_edit_channel_reports). isMine chỉ để xếp kênh của mình lên đầu + badge.
   const sorted = [...list].sort((a, b) => Number(isMine(b)) - Number(isMine(a)));
 
   const today = isoTodayLocal();
@@ -544,6 +613,73 @@ function BrandView({ reports, channels, session, onReportDay }: FacebookReportCo
   const [modal, setModal] = useState<{ channel: AffiliateChannel; date: string } | null>(null);
   const [notification, setNotification] = useState('');
   const notify = (m: string) => { setNotification(m); setTimeout(() => setNotification(''), 4000); };
+
+  // ── Form thêm page thương hiệu (tự phục vụ) ──
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newPageName, setNewPageName] = useState('');
+  const [newPageId, setNewPageId] = useState('');
+  const handleAddPage = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newPageName.trim();
+    const pid = newPageId.trim();
+    if (!name) { alert('Vui lòng nhập tên page.'); return; }
+    if (list.some((c) => c.name === name)) { alert(`Page "${name}" đã tồn tại.`); return; }
+    onAddChannel({
+      id: 'ch_fbbrand_' + Date.now(),
+      name,
+      brandCategory: 'Kênh thương hiệu',
+      platform: 'Facebook',
+      channelType: 'Brand',
+      linkedShop: false,
+      auditId: pid, // Page ID Facebook (dùng cho Graph API sau này)
+      managerName: session.name,
+      managerAvatar: session.avatar,
+      status: 'Đang nuôi',
+      tracking: { revenueActive: false, trafficActive: true },
+    });
+    setNewPageName('');
+    setNewPageId('');
+    setShowAddForm(false);
+    notify('Đã thêm page thương hiệu!');
+  };
+
+  // Khối "Thêm page" — chỉ 1 nút bên phải; bấm mới hiện form.
+  const addBar = (
+    <div className="flex flex-col items-end gap-3">
+      <button
+        type="button"
+        onClick={() => setShowAddForm((s) => !s)}
+        className="flex items-center gap-1.5 px-4 py-2.5 bg-[#D32027] hover:bg-[#B70F1B] text-white font-bold text-xs rounded-xl shadow-soft transition-colors"
+      >
+        <span className="material-symbols-outlined text-[18px]">{showAddForm ? 'close' : 'add'}</span>
+        <span>{showAddForm ? 'Đóng' : 'Thêm page thương hiệu'}</span>
+      </button>
+      {showAddForm && (
+        <form onSubmit={handleAddPage} className="w-full bg-white border border-slate-200/60 rounded-2xl p-4 soft-shadow grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-start">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input
+              type="text"
+              autoFocus
+              placeholder="Tên page (vd: DrKam - Sống khỏe...)"
+              className="px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-[#D32027] bg-white"
+              value={newPageName}
+              onChange={(e) => setNewPageName(e.target.value)}
+            />
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="Page ID Facebook (vd: 1029716813565392)"
+              className="px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-[#D32027] bg-white"
+              value={newPageId}
+              onChange={(e) => setNewPageId(e.target.value)}
+            />
+          </div>
+          <button type="submit" className="px-4 py-2 bg-[#D32027] hover:bg-[#B70F1B] text-white text-xs font-bold rounded-lg sm:self-stretch">Lưu</button>
+          <p className="sm:col-span-2 text-[11px] text-slate-400">Page ID lấy ở phần Giới thiệu/Trang của fanpage — dùng để tự lấy số qua API sau này. Cả team đều báo cáo được page này.</p>
+        </form>
+      )}
+    </div>
+  );
 
   const inRange = (r: DailyReport) => { const iso = toIsoDate(r.date); return iso >= range.from && iso <= range.to; };
   const isBrandReport = (r: DailyReport) => r.channelType === 'Facebook - Thương hiệu' || (r.channelType !== 'Facebook - KOC' && !!r.traffic);
@@ -627,9 +763,11 @@ function BrandView({ reports, channels, session, onReportDay }: FacebookReportCo
         </div>
       </div>
 
+      {addBar}
+
       {list.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow py-12 text-center text-slate-400 font-medium px-6">
-          Chưa có kênh Facebook thương hiệu nào bật theo dõi traffic. Tạo kênh Facebook (Brand) ở mục <b>Quản lý kênh</b>.
+          Chưa có page thương hiệu nào. Bấm <b>“Thêm page”</b> ở trên để thêm — cả team đều nhập báo cáo traffic cho page đó được.
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">

@@ -16,6 +16,7 @@ export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) 
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showForgot, setShowForgot] = useState(false); // popup hướng dẫn quên mật khẩu
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,17 +150,9 @@ export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) 
 
             {/* Mật khẩu */}
             <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider" htmlFor="password">
-                  Mật khẩu
-                </label>
-                <a href="#reset" className="text-xs font-semibold text-[#D32027] hover:underline" onClick={(e) => {
-                  e.preventDefault();
-                  alert('Tiện ích đặt lại mật khẩu: Vui lòng liên hệ Admin IT tại IT@drkam.vn để nhận mã OTP.');
-                }}>
-                  Quên mật khẩu?
-                </a>
-              </div>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2" htmlFor="password">
+                Mật khẩu
+              </label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">
                   lock
@@ -185,6 +178,14 @@ export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) 
                     {showPassword ? 'visibility' : 'visibility_off'}
                   </span>
                 </button>
+              </div>
+              <div className="mt-2 text-right">
+                <a href="#reset" className="text-xs font-semibold text-[#D32027] hover:underline" onClick={(e) => {
+                  e.preventDefault();
+                  setShowForgot(true);
+                }}>
+                  Quên mật khẩu?
+                </a>
               </div>
             </div>
 
@@ -270,6 +271,36 @@ export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) 
 
         </div>
       </div>
+
+      {/* Popup hướng dẫn khi quên mật khẩu */}
+      {showForgot && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm"
+          onClick={() => setShowForgot(false)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-100 p-6 animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center text-center gap-3">
+              <span className="w-12 h-12 rounded-full flex items-center justify-center bg-rose-50 text-[#D32027]">
+                <span className="material-symbols-outlined text-2xl">lock_reset</span>
+              </span>
+              <h3 className="text-lg font-bold text-slate-900 font-display">Quên mật khẩu</h3>
+              <p className="text-sm text-slate-500">
+                Tiện ích đặt lại mật khẩu: Vui lòng liên hệ <b className="text-slate-700">Minh - phòng Marketing</b> để được trợ giúp.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowForgot(false)}
+              className="mt-6 w-full px-4 py-2.5 bg-[#D32027] hover:bg-[#B70F1B] text-white text-sm font-bold rounded-xl transition-colors"
+            >
+              Đã hiểu
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -10,6 +10,7 @@ import {
   Employee,
   TeamTarget,
   AuditLog,
+  FbPage,
 } from '../types';
 import {
   channelFromRow,
@@ -20,6 +21,8 @@ import {
   targetFromRow,
   targetToInsert,
   logFromRow,
+  fbPageFromRow,
+  fbPageToInsert,
 } from './mappers';
 
 function db() {
@@ -38,10 +41,17 @@ export async function loadChannels(): Promise<AffiliateChannel[]> {
   return (data ?? []).map(channelFromRow);
 }
 
-export async function createChannel(c: AffiliateChannel): Promise<AffiliateChannel> {
+/**
+ * Tạo kênh. managerId = người tạo → kênh thuộc về họ (RLS yêu cầu manager_id =
+ * auth.uid() với người không phải Admin; Admin có thể gán cho người khác sau).
+ */
+export async function createChannel(
+  c: AffiliateChannel,
+  managerId: string | null,
+): Promise<AffiliateChannel> {
   const { data, error } = await db()
     .from('channels')
-    .insert(channelToInsert(c))
+    .insert(channelToInsert(c, null, managerId))
     .select('*')
     .single();
   if (error) throw error;
@@ -64,13 +74,21 @@ export async function loadReports(): Promise<DailyReport[]> {
   return (data ?? []).map(reportFromRow);
 }
 
-export async function createReport(
+/**
+ * Upsert báo cáo theo khóa (channel_id, report_date, source_platform):
+ * báo cáo lại cùng kênh/ngày/nguồn sẽ GHI ĐÈ thay vì tạo dòng trùng.
+ * Khớp ràng buộc daily_reports_uniq + trigger updated_at (migration 0002).
+ */
+export async function upsertReport(
   rep: DailyReport,
   createdBy: string,
+  channelId: string,
 ): Promise<DailyReport> {
   const { data, error } = await db()
     .from('daily_reports')
-    .insert(reportToInsert(rep, createdBy))
+    .upsert(reportToInsert(rep, createdBy, channelId), {
+      onConflict: 'channel_id,report_date,source_platform',
+    })
     .select('*')
     .single();
   if (error) throw error;
@@ -79,6 +97,34 @@ export async function createReport(
 
 export async function deleteReport(id: string): Promise<void> {
   const { error } = await db().from('daily_reports').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── FB PAGES (fanpage theo ID Shopee KOC inhouse) ─────────────
+export async function loadFbPages(): Promise<FbPage[]> {
+  const { data, error } = await db()
+    .from('fb_pages')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(fbPageFromRow);
+}
+
+export async function createFbPage(
+  p: FbPage,
+  addedById: string | null,
+): Promise<FbPage> {
+  const { data, error } = await db()
+    .from('fb_pages')
+    .insert(fbPageToInsert(p, addedById))
+    .select('*')
+    .single();
+  if (error) throw error;
+  return fbPageFromRow(data);
+}
+
+export async function deleteFbPage(id: string): Promise<void> {
+  const { error } = await db().from('fb_pages').delete().eq('id', id);
   if (error) throw error;
 }
 
