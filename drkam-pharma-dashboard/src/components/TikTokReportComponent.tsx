@@ -24,6 +24,7 @@ interface TikTokReportComponentProps {
   session: UserSession;
   onReportDay: (channelName: string, channelType: string, rec: TikTokDayRecord) => void;
   onDeleteReport: (reportId: string) => void;
+  onAddChannel: (chan: AffiliateChannel) => void; // người dùng tự thêm kênh
   view: TikTokView;
 }
 
@@ -77,8 +78,14 @@ function aggregate(rs: DailyReport[]): Agg {
   };
 }
 
+const CATEGORY_BY_TYPE: Record<AffiliateChannel['channelType'], string> = {
+  'Brand': 'Kênh thương hiệu',
+  'Real KOC': 'KOC người thật',
+  'AI KOC': 'KOC AI',
+};
+
 export default function TikTokReportComponent({
-  reports, channels, session, onReportDay, onDeleteReport, view,
+  reports, channels, session, onReportDay, onDeleteReport, onAddChannel, view,
 }: TikTokReportComponentProps) {
   const cfg = VIEW_CONFIG[view];
   const list = channels.filter((c) => c.platform === 'TikTok' && c.channelType === cfg.channelType);
@@ -101,7 +108,64 @@ export default function TikTokReportComponent({
   const [modal, setModal] = useState<{ channel: AffiliateChannel; date: string } | null>(null);
   const [notification, setNotification] = useState('');
   const [dialog, setDialog] = useState<ConfirmState>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newChannelName, setNewChannelName] = useState('');
   const notify = (m: string) => { setNotification(m); setTimeout(() => setNotification(''), 4000); };
+
+  // Người dùng tự thêm kênh TikTok vào đúng mục đang xem (kênh dùng chung → cả team báo cáo).
+  const handleAddChannel = (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = newChannelName.trim();
+    if (!id) { alert('Vui lòng nhập tên / ID kênh.'); return; }
+    if (list.some((c) => c.name === id || c.auditId === id)) {
+      alert(`Kênh "${id}" đã tồn tại trong mục này.`);
+      return;
+    }
+    onAddChannel({
+      id: 'ch_tt_' + Date.now(),
+      name: id,
+      brandCategory: CATEGORY_BY_TYPE[cfg.channelType],
+      platform: 'TikTok',
+      channelType: cfg.channelType,
+      linkedShop: cfg.channelType === 'Brand',
+      auditId: id,
+      managerName: session.name,
+      managerAvatar: session.avatar,
+      status: 'Đang nuôi',
+      tracking: { revenueActive: true, trafficActive: cfg.hasTraffic },
+    });
+    setNewChannelName('');
+    setShowAddForm(false);
+    notify('Đã thêm kênh mới!');
+  };
+
+  // Khối "Thêm kênh" — chỉ 1 nút bên phải; bấm mới hiện form.
+  const addBar = (
+    <div className="flex flex-col items-end gap-3">
+      <button
+        type="button"
+        onClick={() => setShowAddForm((s) => !s)}
+        className="flex items-center gap-1.5 px-4 py-2.5 bg-[#D32027] hover:bg-[#B70F1B] text-white font-bold text-xs rounded-xl shadow-soft transition-colors"
+      >
+        <span className="material-symbols-outlined text-[18px]">{showAddForm ? 'close' : 'add'}</span>
+        <span>{showAddForm ? 'Đóng' : `Thêm kênh ${CATEGORY_BY_TYPE[cfg.channelType]}`}</span>
+      </button>
+      {showAddForm && (
+        <form onSubmit={handleAddChannel} className="w-full bg-white border border-slate-200/60 rounded-2xl p-4 soft-shadow flex flex-wrap gap-2 items-center">
+          <input
+            type="text"
+            autoFocus
+            placeholder="Nhập tên / ID kênh TikTok (vd: drkamvn)..."
+            className="flex-1 min-w-[220px] px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-[#D32027] bg-white"
+            value={newChannelName}
+            onChange={(e) => setNewChannelName(e.target.value)}
+          />
+          <button type="submit" className="px-4 py-2 bg-[#D32027] hover:bg-[#B70F1B] text-white text-xs font-bold rounded-lg">Lưu</button>
+          <p className="w-full text-[11px] text-slate-400">Kênh vào đúng mục đang xem; cả team đều nhập báo cáo cho kênh này được.</p>
+        </form>
+      )}
+    </div>
+  );
 
   const inRange = (r: DailyReport) => { const iso = toIso(r.date); return iso >= range.from && iso <= range.to; };
   const reportsInRange = (ch: AffiliateChannel) =>
@@ -186,9 +250,11 @@ export default function TikTokReportComponent({
         </div>
       </div>
 
+      {addBar}
+
       {list.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow py-12 text-center text-slate-400 font-medium px-6">
-          Chưa có kênh TikTok loại này. Tạo kênh TikTok ({cfg.channelType}) ở mục <b>Quản lý kênh</b>.
+          Chưa có kênh loại này. Bấm <b>“Thêm kênh”</b> ở trên để thêm — cả team đều nhập báo cáo cho kênh đó được.
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">

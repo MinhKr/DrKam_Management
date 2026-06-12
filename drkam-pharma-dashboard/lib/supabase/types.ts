@@ -72,11 +72,11 @@ export interface Database {
         Row: {
           id: string;
           report_date: string;
-          channel_id: string | null;
+          channel_id: string;           // NOT NULL từ migration 0002
           channel_name: string | null;
           channel_type: string | null;
           revenue: number;
-          source_platform: string | null;
+          source_platform: string;      // NOT NULL DEFAULT 'manual' từ 0002
           created_by: string;
           created_by_role: string | null;
           views_reach: number | null;
@@ -134,6 +134,22 @@ export interface Database {
           ts?: string;
         };
         Update: Partial<Database['public']['Tables']['audit_logs']['Insert']>;
+        Relationships: [];
+      };
+      fb_pages: {
+        Row: {
+          id: string;
+          channel_id: string;
+          name: string;
+          added_by: string | null;
+          added_by_name: string | null;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['fb_pages']['Row'], 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['fb_pages']['Insert']>;
         Relationships: [];
       };
     };

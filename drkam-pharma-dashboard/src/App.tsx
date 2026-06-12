@@ -171,10 +171,11 @@ export default function App() {
     localStorage.setItem('drkam_logs', JSON.stringify(logs));
   }, [logs, cloud]);
 
-  // fbPages: luôn lưu localStorage (chưa có bảng DB cho phần này).
+  // fbPages: chỉ lưu localStorage ở chế độ demo (cloud dùng bảng fb_pages).
   useEffect(() => {
+    if (cloud) return;
     localStorage.setItem('drkam_fb_pages', JSON.stringify(fbPages));
-  }, [fbPages]);
+  }, [fbPages, cloud]);
 
   // Chế độ DB thật: khôi phục phiên đăng nhập + nạp toàn bộ dữ liệu khi mở app.
   useEffect(() => {
@@ -215,6 +216,14 @@ export default function App() {
         setReports(rp);
         setEmployees(emp);
         setTargets(tg);
+        // Fanpage Facebook — tách riêng để nếu bảng fb_pages chưa tạo (chưa chạy 0002)
+        // thì các dữ liệu khác vẫn nạp bình thường.
+        try {
+          const pages = await repo.loadFbPages();
+          if (active) setFbPages(pages);
+        } catch (e) {
+          console.warn('Tải fanpage Facebook thất bại (có thể chưa chạy migration 0002):', errMsg(e));
+        }
         // Nhật ký chỉ Admin xem được (RLS) — bỏ qua lỗi với vai trò khác.
         try {
           const lg = await repo.loadLogs();
@@ -239,17 +248,23 @@ export default function App() {
   };
 
   // Login Success
-  const handleLoginSuccess = (newSession: UserSession) => {
+  const handleLoginSuccess = async (newSession: UserSession) => {
     setSession(newSession);
-    addAuditLog('Bảo mật', `Nhân sự ${newSession.name} đăng nhập thành công với vai trò ${newSession.role}.`);
+    // Ghi log với danh tính NGƯỜI VỪA ĐĂNG NHẬP (không lấy session cũ — lúc này
+    // setSession chưa kịp cập nhật nên session.name vẫn là tên mặc định cũ).
+    const uid = cloud ? await getCurrentUserId() : null;
+    if (cloud) setCurrentUserId(uid);
+    addAuditLog('Bảo mật', `Nhân sự ${newSession.name} đăng nhập thành công với vai trò ${newSession.role}.`, newSession.name, uid);
   };
 
-  // Helper helper to write audit logs cleanly
-  const addAuditLog = (module: string, action: string) => {
-    const operator = session ? session.name : 'Unknown User';
+  // Helper helper to write audit logs cleanly.
+  // operatorOverride / operatorIdOverride: dùng khi session state chưa kịp cập nhật (vd lúc login).
+  const addAuditLog = (module: string, action: string, operatorOverride?: string, operatorIdOverride?: string | null) => {
+    const operator = operatorOverride ?? (session ? session.name : 'Unknown User');
+    const operatorId = operatorIdOverride !== undefined ? operatorIdOverride : currentUserId;
     // Chế độ DB thật: ghi nhật ký vào Supabase (RLS cho phép mọi user INSERT).
     if (cloud) {
-      void repo.insertLog({ operator, operatorId: currentUserId, action, module });
+      void repo.insertLog({ operator, operatorId, action, module });
       return;
     }
     const now = new Date();
@@ -269,17 +284,33 @@ export default function App() {
   // Action handlers passed to child components
   // ----------------------------------------------------
 
-  // Thông báo lỗi gọn
-  const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+  // Thông báo lỗi gọn. Lỗi Supabase là object {message, code,...} (không phải Error)
+  // → phải đọc .message, nếu không sẽ ra "[object Object]".
+  const errMsg = (e: unknown) => {
+    if (e instanceof Error) return e.message;
+    if (e && typeof e === 'object' && 'message' in e) return String((e as { message: unknown }).message);
+    return String(e);
+  };
+  const errCode = (e: unknown) =>
+    e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : '';
+
+  // Tìm id kênh (UUID ở chế độ DB) theo tên kênh — báo cáo cần gắn channel_id.
+  const findChannelId = (name: string) => channels.find(c => c.name === name)?.id;
+
+  // Gộp 1 báo cáo (đã upsert) vào state: thay bản cũ cùng (kênh + ngày) nếu có.
+  const mergeReport = (saved: DailyReport) =>
+    setReports(prev => [saved, ...prev.filter(r => !(r.channelName === saved.channelName && r.date === saved.date))]);
 
   // Reports
   const handleAddReport = async (newRep: DailyReport) => {
     if (cloud) {
       try {
         if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
-        const saved = await repo.createReport(newRep, currentUserId);
-        setReports(prev => [saved, ...prev]);
-        addAuditLog('Báo cáo', `Đã thêm báo cáo ngày ${saved.date} cho kênh "${saved.channelName}" (Doanh thu: ${saved.revenue.toLocaleString('vi-VN')} đ)`);
+        const channelId = findChannelId(newRep.channelName);
+        if (!channelId) throw new Error(`Không tìm thấy kênh "${newRep.channelName}" để gắn báo cáo.`);
+        const saved = await repo.upsertReport(newRep, currentUserId, channelId);
+        mergeReport(saved);
+        addAuditLog('Báo cáo', `Đã lưu báo cáo ngày ${saved.date} cho kênh "${saved.channelName}" (Doanh thu: ${saved.revenue.toLocaleString('vi-VN')} đ)`);
       } catch (e) {
         alert('Lưu báo cáo thất bại: ' + errMsg(e));
       }
@@ -317,13 +348,32 @@ export default function App() {
     date: string; viewsReach: number; like: number; comment: number; share: number;
     save: number; completionRate: number; avgDuration: number; followerIncr: number;
   };
-  const handleReportDay = (channelName: string, rec: BrandDayRecord) => {
+  const handleReportDay = async (channelName: string, rec: BrandDayRecord) => {
     const traffic = {
       viewsReach: rec.viewsReach, comment: rec.comment, like: rec.like, share: rec.share,
       save: rec.save, viewAllRate: rec.completionRate, avgViewDuration: rec.avgDuration,
       followerIncr: rec.followerIncr,
     };
     const interactions = rec.like + rec.comment + rec.share || null;
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        const channelId = findChannelId(channelName);
+        if (!channelId) throw new Error(`Không tìm thấy kênh "${channelName}" để gắn báo cáo.`);
+        const rep: DailyReport = {
+          id: '', date: rec.date, channelName, channelType: 'Facebook - Thương hiệu', revenue: 0,
+          views: rec.viewsReach || null, interactions,
+          source: session.role === 'Admin' ? 'Admin' : 'Nhân viên',
+          isEditable: true, synced: false, traffic, note: null,
+        };
+        const saved = await repo.upsertReport(rep, currentUserId, channelId);
+        mergeReport(saved);
+        addAuditLog('Báo cáo', `Báo cáo traffic Facebook ngày ${rec.date} — kênh "${channelName}"`);
+      } catch (e) {
+        alert('Lưu báo cáo thất bại: ' + errMsg(e));
+      }
+      return;
+    }
     setReports(prev => {
       const idx = prev.findIndex(r => r.channelName === channelName && r.date === rec.date);
       if (idx >= 0) {
@@ -344,10 +394,30 @@ export default function App() {
 
   // Báo cáo TikTok 1 NGÀY cho 1 kênh (nhập tay): upsert theo (kênh + ngày).
   // Kênh thương hiệu ghi doanh thu + 8 chỉ số traffic; KOC chỉ ghi doanh thu.
-  const handleTikTokReportDay = (channelName: string, channelType: string, rec: TikTokDayRecord) => {
+  const handleTikTokReportDay = async (channelName: string, channelType: string, rec: TikTokDayRecord) => {
     const interactions = rec.traffic
       ? (rec.traffic.like + rec.traffic.comment + rec.traffic.share) || null
       : null;
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        const channelId = findChannelId(channelName);
+        if (!channelId) throw new Error(`Không tìm thấy kênh "${channelName}" để gắn báo cáo.`);
+        const rep: DailyReport = {
+          id: '', date: rec.date, channelName, channelType, revenue: rec.revenue,
+          views: rec.traffic ? (rec.traffic.viewsReach || null) : null,
+          interactions, traffic: rec.traffic,
+          source: session.role === 'Admin' ? 'Admin' : 'Nhân viên',
+          isEditable: true, note: null,
+        };
+        const saved = await repo.upsertReport(rep, currentUserId, channelId);
+        mergeReport(saved);
+        addAuditLog('Báo cáo', `Báo cáo TikTok ngày ${rec.date} — kênh "${channelName}" (Doanh thu: ${rec.revenue.toLocaleString('vi-VN')} đ)`);
+      } catch (e) {
+        alert('Lưu báo cáo thất bại: ' + errMsg(e));
+      }
+      return;
+    }
     setReports(prev => {
       const idx = prev.findIndex(r => r.channelName === channelName && r.date === rec.date);
       const base = {
@@ -373,11 +443,15 @@ export default function App() {
   const handleAddChannel = async (newChan: AffiliateChannel) => {
     if (cloud) {
       try {
-        const saved = await repo.createChannel(newChan);
+        const saved = await repo.createChannel(newChan, currentUserId);
         setChannels(prev => [saved, ...prev]);
         addAuditLog('Hệ thống', `Đăng ký kênh affiliate mới: "${saved.name}" phân loại [${saved.channelType}] do ${saved.managerName} phụ trách.`);
       } catch (e) {
-        alert('Tạo kênh thất bại: ' + errMsg(e));
+        if (errCode(e) === '23505') {
+          alert(`Kênh "${newChan.name}" đã tồn tại trên ${newChan.platform}. Vui lòng dùng tên/ID khác.`);
+        } else {
+          alert('Tạo kênh thất bại: ' + errMsg(e));
+        }
       }
       return;
     }
@@ -506,13 +580,31 @@ export default function App() {
   };
 
   // Fanpage Facebook (theo ID Shopee KOC inhouse)
-  const handleAddFbPage = (page: FbPage) => {
+  const handleAddFbPage = async (page: FbPage) => {
+    if (cloud) {
+      try {
+        const saved = await repo.createFbPage(page, currentUserId);
+        setFbPages(prev => [...prev, saved]);
+        addAuditLog('Hệ thống', `Thêm fanpage Facebook "${saved.name}" vào nhóm ID Shopee.`);
+      } catch (e) {
+        alert('Thêm fanpage thất bại: ' + errMsg(e));
+      }
+      return;
+    }
     setFbPages(prev => [...prev, page]);
     addAuditLog('Hệ thống', `Thêm fanpage Facebook "${page.name}" vào nhóm ID Shopee.`);
   };
 
-  const handleDeleteFbPage = (id: string) => {
+  const handleDeleteFbPage = async (id: string) => {
     const target = fbPages.find(p => p.id === id);
+    if (cloud) {
+      try {
+        await repo.deleteFbPage(id);
+      } catch (e) {
+        alert('Gỡ fanpage thất bại: ' + errMsg(e));
+        return;
+      }
+    }
     setFbPages(prev => prev.filter(p => p.id !== id));
     if (target) addAuditLog('Hệ thống', `Gỡ fanpage Facebook "${target.name}" khỏi nhóm ID Shopee.`);
   };
@@ -563,6 +655,7 @@ export default function App() {
             session={session}
             onReportDay={handleTikTokReportDay}
             onDeleteReport={handleDeleteReport}
+            onAddChannel={handleAddChannel}
             view={ttView}
           />
         );
@@ -581,6 +674,7 @@ export default function App() {
             onDeleteFbPage={handleDeleteFbPage}
             onReportDay={handleReportDay}
             onUpdateChannel={handleUpdateChannel}
+            onAddChannel={handleAddChannel}
             view={activeTab === 'fb-brand' ? 'brand' : 'koc'}
           />
         );

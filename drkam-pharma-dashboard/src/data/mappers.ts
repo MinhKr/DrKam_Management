@@ -12,6 +12,7 @@ import {
   Employee,
   TeamTarget,
   AuditLog,
+  FbPage,
 } from '../types';
 
 type ChannelRow = Database['public']['Tables']['channels']['Row'];
@@ -19,6 +20,20 @@ type ReportRow = Database['public']['Tables']['daily_reports']['Row'];
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 type TargetRow = Database['public']['Tables']['targets']['Row'];
 type LogRow = Database['public']['Tables']['audit_logs']['Row'];
+type FbPageRow = Database['public']['Tables']['fb_pages']['Row'];
+
+/**
+ * Quy ước nguồn doanh thu (source_platform) suy từ loại kênh của báo cáo.
+ * Dùng làm 1 phần khóa UNIQUE(channel_id, report_date, source_platform) cho upsert.
+ *  • TikTok (mọi loại) → 'tiktok_shop'
+ *  • Facebook KOC inhouse (doanh thu Shopee) → 'shopee'
+ *  • Còn lại (vd Facebook thương hiệu chỉ traffic) → 'manual'
+ */
+export function sourcePlatformFor(channelType: string): string {
+  if (channelType.startsWith('TikTok')) return 'tiktok_shop';
+  if (channelType === 'Facebook - KOC') return 'shopee';
+  return 'manual';
+}
 
 // ── Ngày tháng ────────────────────────────────────────────────
 /** "24/10/2023" → "2023-10-24" (kiểu DATE của Postgres). Nếu đã ISO thì giữ nguyên. */
@@ -135,7 +150,7 @@ export function reportFromRow(r: ReportRow): DailyReport {
 export function reportToInsert(
   rep: DailyReport,
   createdBy: string,
-  channelId: string | null = null,
+  channelId: string,
 ): Database['public']['Tables']['daily_reports']['Insert'] {
   const t = rep.traffic;
   return {
@@ -144,7 +159,7 @@ export function reportToInsert(
     channel_name: rep.channelName || null,
     channel_type: rep.channelType || null,
     revenue: rep.revenue,
-    source_platform: null,
+    source_platform: sourcePlatformFor(rep.channelType),
     created_by: createdBy,
     created_by_role: rep.source,
     views_reach: t ? t.viewsReach : rep.views,
@@ -200,6 +215,30 @@ export function targetToInsert(
     achieved_revenue: t.achievedRevenue,
     avatar: t.avatar || null,
     created_by: createdBy,
+  };
+}
+
+// ── FB PAGES ──────────────────────────────────────────────────
+// shopeeChannelId (UI) = channel_id (DB) của nhóm ID Shopee KOC inhouse.
+// addedBy (UI, tên hiển thị) ↔ added_by_name (DB); added_by (UUID) chỉ để FK/RLS.
+export function fbPageFromRow(r: FbPageRow): FbPage {
+  return {
+    id: r.id,
+    shopeeChannelId: r.channel_id,
+    name: r.name,
+    addedBy: r.added_by_name ?? '',
+  };
+}
+
+export function fbPageToInsert(
+  p: FbPage,
+  addedById: string | null,
+): Database['public']['Tables']['fb_pages']['Insert'] {
+  return {
+    channel_id: p.shopeeChannelId,
+    name: p.name,
+    added_by: addedById,
+    added_by_name: p.addedBy || null,
   };
 }
 

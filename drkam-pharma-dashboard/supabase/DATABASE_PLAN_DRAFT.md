@@ -94,11 +94,13 @@ auth.users ──1:1── profiles ──┐
 
 ---
 
-## 6. ⚠️ Quyết định cần bạn chốt (vì là nháp)
-1. **Quyền sửa/xóa báo cáo**: nới RLS cho **mọi nhân viên sửa/xóa mọi báo cáo** (khớp UI hiện tại) hay quay lại "chỉ sửa của mình"? *(ảnh hưởng bảo mật & nhật ký)*
-2. **`channel_id` bắt buộc**: chuyển báo cáo gắn cứng vào `channel_id` (khuyến nghị) thay vì chỉ `channel_name`?
-3. **Lưu lịch sử chỉnh sửa** báo cáo (ai sửa, sửa gì) hay chỉ ghi `audit_logs` như hiện tại?
-4. **Nhiều báo cáo/ngày**: 1 kênh chỉ 1 dòng/ngày (khuyến nghị, hợp upsert) hay cho phép nhiều lần trong ngày?
+## 6. ✅ Quyết định ĐÃ CHỐT (12/06/2026)
+1. **Quyền sửa/xóa báo cáo**: ⚠️ **ĐẢO LẠI — SỞ HỮU THEO KÊNH.** Chủ kênh (`channels.manager_id`) + Admin mới sửa/xóa được kênh + báo cáo + fanpage của kênh đó; người khác chỉ XEM. (Bỏ phương án "nới RLS cho mọi nhân viên".) Triển khai bằng hàm `owns_channel(c_id)` SECURITY DEFINER, áp cho RLS `channels` / `daily_reports` / `fb_pages`. Vẫn ghi `audit_logs`.
+2. **`channel_id` bắt buộc**: ✅ **NOT NULL** — gắn cứng báo cáo vào kênh thật.
+3. **Lưu lịch sử chỉnh sửa**: ✅ **CHỈ `audit_logs`** (không làm bảng versioning chi tiết ở giai đoạn này).
+4. **Số báo cáo/ngày**: ✅ **1 báo cáo / kênh / ngày / nguồn** → `UNIQUE(channel_id, report_date, source_platform)` + upsert.
+
+> ⚠️ Bẫy kỹ thuật cho upsert: `source_platform` hiện **nullable** → trong UNIQUE, NULL bị coi là khác nhau nên upsert KHÔNG gộp. Phải đặt `source_platform NOT NULL DEFAULT 'manual'` (hoặc backfill) trước khi thêm UNIQUE.
 
 ---
 
