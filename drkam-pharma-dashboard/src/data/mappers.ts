@@ -13,6 +13,7 @@ import {
   TeamTarget,
   AuditLog,
   FbPage,
+  ChecklistItem,
 } from '../types';
 
 type ChannelRow = Database['public']['Tables']['channels']['Row'];
@@ -21,6 +22,7 @@ type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 type TargetRow = Database['public']['Tables']['targets']['Row'];
 type LogRow = Database['public']['Tables']['audit_logs']['Row'];
 type FbPageRow = Database['public']['Tables']['fb_pages']['Row'];
+type ChecklistRow = Database['public']['Tables']['content_checklists']['Row'];
 
 /**
  * Quy ước nguồn doanh thu (source_platform) suy từ loại kênh của báo cáo.
@@ -144,6 +146,7 @@ export function reportFromRow(r: ReportRow): DailyReport {
     isEditable: computeEditable(r.report_date),
     traffic,
     note: r.note,
+    videoCount: r.video_count,
   };
 }
 
@@ -171,6 +174,7 @@ export function reportToInsert(
     avg_view_duration: t ? t.avgViewDuration : null,
     follower_incr: t ? t.followerIncr : null,
     note: rep.note ?? null,
+    video_count: rep.videoCount ?? null,
   };
 }
 
@@ -251,5 +255,32 @@ export function logFromRow(r: LogRow): AuditLog {
     action: r.action,
     ipAddress: r.ip_address ?? '',
     module: r.module,
+  };
+}
+
+// ── CHECKLIST TEAM CONTENT ────────────────────────────────────
+export function checklistFromRow(r: ChecklistRow): ChecklistItem {
+  return {
+    id: r.id,
+    date: toUiDate(r.checklist_date),
+    employeeId: r.employee_id,
+    employeeName: r.employee_name ?? '',
+    label: r.label,
+    quantity: r.quantity,
+    createdBy: r.created_by ?? undefined,
+  };
+}
+
+export function checklistToInsert(
+  item: ChecklistItem,
+  createdBy: string,
+): Database['public']['Tables']['content_checklists']['Insert'] {
+  return {
+    checklist_date: toDbDate(item.date),
+    employee_id: item.employeeId,
+    employee_name: item.employeeName || '',
+    label: item.label,
+    quantity: item.quantity,
+    created_by: createdBy,
   };
 }

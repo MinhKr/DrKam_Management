@@ -88,6 +88,7 @@ export interface Database {
           avg_view_duration: number | null;
           follower_incr: number | null;
           note: string | null;
+          video_count: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -150,6 +151,25 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['fb_pages']['Insert']>;
+        Relationships: [];
+      };
+      content_checklists: {
+        Row: {
+          id: string;
+          checklist_date: string;
+          employee_id: string;
+          employee_name: string;
+          label: string;
+          quantity: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['content_checklists']['Row'],
+          'id' | 'created_at' | 'updated_at'
+        > & { id?: string; created_at?: string; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['content_checklists']['Insert']>;
         Relationships: [];
       };
     };

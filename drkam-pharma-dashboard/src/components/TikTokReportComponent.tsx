@@ -10,6 +10,7 @@ type ConfirmState = { message: string; onConfirm: () => void } | null;
 export type TikTokDayRecord = {
   date: string; // dd/mm/yyyy
   revenue: number;
+  videoCount: number; // số video đăng trong ngày
   traffic: {
     viewsReach: number; comment: number; like: number; share: number;
     save: number; viewAllRate: number; avgViewDuration: number; followerIncr: number;
@@ -371,8 +372,8 @@ export default function TikTokReportComponent({
           channel={modal.channel}
           initialDate={modal.date}
           hasTraffic={cfg.hasTraffic}
-          existing={reportsInRange(modal.channel).find((r) => r.date === toDdmmyyyy(modal.date))
-            || reports.find((r) => r.channelName === modal.channel.name && r.date === toDdmmyyyy(modal.date) && r.channelType.startsWith('TikTok'))}
+          findReportOnDate={(d) =>
+            reports.find((r) => r.channelName === modal.channel.name && r.date === d && r.channelType.startsWith('TikTok'))}
           onClose={() => setModal(null)}
           onSubmit={handleSubmit}
         />
@@ -392,11 +393,11 @@ export default function TikTokReportComponent({
 /* ════════════════════════════════════════════════════════════════
    MODAL — báo cáo tay 1 ngày cho 1 kênh TikTok
    ════════════════════════════════════════════════════════════════ */
-function TikTokReportModal({ channel, initialDate, hasTraffic, existing, onClose, onSubmit }: {
+function TikTokReportModal({ channel, initialDate, hasTraffic, findReportOnDate, onClose, onSubmit }: {
   channel: AffiliateChannel;
   initialDate: string;
   hasTraffic: boolean;
-  existing?: DailyReport;
+  findReportOnDate: (dateDdmmyyyy: string) => DailyReport | undefined;
   onClose: () => void;
   onSubmit: (channelName: string, rec: TikTokDayRecord) => void;
 }) {
@@ -404,6 +405,10 @@ function TikTokReportModal({ channel, initialDate, hasTraffic, existing, onClose
   const maxDate = isoToday();
 
   const [date, setDate] = useState(initialDate);
+  // Bản ghi đã có cho NGÀY đang chọn (cập nhật theo ô ngày trong modal).
+  const existing = findReportOnDate(toDdmmyyyy(date));
+  // Khi ngày đang chọn đã có báo cáo → hỏi có muốn sửa (ghi đè) không.
+  const [dupDate, setDupDate] = useState<string | null>(null);
   const [revenueStr, setRevenueStr] = useState('');
   const [viewsReach, setViewsReach] = useState('');
   const [comment, setComment] = useState('');
@@ -425,25 +430,32 @@ function TikTokReportModal({ channel, initialDate, hasTraffic, existing, onClose
     setViewAllRate(t?.viewAllRate ? String(t.viewAllRate) : '');
     setAvgDuration(t?.avgViewDuration ? String(t.avgViewDuration) : '');
     setFollowerIncr(t?.followerIncr ? String(t.followerIncr) : '');
-  }, [existing, date]);
+  }, [existing?.id, date]);
 
   const intF = (s: string) => parseInt(s.replace(/\D/g, ''), 10) || 0;
   const numF = (s: string) => parseFloat(s.replace(/[^\d.]/g, '')) || 0;
   const canSubmit = revenueStr.trim() !== '';
 
+  const buildRec = (dateStr: string): TikTokDayRecord => ({
+    date: dateStr,
+    revenue: intF(revenueStr),
+    videoCount: 0,
+    traffic: hasTraffic ? {
+      viewsReach: intF(viewsReach), comment: intF(comment), like: intF(like), share: intF(share),
+      save: intF(save), viewAllRate: numF(viewAllRate), avgViewDuration: numF(avgDuration), followerIncr: intF(followerIncr),
+    } : null,
+  });
+
   const submit = () => {
     if (!canSubmit) return;
-    onSubmit(channel.name, {
-      date: toDdmmyyyy(date),
-      revenue: intF(revenueStr),
-      traffic: hasTraffic ? {
-        viewsReach: intF(viewsReach), comment: intF(comment), like: intF(like), share: intF(share),
-        save: intF(save), viewAllRate: numF(viewAllRate), avgViewDuration: numF(avgDuration), followerIncr: intF(followerIncr),
-      } : null,
-    });
+    const dateStr = toDdmmyyyy(date);
+    // Đã có báo cáo cho ngày này → không gửi ngay, hỏi người dùng trước.
+    if (findReportOnDate(dateStr)) { setDupDate(dateStr); return; }
+    onSubmit(channel.name, buildRec(dateStr));
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className={`h-1.5 bg-gradient-to-r ${accent.bar}`} />
@@ -511,6 +523,18 @@ function TikTokReportModal({ channel, initialDate, hasTraffic, existing, onClose
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      open={!!dupDate}
+      danger={false}
+      title="Ngày này đã có báo cáo"
+      message={`Kênh "${channel.name}" đã có báo cáo ngày ${dupDate}. Bạn có muốn sửa (ghi đè) số liệu ngày này không? Nếu không, hãy chọn ngày khác.`}
+      confirmText="Sửa số liệu"
+      cancelText="Chọn ngày khác"
+      onConfirm={() => { const d = dupDate; setDupDate(null); if (d) onSubmit(channel.name, buildRec(d)); }}
+      onCancel={() => setDupDate(null)}
+    />
+    </>
   );
 }
 

@@ -45,6 +45,7 @@ export interface DailyReport {
   } | null;
   note?: string | null; // ghi chú (dùng cho nhập tay doanh thu Shopee...)
   synced?: boolean; // true = 6 chỉ số traffic lấy tự động từ Facebook (Views/Lưu vẫn nhập tay)
+  videoCount?: number | null; // số video đăng trong ngày (nhập tay)
 }
 
 export interface Employee {
@@ -84,6 +85,19 @@ export interface FbPage {
   shopeeChannelId: string; // = AffiliateChannel.id của nhóm ID Shopee (KOC inhouse)
   name: string;            // tên / đường dẫn fanpage
   addedBy: string;         // tên người thêm
+}
+
+// Checklist công việc ngày — Team Content.
+// Mỗi nhân viên tự điền số lượng đầu việc cần làm trong ngày (SEO WEB, kịch bản/quay,
+// từng kênh TikTok AI/KOC, fanpage...). Mỗi dòng thuộc về 1 nhân viên + 1 ngày.
+export interface ChecklistItem {
+  id: string;
+  date: string;         // dd/mm/yyyy
+  employeeId: string;   // = profile id (chủ sở hữu dòng — chỉ người này/Admin sửa được)
+  employeeName: string; // tên hiển thị (denormalize, giống channels.managerName)
+  label: string;        // nhãn đầu việc, vd "[TIKTOK AI] haidang0136", "SEO WEB"
+  quantity: number;     // số lượng cần làm trong ngày
+  createdBy?: string;   // uid người tạo (chế độ DB)
 }
 
 // Initial Mock Data
@@ -466,3 +480,6 @@ export const INITIAL_FB_PAGES: FbPage[] = [
   { id: "fp7", shopeeChannelId: "7", name: "Khỏe Đẹp Cùng Khánh", addedBy: "Đặng Kim Khánh" },
   { id: "fp8", shopeeChannelId: "7", name: "Sống Khỏe 360", addedBy: "Đặng Kim Khánh" }
 ];
+
+// Checklist Team Content bắt đầu rỗng — mỗi nhân viên tự thêm đầu việc của mình theo ngày.
+export const INITIAL_CHECKLISTS: ChecklistItem[] = [];

@@ -10,6 +10,7 @@ export type BrandDayRecord = {
   date: string; // dd/mm/yyyy
   viewsReach: number; like: number; comment: number; share: number;
   save: number; completionRate: number; avgDuration: number; followerIncr: number;
+  videoCount: number; // số video đăng trong ngày
 };
 
 interface FacebookReportComponentProps {
@@ -147,21 +148,15 @@ function KocInhouseView({
 
   const [notification, setNotification] = useState('');
   const [dialog, setDialog] = useState<ConfirmState>(null);
+  // Ngày đã có doanh thu → hỏi có muốn sửa (ghi đè) không (giữ lại số cần lưu).
+  const [dupInfo, setDupInfo] = useState<{ formattedDate: string; rev: number; vid: number } | null>(null);
   const notify = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(''), 4000);
   };
 
-  const handleAddReport = (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitReport = (formattedDate: string, rev: number, vid: number) => {
     if (!selectedGroup) return;
-    const rev = parseInt(revenueStr.replace(/\D/g, ''), 10);
-    if (isNaN(rev) || rev < 0) {
-      alert('Vui lòng nhập doanh thu hợp lệ.');
-      return;
-    }
-    const [y, m, d] = date.split('-');
-    const formattedDate = y && m && d ? `${d}/${m}/${y}` : date;
     onAddReport({
       id: 'r_fb_' + Date.now(),
       date: formattedDate,
@@ -174,10 +169,28 @@ function KocInhouseView({
       isEditable: true,
       traffic: null,
       note: null,
+      videoCount: vid || null,
     });
     setRevenueStr('');
     setShowReportForm(false);
     notify('Đã lưu doanh thu Shopee!');
+  };
+
+  const handleAddReport = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedGroup) return;
+    const rev = parseInt(revenueStr.replace(/\D/g, ''), 10);
+    if (isNaN(rev) || rev < 0) {
+      alert('Vui lòng nhập doanh thu hợp lệ.');
+      return;
+    }
+    const vid = 0;
+    const [y, m, d] = date.split('-');
+    const formattedDate = y && m && d ? `${d}/${m}/${y}` : date;
+    // Ngày này đã có doanh thu cho ID đang chọn → hỏi trước khi ghi đè.
+    const dup = reports.find((r) => r.channelName === selectedGroup.name && r.date === formattedDate);
+    if (dup) { setDupInfo({ formattedDate, rev, vid }); return; }
+    submitReport(formattedDate, rev, vid);
   };
 
   const handleAddPage = (e: React.FormEvent) => {
@@ -563,6 +576,17 @@ function KocInhouseView({
         }}
         onCancel={() => setDialog(null)}
       />
+
+      <ConfirmDialog
+        open={!!dupInfo}
+        danger={false}
+        title="Ngày này đã có báo cáo"
+        message={`ID "${selectedGroup?.auditId}" đã có doanh thu ngày ${dupInfo?.formattedDate}. Bạn có muốn sửa (ghi đè) không? Nếu không, hãy chọn ngày khác.`}
+        confirmText="Sửa số liệu"
+        cancelText="Chọn ngày khác"
+        onConfirm={() => { if (dupInfo) submitReport(dupInfo.formattedDate, dupInfo.rev, dupInfo.vid); setDupInfo(null); }}
+        onCancel={() => setDupInfo(null)}
+      />
     </div>
   );
 }
@@ -850,8 +874,8 @@ function BrandView({ reports, channels, session, onReportDay, onAddChannel }: Fa
           channel={modal.channel}
           initialDate={modal.date}
           accentIndex={list.findIndex((c) => c.id === modal.channel.id) % 2}
-          existing={reportsInRange(modal.channel).find((r) => r.date === toDdmmyyyy(modal.date))
-            || reports.find((r) => r.channelName === modal.channel.name && r.date === toDdmmyyyy(modal.date) && isBrandReport(r))}
+          findReportOnDate={(d) =>
+            reports.find((r) => r.channelName === modal.channel.name && r.date === d && isBrandReport(r))}
           onClose={() => setModal(null)}
           onSubmit={handleSubmit}
         />
@@ -861,11 +885,11 @@ function BrandView({ reports, channels, session, onReportDay, onAddChannel }: Fa
 }
 
 /* Modal báo cáo traffic 1 ngày cho 1 page — NHẬP TAY toàn bộ 8 chỉ số */
-function BrandReportModal({ channel, initialDate, accentIndex, existing, onClose, onSubmit }: {
+function BrandReportModal({ channel, initialDate, accentIndex, findReportOnDate, onClose, onSubmit }: {
   channel: AffiliateChannel;
   initialDate: string;
   accentIndex: number;
-  existing?: DailyReport;
+  findReportOnDate: (dateDdmmyyyy: string) => DailyReport | undefined;
   onClose: () => void;
   onSubmit: (channelName: string, rec: BrandDayRecord) => void;
 }) {
@@ -875,6 +899,10 @@ function BrandReportModal({ channel, initialDate, accentIndex, existing, onClose
   const maxDate = isoTodayLocal();
 
   const [date, setDate] = useState(initialDate);
+  // Bản ghi đã có cho NGÀY đang chọn (cập nhật theo ô ngày trong modal).
+  const existing = findReportOnDate(toDdmmyyyy(date));
+  // Khi ngày đang chọn đã có báo cáo → hỏi có muốn sửa (ghi đè) không.
+  const [dupDate, setDupDate] = useState<string | null>(null);
   const [viewsReach, setViewsReach] = useState('');
   const [like, setLike] = useState('');
   const [comment, setComment] = useState('');
@@ -895,25 +923,32 @@ function BrandReportModal({ channel, initialDate, accentIndex, existing, onClose
     setCompletionRate(t?.viewAllRate ? String(t.viewAllRate) : '');
     setAvgDuration(t?.avgViewDuration ? String(t.avgViewDuration) : '');
     setFollowerIncr(t?.followerIncr ? String(t.followerIncr) : '');
-  }, [existing, date]);
+  }, [existing?.id, date]);
 
   const toDdmmyyyyLocal = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
   const intF = (s: string) => parseInt(s.replace(/\D/g, ''), 10) || 0;
   const numF = (s: string) => parseFloat(s.replace(/[^\d.]/g, '')) || 0;
   const canSubmit = viewsReach.trim() !== '';
 
+  const buildRec = (dateStr: string): BrandDayRecord => ({
+    date: dateStr,
+    viewsReach: intF(viewsReach),
+    like: intF(like), comment: intF(comment), share: intF(share),
+    save: intF(save),
+    completionRate: numF(completionRate), avgDuration: numF(avgDuration), followerIncr: intF(followerIncr),
+    videoCount: 0,
+  });
+
   const submit = () => {
     if (!canSubmit) return;
-    onSubmit(channel.name, {
-      date: toDdmmyyyyLocal(date),
-      viewsReach: intF(viewsReach),
-      like: intF(like), comment: intF(comment), share: intF(share),
-      save: intF(save),
-      completionRate: numF(completionRate), avgDuration: numF(avgDuration), followerIncr: intF(followerIncr),
-    });
+    const dateStr = toDdmmyyyyLocal(date);
+    // Đã có báo cáo cho ngày này → không gửi ngay, hỏi người dùng trước.
+    if (findReportOnDate(dateStr)) { setDupDate(dateStr); return; }
+    onSubmit(channel.name, buildRec(dateStr));
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className={`h-1.5 bg-gradient-to-r ${accent.bar}`} />
@@ -965,6 +1000,18 @@ function BrandReportModal({ channel, initialDate, accentIndex, existing, onClose
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      open={!!dupDate}
+      danger={false}
+      title="Ngày này đã có báo cáo"
+      message={`Page "${channel.name}" đã có báo cáo ngày ${dupDate}. Bạn có muốn sửa (ghi đè) số liệu ngày này không? Nếu không, hãy chọn ngày khác.`}
+      confirmText="Sửa số liệu"
+      cancelText="Chọn ngày khác"
+      onConfirm={() => { const d = dupDate; setDupDate(null); if (d) onSubmit(channel.name, buildRec(d)); }}
+      onCancel={() => setDupDate(null)}
+    />
+    </>
   );
 }
 
