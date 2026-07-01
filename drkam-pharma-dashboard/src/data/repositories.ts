@@ -11,6 +11,7 @@ import {
   TeamTarget,
   AuditLog,
   FbPage,
+  ChecklistItem,
 } from '../types';
 import {
   channelFromRow,
@@ -23,6 +24,8 @@ import {
   logFromRow,
   fbPageFromRow,
   fbPageToInsert,
+  checklistFromRow,
+  checklistToInsert,
 } from './mappers';
 
 function db() {
@@ -219,5 +222,42 @@ export async function clearLogs(): Promise<void> {
     .from('audit_logs')
     .delete()
     .neq('id', '00000000-0000-0000-0000-000000000000');
+  if (error) throw error;
+}
+
+// ── CHECKLIST TEAM CONTENT ────────────────────────────────────
+export async function loadChecklists(): Promise<ChecklistItem[]> {
+  const { data, error } = await db()
+    .from('content_checklists')
+    .select('*')
+    .order('checklist_date', { ascending: false })
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(checklistFromRow);
+}
+
+export async function createChecklistItem(
+  item: ChecklistItem,
+  createdBy: string,
+): Promise<ChecklistItem> {
+  const { data, error } = await db()
+    .from('content_checklists')
+    .insert(checklistToInsert(item, createdBy))
+    .select('*')
+    .single();
+  if (error) throw error;
+  return checklistFromRow(data);
+}
+
+export async function updateChecklistItem(
+  id: string,
+  patch: { label?: string; quantity?: number },
+): Promise<void> {
+  const { error } = await db().from('content_checklists').update(patch).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteChecklistItem(id: string): Promise<void> {
+  const { error } = await db().from('content_checklists').delete().eq('id', id);
   if (error) throw error;
 }

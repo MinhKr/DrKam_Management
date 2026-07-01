@@ -9,13 +9,15 @@ import {
   INITIAL_TARGETS,
   INITIAL_AUDIT_LOGS,
   INITIAL_FB_PAGES,
+  INITIAL_CHECKLISTS,
   UserSession,
   AffiliateChannel,
   DailyReport,
   Employee,
   TeamTarget,
   AuditLog,
-  FbPage
+  FbPage,
+  ChecklistItem
 } from './types';
 
 import LoginComponent from './components/LoginComponent';
@@ -27,6 +29,7 @@ import EmployeeManagementComponent from './components/EmployeeManagementComponen
 import TargetKPIComponent from './components/TargetKPIComponent';
 import DetailedStatisticsComponent from './components/DetailedStatisticsComponent';
 import AuditLogsComponent from './components/AuditLogsComponent';
+import ContentChecklistComponent from './components/ContentChecklistComponent';
 
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import * as repo from './data/repositories';
@@ -128,6 +131,16 @@ export default function App() {
     }
   });
 
+  // Checklist công việc ngày — Team Content (cloud: bảng content_checklists; demo: localStorage).
+  const [checklists, setChecklists] = useState<ChecklistItem[]>(() => {
+    try {
+      const stored = localStorage.getItem('drkam_checklists');
+      return stored ? JSON.parse(stored) : INITIAL_CHECKLISTS;
+    } catch {
+      return INITIAL_CHECKLISTS;
+    }
+  });
+
   // Active view tab state ("overview", "tiktok-brand"/"tiktok-real-koc"/"tiktok-ai-koc", "fb-koc"/"fb-brand", "channels", "employees", "chi-tieu", "stats", "logs")
   // Mặc định vào TikTok — Kênh thương hiệu (Tổng quan đang tạm khoá, xem canAccessTab).
   const [activeTab, setActiveTab] = useState('tiktok-brand');
@@ -177,6 +190,12 @@ export default function App() {
     localStorage.setItem('drkam_fb_pages', JSON.stringify(fbPages));
   }, [fbPages, cloud]);
 
+  // checklists: chỉ lưu localStorage ở chế độ demo (cloud dùng bảng content_checklists).
+  useEffect(() => {
+    if (cloud) return;
+    localStorage.setItem('drkam_checklists', JSON.stringify(checklists));
+  }, [checklists, cloud]);
+
   // Chế độ DB thật: khôi phục phiên đăng nhập + nạp toàn bộ dữ liệu khi mở app.
   useEffect(() => {
     if (!cloud) return;
@@ -223,6 +242,14 @@ export default function App() {
           if (active) setFbPages(pages);
         } catch (e) {
           console.warn('Tải fanpage Facebook thất bại (có thể chưa chạy migration 0002):', errMsg(e));
+        }
+        // Checklist Team Content — tách riêng để nếu bảng content_checklists chưa tạo
+        // (chưa chạy migration 0004) thì các dữ liệu khác vẫn nạp bình thường.
+        try {
+          const cl = await repo.loadChecklists();
+          if (active) setChecklists(cl);
+        } catch (e) {
+          console.warn('Tải checklist thất bại (có thể chưa chạy migration 0004):', errMsg(e));
         }
         // Nhật ký chỉ Admin xem được (RLS) — bỏ qua lỗi với vai trò khác.
         try {
@@ -347,6 +374,7 @@ export default function App() {
   type BrandDayRecord = {
     date: string; viewsReach: number; like: number; comment: number; share: number;
     save: number; completionRate: number; avgDuration: number; followerIncr: number;
+    videoCount: number;
   };
   const handleReportDay = async (channelName: string, rec: BrandDayRecord) => {
     const traffic = {
@@ -364,7 +392,7 @@ export default function App() {
           id: '', date: rec.date, channelName, channelType: 'Facebook - Thương hiệu', revenue: 0,
           views: rec.viewsReach || null, interactions,
           source: session.role === 'Admin' ? 'Admin' : 'Nhân viên',
-          isEditable: true, synced: false, traffic, note: null,
+          isEditable: true, synced: false, traffic, note: null, videoCount: rec.videoCount ?? null,
         };
         const saved = await repo.upsertReport(rep, currentUserId, channelId);
         mergeReport(saved);
@@ -378,7 +406,7 @@ export default function App() {
       const idx = prev.findIndex(r => r.channelName === channelName && r.date === rec.date);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = { ...next[idx], synced: false, views: rec.viewsReach || null, interactions, traffic };
+        next[idx] = { ...next[idx], synced: false, views: rec.viewsReach || null, interactions, traffic, videoCount: rec.videoCount ?? null };
         return next;
       }
       return [{
@@ -386,7 +414,7 @@ export default function App() {
         date: rec.date, channelName, channelType: 'Facebook - Thương hiệu', revenue: 0,
         views: rec.viewsReach || null, interactions,
         source: session.role === 'Admin' ? 'Admin' : 'Nhân viên',
-        isEditable: true, synced: false, traffic, note: null,
+        isEditable: true, synced: false, traffic, note: null, videoCount: rec.videoCount ?? null,
       }, ...prev];
     });
     addAuditLog('Báo cáo', `Báo cáo traffic Facebook ngày ${rec.date} — kênh "${channelName}"`);
@@ -408,7 +436,7 @@ export default function App() {
           views: rec.traffic ? (rec.traffic.viewsReach || null) : null,
           interactions, traffic: rec.traffic,
           source: session.role === 'Admin' ? 'Admin' : 'Nhân viên',
-          isEditable: true, note: null,
+          isEditable: true, note: null, videoCount: rec.videoCount ?? null,
         };
         const saved = await repo.upsertReport(rep, currentUserId, channelId);
         mergeReport(saved);
@@ -424,6 +452,7 @@ export default function App() {
         date: rec.date, channelName, channelType, revenue: rec.revenue,
         views: rec.traffic ? (rec.traffic.viewsReach || null) : null,
         interactions, traffic: rec.traffic, note: null as string | null,
+        videoCount: rec.videoCount ?? null,
       };
       if (idx >= 0) {
         const next = [...prev];
@@ -609,11 +638,55 @@ export default function App() {
     if (target) addAuditLog('Hệ thống', `Gỡ fanpage Facebook "${target.name}" khỏi nhóm ID Shopee.`);
   };
 
+  // Checklist Team Content — mỗi nhân viên tự điền số lượng đầu việc/ngày.
+  // Quyền: RLS + component chỉ cho sửa dòng của chính mình (employee_id = mình) hoặc Admin.
+  const handleAddChecklistItem = async (item: ChecklistItem) => {
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        const saved = await repo.createChecklistItem(item, currentUserId);
+        setChecklists(prev => [...prev, saved]);
+        addAuditLog('Checklist', `Thêm đầu việc "${item.label}" (SL ${item.quantity}) — ${item.employeeName}, ngày ${item.date}`);
+      } catch (e) {
+        alert('Lưu checklist thất bại: ' + errMsg(e));
+      }
+      return;
+    }
+    setChecklists(prev => [...prev, item]);
+    addAuditLog('Checklist', `Thêm đầu việc "${item.label}" — ${item.employeeName}, ngày ${item.date}`);
+  };
+
+  const handleUpdateChecklistItem = async (id: string, patch: { label?: string; quantity?: number }) => {
+    if (cloud) {
+      try {
+        await repo.updateChecklistItem(id, patch);
+      } catch (e) {
+        alert('Cập nhật checklist thất bại: ' + errMsg(e));
+        return;
+      }
+    }
+    setChecklists(prev => prev.map(c => (c.id === id ? { ...c, ...patch } : c)));
+  };
+
+  const handleDeleteChecklistItem = async (id: string) => {
+    const target = checklists.find(c => c.id === id);
+    if (cloud) {
+      try {
+        await repo.deleteChecklistItem(id);
+      } catch (e) {
+        alert('Xóa checklist thất bại: ' + errMsg(e));
+        return;
+      }
+    }
+    setChecklists(prev => prev.filter(c => c.id !== id));
+    if (target) addAuditLog('Checklist', `Xóa đầu việc "${target.label}" — ${target.employeeName}, ngày ${target.date}`);
+  };
+
   // Role permissions checking helper
   const canAccessTab = (tab: string) => {
     // TẠM KHOÁ mọi mục ngoài TikTok & Facebook cho MỌI vai trò (giữ nguyên code, chỉ chặn truy cập).
     // Mở lại sau: thêm tab vào ALLOWED_TABS hoặc bỏ chặn này.
-    const ALLOWED_TABS = ['tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand'];
+    const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'checklist'];
     if (!ALLOWED_TABS.includes(tab)) return false;
 
     // (Phân quyền theo vai trò trước đây — giữ lại để khôi phục khi mở khoá:)
@@ -642,7 +715,20 @@ export default function App() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <DashboardComponent reports={reports} targets={targets} onNavigateToTab={navigateToTab} />;
+        return (
+          <DashboardComponent
+            reports={reports}
+            channels={channels}
+            employees={employees}
+            checklists={checklists}
+            session={session}
+            currentUserId={currentUserId}
+            onNavigateToTab={navigateToTab}
+            onAddChecklistItem={handleAddChecklistItem}
+            onUpdateChecklistItem={handleUpdateChecklistItem}
+            onDeleteChecklistItem={handleDeleteChecklistItem}
+          />
+        );
       case 'tiktok-brand':
       case 'tiktok-real-koc':
       case 'tiktok-ai-koc': {
@@ -676,6 +762,18 @@ export default function App() {
             onUpdateChannel={handleUpdateChannel}
             onAddChannel={handleAddChannel}
             view={activeTab === 'fb-brand' ? 'brand' : 'koc'}
+          />
+        );
+      case 'checklist':
+        return (
+          <ContentChecklistComponent
+            checklists={checklists}
+            employees={employees}
+            session={session}
+            currentUserId={currentUserId}
+            onAddItem={handleAddChecklistItem}
+            onUpdateItem={handleUpdateChecklistItem}
+            onDeleteItem={handleDeleteChecklistItem}
           />
         );
       case 'channels':
@@ -719,7 +817,20 @@ export default function App() {
           />
         );
       default:
-        return <DashboardComponent reports={reports} targets={targets} onNavigateToTab={navigateToTab} />;
+        return (
+          <DashboardComponent
+            reports={reports}
+            channels={channels}
+            employees={employees}
+            checklists={checklists}
+            session={session}
+            currentUserId={currentUserId}
+            onNavigateToTab={navigateToTab}
+            onAddChecklistItem={handleAddChecklistItem}
+            onUpdateChecklistItem={handleUpdateChecklistItem}
+            onDeleteChecklistItem={handleDeleteChecklistItem}
+          />
+        );
     }
   };
 
@@ -996,23 +1107,23 @@ export default function App() {
               </div>
 
               <button
-                onClick={() => navigateToTab('channels')}
+                onClick={() => navigateToTab('checklist')}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                  !canAccessTab('channels') ? 'opacity-50 cursor-not-allowed' : ''
+                  !canAccessTab('checklist') ? 'opacity-50 cursor-not-allowed' : ''
                 } ${
-                  activeTab === 'channels'
+                  activeTab === 'checklist'
                     ? 'bg-rose-50 text-[#D32027]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`}
-                disabled={!canAccessTab('channels')}
+                disabled={!canAccessTab('checklist')}
               >
                 <div className="flex items-center gap-3">
                   <span className="w-8 h-8 rounded-lg flex items-center justify-center text-teal-600 bg-teal-50 flex-shrink-0">
-                    <span className="material-symbols-outlined text-[18px]">hub</span>
+                    <span className="material-symbols-outlined text-[18px]">checklist</span>
                   </span>
-                  <span>Quản lý kênh</span>
+                  <span>Checklist</span>
                 </div>
-                {!canAccessTab('channels') && <span className="material-symbols-outlined text-[14px]">lock</span>}
+                {!canAccessTab('checklist') && <span className="material-symbols-outlined text-[14px]">lock</span>}
               </button>
 
               <button

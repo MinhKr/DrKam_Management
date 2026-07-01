@@ -1,457 +1,507 @@
 import React, { useState } from 'react';
-import { DailyReport, TeamTarget } from '../types';
+import { DailyReport, AffiliateChannel, Employee, ChecklistItem, UserSession } from '../types';
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  BarChart, Bar, Cell,
+} from 'recharts';
+import { dailySeries } from '../lib/analytics';
+import ContentChecklistComponent from './ContentChecklistComponent';
 
 interface DashboardComponentProps {
   reports: DailyReport[];
-  targets: TeamTarget[];
+  channels: AffiliateChannel[];
+  employees: Employee[];
+  checklists: ChecklistItem[];
+  session: UserSession;
+  currentUserId: string | null;
   onNavigateToTab: (tabId: string) => void;
+  onAddChecklistItem: (item: ChecklistItem) => void;
+  onUpdateChecklistItem: (id: string, patch: { label?: string; quantity?: number }) => void;
+  onDeleteChecklistItem: (id: string) => void;
 }
 
-type TimePeriod = 'today' | 'week' | 'month';
+// ── Chỉ tiêu doanh số THÁNG theo kênh (copy tháng 6 theo ảnh — sửa tự do ở đây) ──
+const CHANNEL_TARGETS: Record<string, number> = {
+  'DrKam VN Official': 10_008_000,
+  'KOC - Happy Daily': 50_000_000,
+  'KOC - Nhà của CamCam': 20_000_000,
+  'KOC - Gia đình MinhHee': 10_000_000,
+  'KOC - Bảo Châu': 20_000_000,
+  'FB AI - duocsikhanh': 70_000_000,
+  'FB AI - conghaing': 70_000_000,
+  'FB AI - ynni1809': 50_000_000,
+};
+const CATEGORY_TARGET_OVERRIDE: Record<string, number> = { 'tt-ai': 30_000_000 };
 
-export default function DashboardComponent({ reports, targets, onNavigateToTab }: DashboardComponentProps) {
-  const [period, setPeriod] = useState<TimePeriod>('month');
+type CatKey = 'tt-brand' | 'tt-real' | 'tt-ai' | 'fb-ai' | 'fb-brand' | 'other';
+const CATEGORIES: { key: CatKey; label: string; color: string }[] = [
+  { key: 'tt-brand', label: 'TikTok — Thương hiệu', color: '#0F172A' },
+  { key: 'tt-real', label: 'TikTok — KOC người thật', color: '#D32027' },
+  { key: 'tt-ai', label: 'TikTok — KOC AI', color: '#7C3AED' },
+  { key: 'fb-ai', label: 'Facebook AI (Shopee)', color: '#2563EB' },
+  { key: 'fb-brand', label: 'Facebook — Thương hiệu', color: '#0891B2' },
+  { key: 'other', label: 'Khác', color: '#64748B' },
+];
 
-  // Dynamically calculate KPIs based on current period selected
-  const getPeriodMultiplier = () => {
-    if (period === 'today') return 0.08; // 8% of data
-    if (period === 'week') return 0.35; // 35% of data
-    return 1.0; // full month data
-  };
+const vnd = (v: number) => new Intl.NumberFormat('vi-VN').format(Math.round(v)) + ' đ';
+const vndShort = (v: number) => {
+  if (v >= 1_000_000_000) return (v / 1_000_000_000).toFixed(1).replace('.0', '') + ' tỷ';
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1).replace('.0', '') + ' tr';
+  if (v >= 1_000) return Math.round(v / 1_000) + 'K';
+  return String(Math.round(v));
+};
+const pct = (actual: number, target: number) => (target > 0 ? Math.round((actual / target) * 1000) / 10 : null);
+const pctColor = (p: number | null) =>
+  p == null ? 'text-slate-400 bg-slate-50'
+    : p >= 100 ? 'text-green-700 bg-green-50'
+    : p >= 70 ? 'text-amber-700 bg-amber-50'
+    : 'text-rose-700 bg-rose-50';
 
-  const multiplier = getPeriodMultiplier();
+const nowMonthKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+const shiftMonth = (key: string, delta: number) => {
+  const [y, m] = key.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+const lastDayOfMonth = (key: string) => {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+};
+const isoToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const toDdmmyyyy = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+const WEEK_BOUNDS = [7, 14, 21, 99];
+const weekIndex = (dayOfMonth: number) => WEEK_BOUNDS.findIndex((b) => dayOfMonth <= b);
 
-  // Basic stats matching the main design image
-  const rawRevenueTotal = Math.round(1250000000 * multiplier);
-  const rawRevenueTikTok = Math.round(850000000 * multiplier);
-  const rawRevenueShopee = Math.round(400000000 * multiplier);
-  const rawViews = period === 'today' ? "350K" : period === 'week' ? "1.8M" : "5.2M";
+// Loại kênh (nền tảng + Brand/KOC/AI) theo meta kênh.
+function catKeyOf(r: DailyReport, chMeta: Map<string, AffiliateChannel>): CatKey {
+  const ch = chMeta.get(r.channelName);
+  const plat = ch?.platform;
+  const type = ch?.channelType;
+  if (plat === 'TikTok') return type === 'Brand' ? 'tt-brand' : type === 'AI KOC' ? 'tt-ai' : type === 'Real KOC' ? 'tt-real' : 'other';
+  if (plat === 'Facebook') return type === 'Brand' ? 'fb-brand' : 'fb-ai';
+  if (r.channelType.startsWith('TikTok')) return r.channelType.includes('Thương hiệu') ? 'tt-brand' : 'tt-real';
+  if (r.channelType.startsWith('Facebook')) return r.channelType.includes('Thương hiệu') ? 'fb-brand' : 'fb-ai';
+  return 'other';
+}
 
-  const numFormat = (val: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val).replace('₫', 'đ');
+/* ════════════════════════════════════════════════════════════════
+   CONTAINER — Tổng quan có 3 tab con
+   ════════════════════════════════════════════════════════════════ */
+export default function DashboardComponent(props: DashboardComponentProps) {
+  const [view, setView] = useState<'chung' | 'doanhso' | 'checklist'>('chung');
+  const TABS: { key: typeof view; label: string; icon: string }[] = [
+    { key: 'chung', label: 'Báo cáo chung', icon: 'monitoring' },
+    { key: 'doanhso', label: 'Doanh số', icon: 'storefront' },
+    { key: 'checklist', label: 'Checklist', icon: 'checklist' },
+  ];
+
+  return (
+    <div className="max-w-[1200px] mx-auto flex flex-col gap-4 text-slate-800">
+      <div>
+        <h1 className="text-xl font-bold text-slate-900 font-display flex items-center gap-2">
+          <span className="material-symbols-outlined text-[#D32027] text-2xl">dashboard</span>
+          <span>Tổng quan — Team Content DrKam</span>
+        </h1>
+        <p className="text-[11px] text-slate-400 mt-0.5">Tất cả báo cáo ở một nơi — chuyển tab để xem/chụp từng phần.</p>
+      </div>
+
+      {/* Tab con */}
+      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 soft-shadow self-start">
+        {TABS.map((t) => (
+          <button key={t.key} onClick={() => setView(t.key)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+              view === t.key ? 'bg-[#D32027] text-white shadow-soft' : 'text-slate-500 hover:bg-slate-50'
+            }`}>
+            <span className="material-symbols-outlined text-[16px]">{t.icon}</span>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'chung' && <BaoCaoChung reports={props.reports} channels={props.channels} onGotoView={setView} />}
+      {view === 'doanhso' && <DoanhSoNgay reports={props.reports} channels={props.channels} />}
+      {view === 'checklist' && (
+        <ContentChecklistComponent
+          readOnly
+          checklists={props.checklists}
+          employees={props.employees}
+          session={props.session}
+          currentUserId={props.currentUserId}
+          onAddItem={props.onAddChecklistItem}
+          onUpdateItem={props.onUpdateChecklistItem}
+          onDeleteItem={props.onDeleteChecklistItem}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TAB 1 — BÁO CÁO CHUNG (tháng: KPI + biểu đồ + bảng kênh × tuần)
+   ════════════════════════════════════════════════════════════════ */
+function BaoCaoChung({ reports, channels, onGotoView }: {
+  reports: DailyReport[];
+  channels: AffiliateChannel[];
+  onGotoView: (v: 'doanhso') => void;
+}) {
+  const [monthKey, setMonthKey] = useState(nowMonthKey);
+  const [y, m] = monthKey.split('-').map(Number);
+  const isCurrentMonth = monthKey === nowMonthKey();
+  const monthFromIso = `${monthKey}-01`;
+  const monthToIso = `${monthKey}-${String(lastDayOfMonth(monthKey)).padStart(2, '0')}`;
+
+  const chMeta = new Map(channels.map((c) => [c.name, c]));
+  const monthReports = reports.filter((r) => {
+    const [dd, mm, yy] = r.date.split('/');
+    return `${yy}-${mm}` === monthKey && dd;
+  });
+
+  type Row = { name: string; cat: CatKey; weeks: number[]; total: number; target: number };
+  const rowMap = new Map<string, Row>();
+  monthReports.forEach((r) => {
+    const day = Number(r.date.split('/')[0]);
+    const wi = weekIndex(day);
+    let row = rowMap.get(r.channelName);
+    if (!row) {
+      row = { name: r.channelName, cat: catKeyOf(r, chMeta), weeks: [0, 0, 0, 0], total: 0, target: CHANNEL_TARGETS[r.channelName] ?? 0 };
+      rowMap.set(r.channelName, row);
+    }
+    row.weeks[wi] += r.revenue;
+    row.total += r.revenue;
+  });
+
+  const grouped = CATEGORIES.map((c) => {
+    const rows = [...rowMap.values()].filter((r) => r.cat === c.key).sort((a, b) => b.total - a.total);
+    const subWeeks = [0, 1, 2, 3].map((i) => rows.reduce((s, r) => s + r.weeks[i], 0));
+    const subTotal = rows.reduce((s, r) => s + r.total, 0);
+    const subTarget = rows.reduce((s, r) => s + r.target, 0) || (CATEGORY_TARGET_OVERRIDE[c.key] ?? 0);
+    return { ...c, rows, subWeeks, subTotal, subTarget };
+  }).filter((g) => g.rows.length > 0);
+
+  const grandTotal = grouped.reduce((s, g) => s + g.subTotal, 0);
+  const grandTarget = grouped.reduce((s, g) => s + g.subTarget, 0);
+  const grandWeeks = [0, 1, 2, 3].map((i) => grouped.reduce((s, g) => s + g.subWeeks[i], 0));
+
+  const revTikTok = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('tt')).reduce((s, r) => s + r.revenue, 0);
+  const revFacebook = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('fb')).reduce((s, r) => s + r.revenue, 0);
+
+  const prevKey = shiftMonth(monthKey, -1);
+  const prevTotal = reports.filter((r) => { const [, mm, yy] = r.date.split('/'); return `${yy}-${mm}` === prevKey; }).reduce((s, r) => s + r.revenue, 0);
+  const delta = prevTotal ? Math.round(((grandTotal - prevTotal) / prevTotal) * 1000) / 10 : null;
+
+  const series = dailySeries(monthReports, monthFromIso, monthToIso);
+  const catBar = grouped.map((g) => ({ label: g.label, value: g.subTotal, color: g.color }));
+  const weekLabel = (i: number) => {
+    const last = lastDayOfMonth(monthKey);
+    return `Tuần ${i + 1} (${[1, 8, 15, 22][i]}–${[7, 14, 21, last][i]}/${m})`;
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      
-      {/* Header & Filter Controls bar */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-[#1F1F1F]">Tổng quan</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Báo cáo phân tích doanh thu bán hàng và chỉ số tương tác kênh phễu.
-          </p>
-        </div>
-        
-        {/* Dynamic Period Filter Buttons */}
-        <div className="flex bg-white rounded-2xl border border-slate-200 p-1 soft-card-shadow">
-          <button 
-            onClick={() => setPeriod('today')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              period === 'today' 
-                ? 'bg-rose-50 text-[#D32027] border border-rose-100' 
-                : 'text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            Hôm nay
+    <div className="flex flex-col gap-4">
+      {/* Chọn tháng */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold text-slate-600">Doanh số tháng {m}/{y}</span>
+        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-1.5 py-1 soft-shadow">
+          <button onClick={() => setMonthKey(shiftMonth(monthKey, -1))} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
+            <span className="material-symbols-outlined text-[18px]">chevron_left</span>
           </button>
-          <button 
-            onClick={() => setPeriod('week')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              period === 'week' 
-                ? 'bg-rose-50 text-[#D32027] border border-rose-100' 
-                : 'text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            Tuần này
-          </button>
-          <button 
-            onClick={() => setPeriod('month')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              period === 'month' 
-                ? 'bg-rose-50 text-[#D32027] border border-rose-100' 
-                : 'text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            Tháng này
-          </button>
-          
-          <div className="w-px bg-slate-200 mx-1 my-1"></div>
-          
-          <button 
-            onClick={() => alert("Chức năng lọc tùy chọn lịch ngày: Vui lòng kết nối cơ sở dữ liệu để lọc phạm vi tùy ý.")}
-            className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-50 text-xs font-bold flex items-center gap-1 transition-all"
-          >
-            <span className="material-symbols-outlined text-[16px]">calendar_month</span>
-            Tùy chọn ngày
+          <span className="text-sm font-bold text-slate-700 px-2 tabular-nums">Tháng {m}/{y}</span>
+          <button onClick={() => setMonthKey(shiftMonth(monthKey, 1))} disabled={isCurrentMonth}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
+            <span className="material-symbols-outlined text-[18px]">chevron_right</span>
           </button>
         </div>
       </div>
 
-      {/* KPI Metric Summary Widgets */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        
-        {/* Card 1: Tổng Doanh Thu */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/60 soft-card-shadow flex flex-col gap-4">
-          <div className="flex justify-between items-start">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Tổng doanh thu</h3>
-            <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center text-[#D32027]">
-              <span className="material-symbols-outlined">payments</span>
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-extrabold text-[#1F1F1F] tracking-tight">{numFormat(rawRevenueTotal)}</div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-green-700 mt-2 bg-green-50 px-2 py-0.5 rounded-full w-max">
-              <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
-              <span>15%</span>
-              <span className="text-slate-500 font-normal ml-1">so với kỳ trước</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Doanh thu TikTok */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/60 soft-card-shadow flex flex-col gap-4">
-          <div className="flex justify-between items-start">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Doanh thu TikTok</h3>
-            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-900">
-              <span className="material-symbols-outlined">smart_display</span>
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-extrabold text-[#1F1F1F] tracking-tight">{numFormat(rawRevenueTikTok)}</div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-green-700 mt-2 bg-green-50 px-2 py-0.5 rounded-full w-max">
-              <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
-              <span>12%</span>
-              <span className="text-slate-500 font-normal ml-1">so với kỳ trước</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 3: Doanh thu Shopee */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/60 soft-card-shadow flex flex-col gap-4">
-          <div className="flex justify-between items-start">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Doanh thu Shopee (FB)</h3>
-            <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600">
-              <span className="material-symbols-outlined">storefront</span>
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-extrabold text-[#1F1F1F] tracking-tight">{numFormat(rawRevenueShopee)}</div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-green-700 mt-2 bg-green-50 px-2 py-0.5 rounded-full w-max">
-              <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
-              <span>8%</span>
-              <span className="text-slate-500 font-normal ml-1">so với kỳ trước</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4: Tổng Lượt Xem */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/60 soft-card-shadow flex flex-col gap-4">
-          <div className="flex justify-between items-start">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Lượt xem (kênh TH)</h3>
-            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
-              <span className="material-symbols-outlined">visibility</span>
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-extrabold text-[#1F1F1F] tracking-tight">{rawViews}</div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-green-700 mt-2 bg-green-50 px-2 py-0.5 rounded-full w-max">
-              <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
-              <span>20%</span>
-              <span className="text-slate-500 font-normal ml-1">so với kỳ trước</span>
-            </div>
-          </div>
-        </div>
+      {/* KPI */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard label="Tổng doanh số" value={vnd(grandTotal)} icon="payments" tone="rose"
+          sub={delta == null ? 'Chưa có kỳ trước' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta)}% so tháng trước`}
+          subTone={delta == null ? 'muted' : delta >= 0 ? 'up' : 'down'} />
+        <KpiCard label="Doanh số TikTok" value={vnd(revTikTok)} icon="smart_display" tone="slate" />
+        <KpiCard label="Doanh số Facebook" value={vnd(revFacebook)} icon="storefront" tone="blue" />
+        <KpiCard label="% đạt chỉ tiêu" value={grandTarget ? `${pct(grandTotal, grandTarget)}%` : '—'} icon="target" tone="green"
+          sub={grandTarget ? `Chỉ tiêu ${vndShort(grandTarget)}` : 'Chưa đặt chỉ tiêu'} subTone="muted" />
       </div>
 
-      {/* Visual Analytics Sections split */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* TikTok vs Shopee Line graph widget */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200/60 soft-card-shadow flex flex-col">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
-            <h3 className="text-lg font-bold text-gray-900 font-display">Xu hướng doanh thu theo ngày</h3>
-            
-            {/* Color indicators */}
-            <div className="flex items-center gap-4 text-xs font-semibold">
-              <div className="flex items-center gap-2 text-slate-600">
-                <span className="w-3 h-3 rounded-full bg-[#D32027]"></span> 
-                <span>Kênh TikTok</span>
-              </div>
-              <div className="flex items-center gap-2 text-slate-600">
-                <span className="w-3 h-3 rounded-full border border-dashed border-[#C05530] bg-[#C05530]/20"></span>
-                <span>Kênh Shopee (qua phễu FB)</span>
-              </div>
-            </div>
-          </div>
-
-          {/* SVG Line Graph wrapper */}
-          <div className="flex-1 relative min-h-[280px] w-full bg-slate-50/50 rounded-xl border border-slate-200/60 overflow-hidden p-4">
-            
-            {/* Y Axis Grid Labeling */}
-            <div className="absolute left-3 top-4 bottom-8 flex flex-col justify-between text-[11px] text-slate-400 font-mono">
-              <span>100M</span>
-              <span>75M</span>
-              <span>50M</span>
-              <span>25M</span>
-              <span>0</span>
-            </div>
-
-            {/* Grid Line Visuals */}
-            <div className="absolute inset-0 left-12 right-4 top-4 bottom-8 flex flex-col justify-between pointer-events-none">
-              <div className="w-full h-px bg-slate-200/75"></div>
-              <div className="w-full h-px bg-slate-200/75"></div>
-              <div className="w-full h-px bg-slate-200/75"></div>
-              <div className="w-full h-px bg-slate-200/75"></div>
-              <div className="w-full h-px bg-slate-300 border-b border-dashed"></div>
-            </div>
-
-            {/* SVGs plotting */}
-            <div className="absolute inset-0 left-12 right-4 bottom-8 top-4">
-              
-              {/* Solid line - TikTok */}
-              <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+      {/* Biểu đồ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-white rounded-2xl p-4 border border-slate-200/70 soft-shadow">
+          <h3 className="text-sm font-bold text-slate-800 mb-3">Doanh số theo ngày</h3>
+          <div className="h-[240px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={series} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="solidGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#D32027" stopOpacity="0.15" />
-                    <stop offset="100%" stopColor="#D32027" stopOpacity="0" />
+                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#D32027" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#D32027" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <path 
-                  d="M 0 80 C 10 75, 20 68, 30 50 C 40 45, 50 65, 60 30 C 70 25, 80 40, 90 20 L 100 10" 
-                  fill="none" 
-                  stroke="#D32027" 
-                  strokeWidth="3.2" 
-                  strokeLinecap="round"
-                />
-                <path 
-                  d="M 0 80 C 10 75, 20 68, 30 50 C 40 45, 50 65, 60 30 C 70 25, 80 40, 90 20 L 100 10 L 100 100 L 0 100 Z" 
-                  fill="url(#solidGrad)"
-                />
-              </svg>
-
-              {/* Dashed line - Shopee */}
-              <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-                <path 
-                  d="M 0 92 C 15 88, 25 80, 40 75 C 50 72, 60 62, 70 65 C 80 64, 88 52, 100 48" 
-                  fill="none" 
-                  stroke="#C05530" 
-                  strokeWidth="2.5" 
-                  strokeDasharray="5,4" 
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
-
-            {/* X Axis Grid Labeling */}
-            <div className="absolute left-12 right-4 bottom-2 flex justify-between text-[11px] text-slate-400 font-mono">
-              <span>01/10</span>
-              <span>05/10</span>
-              <span>10/10</span>
-              <span>15/10</span>
-              <span>20/10</span>
-              <span>25/10</span>
-              <span>30/10</span>
-            </div>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94A3B8' }} interval="preserveStartEnd" minTickGap={24} />
+                <YAxis tickFormatter={vndShort} tick={{ fontSize: 10, fill: '#94A3B8' }} width={44} />
+                <Tooltip formatter={(v) => vnd(Number(v))} labelFormatter={(l) => `Ngày ${l}`} />
+                <Area type="monotone" dataKey="revenue" name="Doanh số" stroke="#D32027" strokeWidth={2.4} fill="url(#revGrad)" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
-
-        {/* Channel Share donut widget */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/60 soft-card-shadow flex flex-col">
-          <h3 className="text-lg font-bold text-gray-900 font-display mb-4">Tỷ trọng kênh bán hàng</h3>
-          
-          <div className="flex-1 flex flex-col items-center justify-center gap-6 mt-2">
-            {/* Radial circular progress diagram */}
-            <div className="relative w-40 h-40 flex items-center justify-center">
-              
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                {/* Background Track */}
-                <circle cx="18" cy="18" r="15.915" fill="none" stroke="#E2E8F0" strokeWidth="3.2" />
-                {/* Green - KOC AI (15%) */}
-                <circle cx="18" cy="18" r="15.915" fill="none" stroke="#425b29" strokeWidth="3.2" strokeDasharray="15 85" strokeDashoffset="0" />
-                {/* Orange - KOC Người thật (30%) */}
-                <circle cx="18" cy="18" r="15.915" fill="none" stroke="#C05530" strokeWidth="3.2" strokeDasharray="30 70" strokeDashoffset="-15" />
-                {/* Red - Thương Hiệu (55%) */}
-                <circle cx="18" cy="18" r="15.915" fill="none" stroke="#D32027" strokeWidth="3.2" strokeDasharray="55 45" strokeDashoffset="-45" />
-              </svg>
-
-              <div className="absolute flex flex-col items-center justify-center text-center">
-                <span className="text-3xl font-extrabold text-slate-900 tracking-tight">100%</span>
-                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Tổng sản lượng</span>
-              </div>
-            </div>
-
-            {/* Percentages Table Legend */}
-            <div className="w-full flex flex-col gap-2 mt-2">
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2 text-slate-700">
-                  <span className="w-3 h-3 rounded-full bg-[#D32027]"></span>
-                  <span>Kênh thương hiệu</span>
-                </div>
-                <span className="font-bold text-slate-800">55%</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2 text-slate-700">
-                  <span className="w-3 h-3 rounded-full bg-[#C05530]"></span>
-                  <span>KOC người thật</span>
-                </div>
-                <span className="font-bold text-slate-800">30%</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2 text-slate-700">
-                  <span className="w-3 h-3 rounded-full bg-[#425b29]"></span>
-                  <span>KOC sử dụng AI</span>
-                </div>
-                <span className="font-bold text-slate-800">15%</span>
-              </div>
-            </div>
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/70 soft-shadow">
+          <h3 className="text-sm font-bold text-slate-800 mb-3">Doanh số theo nhóm kênh</h3>
+          <div className="h-[240px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={catBar} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
+                <XAxis type="number" tickFormatter={vndShort} tick={{ fontSize: 10, fill: '#94A3B8' }} />
+                <YAxis type="category" dataKey="label" tick={{ fontSize: 9, fill: '#64748B' }} width={92} />
+                <Tooltip formatter={(v) => vnd(Number(v))} />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                  {catBar.map((c, i) => <Cell key={i} fill={c.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
-
       </div>
 
-      {/* Sales Leaderboard Section */}
-      <div className="bg-white rounded-2xl p-6 border border-slate-200/60 soft-card-shadow">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-bold text-gray-900 font-display">Bảng xếp hạng nhân viên theo doanh thu</h3>
-          <button 
-            onClick={() => onNavigateToTab('chi-tieu')}
-            className="text-xs font-bold text-[#D32027] hover:underline flex items-center gap-1"
-          >
-            <span>Quản lý KPI</span>
-            <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-          </button>
+      {/* Bảng kênh × tuần */}
+      <div className="bg-white rounded-2xl border border-slate-200/70 soft-shadow overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-800">Chi tiết theo kênh — Chỉ tiêu / Thực hiện / % (tháng {m}/{y})</h3>
+          <span className="text-xs font-bold text-[#D32027]">Tổng: {vnd(grandTotal)}</span>
         </div>
-
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[640px]">
+          <table className="w-full text-xs border-collapse min-w-[860px]">
             <thead>
-              <tr className="border-b border-slate-100 text-xs text-slate-400 font-medium uppercase tracking-wider">
-                <th className="py-4 px-4 text-center w-16">Hạng</th>
-                <th className="py-4 px-4 text-left">Nhân viên</th>
-                <th className="py-4 px-4 text-left">Nhóm</th>
-                <th className="py-4 px-4 text-right">Doanh thu đạt được</th>
-                <th className="py-4 px-4 text-left w-64">% hoàn thành chỉ tiêu</th>
+              <tr className="text-[10px] text-slate-500 uppercase tracking-wider bg-slate-50">
+                <th className="sticky left-0 z-10 bg-slate-50 px-4 py-2.5 text-left font-bold border-b border-slate-200">Kênh</th>
+                <th className="px-3 py-2.5 text-right font-bold border-b border-slate-200">Chỉ tiêu</th>
+                <th className="px-3 py-2.5 text-right font-bold border-b border-slate-200">Thực hiện</th>
+                <th className="px-3 py-2.5 text-center font-bold border-b border-slate-200">%</th>
+                {[0, 1, 2, 3].map((i) => (
+                  <th key={i} className="px-3 py-2.5 text-right font-bold border-b border-slate-200 whitespace-nowrap" title={weekLabel(i)}>T{i + 1}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-sm">
-              
-              {/* Row 1 */}
-              <tr className="hover:bg-slate-50 transition-colors">
-                <td className="py-4 px-4 text-center">
-                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 text-amber-700 font-bold">1</span>
-                </td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center gap-3">
-                    <img 
-                      alt="Nguyen Van A" 
-                      className="w-10 h-10 rounded-full object-cover border border-slate-200" 
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBd-vzveFjQnMXwRBSE5hRbjWLkVKSfLRJyEVtt3FFF-EpnkYdvqVfaEBHaP5gubL_nohHV3L6KINm_ivztrBMZpNcjFGeKNuKgtOj8q6w7dkoLBn-ALRsk1bNuygMmLjT5A5xZqGOUqecdvXPzWI9JXfJLaIbUv3-OQ11U-_TqOSzAEQIL5XYRl5EXNgSiPbmiRmihM_th8rLJLAIZYOxgRnKkD5YxTYKZGpzSPdyE4TJjFJnpVAYphV_9UpuOLyW60NiMChPDnqr" 
-                    />
-                    <div>
-                      <div className="font-semibold text-slate-900">Nguyễn Văn A</div>
-                      <div className="text-xs text-slate-500">Leader</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-4 px-4">
-                  <span className="px-2.5 py-1 bg-slate-100 rounded-md text-xs font-medium text-slate-700">Team TikTok</span>
-                </td>
-                <td className="py-4 px-4 text-right font-bold text-slate-900">
-                  {numFormat(350000000)}
-                </td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#D32027] rounded-full" style={{ width: '100%' }}></div>
-                    </div>
-                    <span className="text-xs font-bold text-[#D32027]">120%</span>
-                  </div>
-                </td>
-              </tr>
-
-              {/* Row 2 */}
-              <tr className="hover:bg-slate-50 transition-colors">
-                <td className="py-4 px-4 text-center">
-                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold">2</span>
-                </td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center gap-3">
-                    <img 
-                      alt="Tran Thi B" 
-                      className="w-10 h-10 rounded-full object-cover border border-slate-200" 
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuA7hJqbL0fQIqlo1FE3j4-WZeqTHw9cn0ga5_nxJXHO3hwKU5C-XJqfMIYYWJjYkI9UnaG4W_mmJ7z8QUlbxQ7YEow_HLbhZYA3FV3w2VgxdzlqIp4oB7TXAhzNG7620ml3yJ0apWRP7ynDUgBVvDzYSXMjoVtTM4bxOMGeXu7QNgwLsznEorRWpcXV-0H0Dh86o59C4oVRi4urL_DCGG9BRqyHPxMAIIs4AOuvVPY6FamKTifQkXK5OQbA2dIPyVLhtinhe2InKOon" 
-                    />
-                    <div>
-                      <div className="font-semibold text-slate-900">Trần Thị B</div>
-                      <div className="text-xs text-slate-500">Chuyên viên</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-4 px-4">
-                  <span className="px-2.5 py-1 bg-slate-100 rounded-md text-xs font-medium text-slate-700">Team FB</span>
-                </td>
-                <td className="py-4 px-4 text-right font-bold text-slate-900">
-                  {numFormat(280000000)}
-                </td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-red-500 rounded-full" style={{ width: '95%' }}></div>
-                    </div>
-                    <span className="text-xs font-bold text-slate-700">95%</span>
-                  </div>
-                </td>
-              </tr>
-
-              {/* Row 3 */}
-              <tr className="hover:bg-slate-50 transition-colors">
-                <td className="py-4 px-4 text-center">
-                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-600 font-bold">3</span>
-                </td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center gap-3">
-                    <img 
-                      alt="Le Van C" 
-                      className="w-10 h-10 rounded-full object-cover border border-slate-200" 
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7goLbziQTnC2JUBRIyeKheBShX-MRMuRKl89X27RF4umEa-_0diYtjIFGG3sZnC3EldaGqNP1k7-1zuQXN4H1Lp1KMjZLT6TWr_3xkNDHJYyejU4-5dxwmXt7r3fwNUhWrN_QfAsD-iDAXttm-1Hlr4BqzIv4TKXKnQe-EFzihR3ZwbTuzxxcSqHswDXqRk8HrclGJyKD1NdWJDhv6rrUVKpnCVfRj9HwgvTFCyghdOT70e5GbJW1Z3bWoR10XY4OwRYV-CJboViX" 
-                    />
-                    <div>
-                      <div className="font-semibold text-slate-900">Lê Văn C</div>
-                      <div className="text-xs text-slate-500">Chuyên viên</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-4 px-4">
-                  <span className="px-2.5 py-1 bg-slate-100 rounded-md text-xs font-medium text-slate-700">Team TikTok</span>
-                </td>
-                <td className="py-4 px-4 text-right font-bold text-slate-900">
-                  {numFormat(210000000)}
-                </td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-500 rounded-full" style={{ width: '70%' }}></div>
-                    </div>
-                    <span className="text-xs font-bold text-slate-700">70%</span>
-                  </div>
-                </td>
-              </tr>
-
+            <tbody>
+              {grouped.map((g) => {
+                const p = pct(g.subTotal, g.subTarget);
+                return (
+                  <React.Fragment key={g.key}>
+                    <tr className="bg-slate-50/60">
+                      <td className="sticky left-0 z-10 bg-slate-50/60 px-4 py-2 font-bold text-slate-700 border-b border-slate-100">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: g.color }} />{g.label}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold text-slate-500 border-b border-slate-100">{g.subTarget ? vndShort(g.subTarget) : '—'}</td>
+                      <td className="px-3 py-2 text-right font-extrabold text-slate-900 border-b border-slate-100">{vndShort(g.subTotal)}</td>
+                      <td className="px-3 py-2 text-center border-b border-slate-100">
+                        <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(p)}`}>{p == null ? '—' : p + '%'}</span>
+                      </td>
+                      {g.subWeeks.map((w, i) => (
+                        <td key={i} className="px-3 py-2 text-right font-semibold text-slate-600 border-b border-slate-100">{w ? vndShort(w) : '—'}</td>
+                      ))}
+                    </tr>
+                    {g.rows.map((r) => {
+                      const rp = pct(r.total, r.target);
+                      return (
+                        <tr key={r.name} className="hover:bg-rose-50/30">
+                          <td className="sticky left-0 z-10 bg-white px-4 py-1.5 pl-8 text-slate-600 truncate max-w-[220px] border-b border-slate-50" title={r.name}>{r.name}</td>
+                          <td className="px-3 py-1.5 text-right text-slate-400 border-b border-slate-50">{r.target ? vndShort(r.target) : '—'}</td>
+                          <td className="px-3 py-1.5 text-right font-bold text-slate-800 border-b border-slate-50">{vndShort(r.total)}</td>
+                          <td className="px-3 py-1.5 text-center border-b border-slate-50">
+                            <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(rp)}`}>{rp == null ? '—' : rp + '%'}</span>
+                          </td>
+                          {r.weeks.map((w, i) => (
+                            <td key={i} className="px-3 py-1.5 text-right text-slate-500 font-mono border-b border-slate-50">{w ? vndShort(w) : '—'}</td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+              {grouped.length === 0 && (
+                <tr><td colSpan={7} className="py-10 text-center text-slate-400">Chưa có báo cáo doanh số nào trong tháng này.</td></tr>
+              )}
             </tbody>
+            {grouped.length > 0 && (
+              <tfoot>
+                <tr className="text-[11px] bg-slate-100">
+                  <td className="sticky left-0 z-10 bg-slate-100 px-4 py-2.5 font-extrabold text-slate-700 uppercase border-t-2 border-slate-200">Tổng cộng</td>
+                  <td className="px-3 py-2.5 text-right font-bold text-slate-600 border-t-2 border-slate-200">{grandTarget ? vndShort(grandTarget) : '—'}</td>
+                  <td className="px-3 py-2.5 text-right font-extrabold text-[#D32027] border-t-2 border-slate-200">{vndShort(grandTotal)}</td>
+                  <td className="px-3 py-2.5 text-center border-t-2 border-slate-200">
+                    <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(pct(grandTotal, grandTarget))}`}>
+                      {pct(grandTotal, grandTarget) == null ? '—' : pct(grandTotal, grandTarget) + '%'}
+                    </span>
+                  </td>
+                  {grandWeeks.map((w, i) => (
+                    <td key={i} className="px-3 py-2.5 text-right font-bold text-slate-700 border-t-2 border-slate-200">{w ? vndShort(w) : '—'}</td>
+                  ))}
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
-
-        <div className="mt-6 flex justify-center">
-          <button 
-            onClick={() => onNavigateToTab('nhan-vien')}
-            className="px-6 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl font-semibold text-slate-600 transition-colors text-xs"
-          >
-            Xem tất cả nhân sự
+        <div className="px-4 py-2 flex items-center gap-4 text-[10px] text-slate-400 border-t border-slate-100">
+          <span>T1–T4 = 4 tuần trong tháng</span>
+          <button onClick={() => onGotoView('doanhso')} className="ml-auto text-[#D32027] font-bold hover:underline flex items-center gap-1">
+            Xem doanh số chi tiết <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
           </button>
         </div>
       </div>
+    </div>
+  );
+}
 
+/* ════════════════════════════════════════════════════════════════
+   TAB 2 — DOANH SỐ NGÀY (bảng chi tiết từng dòng, ảnh 2)
+   ════════════════════════════════════════════════════════════════ */
+function DoanhSoNgay({ reports, channels }: { reports: DailyReport[]; channels: AffiliateChannel[] }) {
+  const [dateIso, setDateIso] = useState(isoToday);
+  const date = toDdmmyyyy(dateIso);
+  const isToday = dateIso === isoToday();
+  const day = Number(dateIso.split('-')[2]);
+  const tuan = `Tuần ${weekIndex(day) + 1}`;
+
+  const loaiKenh = (ch: AffiliateChannel) => {
+    if (ch.platform === 'TikTok') return ch.channelType === 'Brand' ? 'TikTok Brand' : ch.channelType === 'Real KOC' ? 'TikTok KOC' : 'TikTok AI';
+    if (ch.platform === 'Facebook') return ch.channelType === 'Brand' ? 'FB Brand' : 'FB AI';
+    return ch.platform;
+  };
+  const catRank = (ch: AffiliateChannel) => {
+    if (ch.platform === 'TikTok') return ch.channelType === 'Brand' ? 0 : ch.channelType === 'Real KOC' ? 1 : 2;
+    if (ch.platform === 'Facebook') return ch.channelType === 'Brand' ? 3 : 4;
+    return 5;
+  };
+
+  // Gán người phụ trách cố định cho một số kênh (khi manager_name trong DB trống).
+  // Khớp theo tên đã chuẩn hoá (bỏ dấu tiếng Việt, viết thường, bỏ dấu cách/chấm/gạch) — sửa tự do ở đây.
+  const norm = (s: string) => s.normalize('NFD').toLowerCase().replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
+  const MANAGER_OVERRIDE: Record<string, string> = {
+    // TikTok Brand
+    'drkampharmaofficial': 'Nguyễn Công Hải',
+    'drkamvn': 'Hoàng Yến Nhi',
+    'drkamvnofficial': 'Đặng Kim Khánh',
+    // TikTok KOC
+    'happyydaily': 'Hoàng Yến Nhi',
+    'nhacuacamcam': 'Nguyễn Công Hải',
+    'giadinhminhhee': 'Nguyễn Công Hải',
+    'baochauday': 'Đặng Kim Khánh',
+    // TikTok AI
+    'koi928tramtram': 'Đặng Kim Khánh',
+    'tinh642002': 'Đặng Kim Khánh',
+    'doisongsuckhoe86': 'Đặng Kim Khánh',
+    'ngochuong259': 'Nguyễn Công Hải',
+    'haidang0136': 'Nguyễn Công Hải',
+    'minhquan8046': 'Hoàng Yến Nhi',
+    'quinchana82': 'Hoàng Yến Nhi',
+    'anhquan9684': 'Hoàng Yến Nhi',
+    // FB Brand (tên đầy đủ trong app)
+    'drkamsongkhoecungchuyengia': 'Đặng Kim Khánh',
+    'drkambacsirangmienghongcuamoigiadinh': 'Đặng Kim Khánh',
+    // FB AI
+    'duocsikhanh': 'Đặng Kim Khánh',
+    'conghaing': 'Nguyễn Công Hải',
+    'ynni1809': 'Hoàng Yến Nhi',
+  };
+  const nguoiPT = (ch: AffiliateChannel) => MANAGER_OVERRIDE[norm(ch.name)] ?? ch.managerName ?? '—';
+
+  // Tất cả kênh = dòng CỐ ĐỊNH (Kênh · Loại · Người PT để sẵn); doanh số/video/view lấy từ báo cáo ngày.
+  const reportOf = (name: string) => reports.find((r) => r.channelName === name && r.date === date);
+  const rows = [...channels]
+    .sort((a, b) => catRank(a) - catRank(b) || a.name.localeCompare(b.name, 'vi'))
+    .map((ch) => ({ ch, rep: reportOf(ch.name) }));
+
+  const totalRev = rows.reduce((s, x) => s + (x.rep?.revenue ?? 0), 0);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-sm font-bold text-slate-600">Doanh số chi tiết ngày {date} · {tuan}</span>
+        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1.5 soft-shadow">
+          <span className="material-symbols-outlined text-[18px] text-orange-600">event</span>
+          <input type="date" value={dateIso} max={isoToday()} onChange={(e) => setDateIso(e.target.value)}
+            className="text-sm font-semibold border-none outline-none bg-transparent text-slate-700" />
+          {!isToday && <button onClick={() => setDateIso(isoToday())} className="text-[11px] font-bold text-[#D32027] hover:underline">Hôm nay</button>}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200/70 soft-shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse min-w-[560px]">
+            <thead>
+              <tr className="text-[10px] text-slate-500 uppercase tracking-wider bg-slate-50">
+                <th className="px-2 py-2.5 text-center font-bold border-b border-slate-200 w-9">#</th>
+                <th className="px-2 py-2.5 text-left font-bold border-b border-slate-200 whitespace-nowrap">Tuần</th>
+                <th className="px-3 py-2.5 text-left font-bold border-b border-slate-200">Kênh</th>
+                <th className="px-2 py-2.5 text-left font-bold border-b border-slate-200 whitespace-nowrap">Loại kênh</th>
+                <th className="px-3 py-2.5 text-left font-bold border-b border-slate-200 whitespace-nowrap">Người PT</th>
+                <th className="px-3 py-2.5 text-right font-bold border-b border-slate-200">Doanh số</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {rows.length === 0 ? (
+                <tr><td colSpan={6} className="py-10 text-center text-slate-400">Chưa có kênh nào. Thêm kênh ở mục TikTok / Facebook.</td></tr>
+              ) : (
+                rows.map(({ ch, rep }, i) => (
+                  <tr key={ch.id} className="hover:bg-orange-50/30">
+                    <td className="px-2 py-1.5 text-center text-slate-400 font-mono">{i + 1}</td>
+                    <td className="px-2 py-1.5 text-slate-500 whitespace-nowrap">{tuan}</td>
+                    <td className="px-3 py-1.5 font-semibold text-slate-700 truncate max-w-[200px]" title={ch.name}>{ch.name}</td>
+                    <td className="px-2 py-1.5 text-slate-500 whitespace-nowrap">{loaiKenh(ch)}</td>
+                    <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{nguoiPT(ch)}</td>
+                    <td className={`px-3 py-1.5 text-right font-bold ${rep && rep.revenue > 0 ? 'text-slate-900' : 'text-slate-300'}`}>{rep && rep.revenue > 0 ? vnd(rep.revenue) : ''}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            {rows.length > 0 && (
+              <tfoot>
+                <tr className="text-[11px] bg-slate-100 font-bold">
+                  <td className="px-2 py-2.5 text-slate-600 uppercase border-t-2 border-slate-200" colSpan={5}>Tổng {rows.length} kênh</td>
+                  <td className="px-3 py-2.5 text-right text-[#D32027] border-t-2 border-slate-200">{vnd(totalRev)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+        <p className="px-4 py-2 text-[10px] text-slate-400 border-t border-slate-100">
+          Danh sách kênh để sẵn — cột <b>Doanh số</b> tự điền khi báo cáo ở mục TikTok / Facebook.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Thẻ KPI ─────────────────────────────────────────────────────────────────
+function KpiCard({ label, value, icon, tone, sub, subTone = 'muted' }: {
+  label: string; value: string; icon: string; tone: 'rose' | 'slate' | 'blue' | 'green';
+  sub?: string; subTone?: 'up' | 'down' | 'muted';
+}) {
+  const toneCls: Record<string, string> = {
+    rose: 'bg-rose-50 text-[#D32027]', slate: 'bg-slate-100 text-slate-800',
+    blue: 'bg-blue-50 text-blue-600', green: 'bg-green-50 text-green-700',
+  };
+  const subCls = subTone === 'up' ? 'text-green-700' : subTone === 'down' ? 'text-rose-600' : 'text-slate-400';
+  return (
+    <div className="bg-white rounded-2xl p-4 border border-slate-200/70 soft-shadow flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+        <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${toneCls[tone]}`}>
+          <span className="material-symbols-outlined text-[18px]">{icon}</span>
+        </span>
+      </div>
+      <div className="text-lg font-extrabold text-slate-900 tracking-tight tabular-nums">{value}</div>
+      {sub && <div className={`text-[11px] font-semibold ${subCls}`}>{sub}</div>}
     </div>
   );
 }
