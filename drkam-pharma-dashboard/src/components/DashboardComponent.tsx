@@ -49,6 +49,13 @@ const LINE_ITEMS: LineItem[] = [
   { id: 'fbnhi', label: 'FB AI – Nhi/ynni1809', monthlyTarget: 50_000_000, badge: 'fb', match: nameIs('ynni1809') },
 ];
 
+// VIEW / REACH — chỉ tiêu THÁNG (tuần = tháng ÷ 4); Thực hiện = tổng reach (viewsReach) các tuần.
+// reach nhập theo tuần ở form TikTok/Facebook thương hiệu.
+const VIEW_REACH: { id: string; label: string; badge: BadgeKind; monthlyTarget: number; plat: 'tt' | 'fb' }[] = [
+  { id: 'tt-view',  label: 'Lượt view TikTok',        badge: 'tiktok', monthlyTarget: 5_000_000,  plat: 'tt' },
+  { id: 'fb-reach', label: 'Lượt tiếp cận Facebook',  badge: 'fb',     monthlyTarget: 10_000_000, plat: 'fb' },
+];
+
 // Dải màu theo % hoàn thành (khớp chú thích dưới biểu đồ) + icon trạng thái.
 function completionStyle(p: number | null): { bar: string; text: string; icon: string | null } {
   if (p == null) return { bar: '#CBD5E1', text: '#94A3B8', icon: null };
@@ -213,6 +220,18 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
   const withTarget = LINE_ITEMS.filter((li) => li.monthlyTarget > 0);
   const reached = withTarget.filter((li) => rowById.get(li.id)!.total >= li.monthlyTarget).length;
 
+  // VIEW / REACH — cộng reach (viewsReach) theo nền tảng & tuần (reach nhập theo tuần → cộng dồn ra tháng).
+  const vrRows = VIEW_REACH.map((v) => ({ ...v, weeks: [0, 0, 0, 0] as number[], total: 0 }));
+  monthReports.forEach((r) => {
+    const reach = r.traffic?.viewsReach ?? 0;
+    if (!reach) return;
+    const cat = catKeyOf(r, chMeta);
+    const v = vrRows.find((x) => cat.startsWith(x.plat));
+    if (!v) return;
+    v.weeks[weekIndex(Number(r.date.split('/')[0]))] += reach;
+    v.total += reach;
+  });
+
   const revTikTok = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('tt')).reduce((s, r) => s + r.revenue, 0);
   const revFacebook = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('fb')).reduce((s, r) => s + r.revenue, 0);
 
@@ -344,10 +363,9 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
                   </tr>
                 );
               })}
-            </tbody>
-            <tfoot>
+              {/* Tổng cộng doanh số */}
               <tr className="text-[11px] bg-slate-100">
-                <td className="sticky left-0 z-10 bg-slate-100 px-4 py-2.5 font-extrabold text-slate-700 uppercase border-t-2 border-slate-200">Tổng cộng</td>
+                <td className="sticky left-0 z-10 bg-slate-100 px-4 py-2.5 font-extrabold text-slate-700 uppercase border-t-2 border-slate-200">Tổng doanh số</td>
                 <td className="px-3 py-2.5 text-right font-bold text-slate-600 border-t-2 border-slate-200">{grandTarget ? vndShort(grandTarget) : '—'}</td>
                 <td className="px-3 py-2.5 text-right font-extrabold text-[#D32027] border-t-2 border-slate-200">{vndShort(grandTotal)}</td>
                 <td className="px-3 py-2.5 text-center border-t-2 border-slate-200">
@@ -357,11 +375,44 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
                   <td key={i} className="px-3 py-2.5 text-right font-bold text-slate-700 border-t-2 border-slate-200">{w ? vndShort(w) : '—'}</td>
                 ))}
               </tr>
-            </tfoot>
+
+              {/* Dải ngăn cách — VIEW / REACH (traffic, nhập theo tuần) */}
+              <tr>
+                <td colSpan={8} className="bg-blue-600 text-white px-4 py-2 text-[11px] font-bold uppercase tracking-wider">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[15px]">visibility</span>
+                    View / Reach · lấy từ báo cáo traffic (nhập theo tuần)
+                  </span>
+                </td>
+              </tr>
+              {vrRows.map((v) => {
+                const vp = pct(v.total, v.monthlyTarget);
+                return (
+                  <tr key={v.id} className="hover:bg-blue-50/30">
+                    <td className="sticky left-0 z-10 bg-white px-4 py-2 font-semibold text-slate-700 border-b border-slate-50">
+                      <span className="inline-flex items-center gap-2">
+                        {v.badge === 'tiktok'
+                          ? <span className="w-5 h-5 rounded-full bg-slate-900 flex items-center justify-center shrink-0"><TikTokIcon className="w-3 h-3 text-white" /></span>
+                          : <FacebookIcon className="w-5 h-5 text-[#1877F2] shrink-0" />}
+                        {v.label}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-400 border-b border-slate-50">{vndShort(v.monthlyTarget)}</td>
+                    <td className="px-3 py-2 text-right font-bold text-slate-900 border-b border-slate-50">{v.total ? vndShort(v.total) : '—'}</td>
+                    <td className="px-3 py-2 text-center border-b border-slate-50">
+                      <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(vp)}`}>{vp == null ? '—' : vp + '%'}</span>
+                    </td>
+                    {v.weeks.map((w, i) => (
+                      <td key={i} className="px-3 py-2 text-right text-slate-500 font-mono border-b border-slate-50">{w ? vndShort(w) : '—'}</td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
           </table>
         </div>
         <div className="px-4 py-2 flex items-center gap-4 text-[10px] text-slate-400 border-t border-slate-100">
-          <span>T1 (1–7) · T2 (8–14) · T3 (15–21) · T4 (22–cuối tháng) · Thực hiện tự cộng từ báo cáo ngày</span>
+          <span>T1 (1–7) · T2 (8–14) · T3 (15–21) · T4 (22–cuối tháng) · Doanh số cộng theo ngày · View/Reach cộng theo tuần</span>
           <button onClick={() => onGotoView('doanhso')} className="ml-auto text-[#D32027] font-bold hover:underline flex items-center gap-1">
             Xem doanh số chi tiết <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
           </button>

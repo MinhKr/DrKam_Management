@@ -424,6 +424,8 @@ function TikTokReportModal({ channel, initialDate, hasTraffic, findReportOnDate,
   const [viewAllRate, setViewAllRate] = useState('');
   const [avgDuration, setAvgDuration] = useState('');
   const [followerIncr, setFollowerIncr] = useState('');
+  // Chỉ số traffic (reach…) nhập theo TUẦN → mặc định thu gọn; tự mở nếu ngày này đã có traffic.
+  const [showTraffic, setShowTraffic] = useState(false);
 
   useEffect(() => {
     setRevenueStr(existing ? existing.revenue.toLocaleString('vi-VN') : '');
@@ -436,6 +438,8 @@ function TikTokReportModal({ channel, initialDate, hasTraffic, findReportOnDate,
     setViewAllRate(t?.viewAllRate ? String(t.viewAllRate) : '');
     setAvgDuration(t?.avgViewDuration ? String(t.avgViewDuration) : '');
     setFollowerIncr(t?.followerIncr ? String(t.followerIncr) : '');
+    // Mở sẵn khối traffic khi ngày đang chọn đã có số liệu traffic (để sửa).
+    setShowTraffic(!!t && (t.viewsReach > 0 || t.like > 0 || t.comment > 0 || t.share > 0 || t.save > 0 || t.followerIncr > 0));
   }, [existing?.id, date]);
 
   const intF = (s: string) => parseInt(s.replace(/\D/g, ''), 10) || 0;
@@ -498,20 +502,32 @@ function TikTokReportModal({ channel, initialDate, hasTraffic, findReportOnDate,
 
           {hasTraffic && (
             <div className="mb-5">
-              <p className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[16px] text-blue-600">analytics</span>
-                Chỉ số traffic
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <NumField label="Views / Reach" value={viewsReach} onChange={setViewsReach} />
-                <NumField label="Comment" value={comment} onChange={setComment} />
-                <NumField label="Like" value={like} onChange={setLike} />
-                <NumField label="Share" value={share} onChange={setShare} />
-                <NumField label="Lưu (Save)" value={save} onChange={setSave} />
-                <NumField label="Số follow tăng" value={followerIncr} onChange={setFollowerIncr} />
-                <NumField label="Tỷ lệ xem hết (%)" value={viewAllRate} onChange={setViewAllRate} decimal />
-                <NumField label="TG xem TB (giây)" value={avgDuration} onChange={setAvgDuration} decimal />
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowTraffic((s) => !s)}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-blue-200 bg-blue-50/60 hover:bg-blue-50 transition-colors"
+              >
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px] text-blue-600">analytics</span>
+                  Nhập chỉ số tuần (traffic · reach)
+                </span>
+                <span className={`material-symbols-outlined text-[18px] text-blue-600 transition-transform ${showTraffic ? 'rotate-180' : ''}`}>expand_more</span>
+              </button>
+              {showTraffic && (
+                <>
+                  <p className="text-[11px] text-slate-400 mt-2 mb-2">Nhập 1 lần/tuần — số này cộng dồn lên báo cáo chung (View/Reach).</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <NumField label="Views / Reach" value={viewsReach} onChange={setViewsReach} />
+                    <NumField label="Comment" value={comment} onChange={setComment} />
+                    <NumField label="Like" value={like} onChange={setLike} />
+                    <NumField label="Share" value={share} onChange={setShare} />
+                    <NumField label="Lưu (Save)" value={save} onChange={setSave} />
+                    <NumField label="Số follow tăng" value={followerIncr} onChange={setFollowerIncr} />
+                    <NumField label="Tỷ lệ xem hết (%)" value={viewAllRate} onChange={setViewAllRate} decimal />
+                    <NumField label="TG xem TB (giây)" value={avgDuration} onChange={setAvgDuration} decimal />
+                  </div>
+                </>
+              )}
             </div>
           )}
 
