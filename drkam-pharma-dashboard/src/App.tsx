@@ -278,6 +278,8 @@ export default function App() {
   // Login Success
   const handleLoginSuccess = async (newSession: UserSession) => {
     setSession(newSession);
+    // Sau mỗi lần đăng nhập luôn về mục Tổng quan (kể cả đăng nhập lại không tải trang).
+    setActiveTab('overview');
     // Ghi log với danh tính NGƯỜI VỪA ĐĂNG NHẬP (không lấy session cũ — lúc này
     // setSession chưa kịp cập nhật nên session.name vẫn là tên mặc định cũ).
     const uid = cloud ? await getCurrentUserId() : null;
