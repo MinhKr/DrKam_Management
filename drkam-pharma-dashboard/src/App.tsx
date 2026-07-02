@@ -143,8 +143,8 @@ export default function App() {
   });
 
   // Active view tab state ("overview", "tiktok-brand"/"tiktok-real-koc"/"tiktok-ai-koc", "fb-koc"/"fb-brand", "channels", "employees", "chi-tieu", "stats", "logs")
-  // Mặc định vào TikTok — Kênh thương hiệu (Tổng quan đang tạm khoá, xem canAccessTab).
-  const [activeTab, setActiveTab] = useState('tiktok-brand');
+  // Mặc định luôn mở mục Tổng quan mỗi khi vào app.
+  const [activeTab, setActiveTab] = useState('overview');
   const [ttMenuOpen, setTtMenuOpen] = useState(true); // dropdown TikTok ở sidebar (mở sẵn)
   const [fbMenuOpen, setFbMenuOpen] = useState(false); // dropdown Facebook ở sidebar
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
