@@ -3,6 +3,7 @@ import { DailyReport, AffiliateChannel, UserSession } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import BrandTrafficDashboard from './BrandTrafficDashboard';
 import KocRevenueDashboard from './KocRevenueDashboard';
+import { TikTokIcon } from './BrandIcons';
 
 type ConfirmState = { message: string; onConfirm: () => void } | null;
 
@@ -206,7 +207,7 @@ export default function TikTokReportComponent({
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 font-display flex items-center gap-2">
-            <span className="material-symbols-outlined text-slate-900 text-2xl">music_note</span>
+            <TikTokIcon className="w-6 h-6 text-slate-900" />
             <span>{cfg.title}</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">{cfg.subtitle}</p>
@@ -289,7 +290,10 @@ export default function TikTokReportComponent({
                 {rows.map(({ ch, rs, agg }) => {
                   const has = rs.length > 0;
                   const tracked = cfg.hasTraffic || ch.tracking.revenueActive;
-                  const reportDate = single ? range.from : today;
+                  // Đã có báo cáo trong khoảng → SỬA đúng ngày báo cáo gần nhất (rs[0]),
+                  // KHÔNG nhảy về hôm nay (bug cũ: sửa ở view nhiều ngày lại ghi vào hôm nay
+                  // nên số ngày cũ không đổi). Chưa có → mặc định ngày đang xem / hôm nay.
+                  const reportDate = has ? toIso(rs[0].date) : (single ? range.from : today);
                   const muted = !has ? 'text-slate-300' : '';
                   return (
                     <tr key={ch.id} className="group hover:bg-rose-50/40 transition-colors">
@@ -320,7 +324,7 @@ export default function TikTokReportComponent({
                         <button
                           onClick={() => setModal({ channel: ch, date: reportDate })}
                           className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-[#D32027] transition-colors"
-                          title={single ? `Báo cáo ngày ${toDdmmyyyy(range.from)}` : 'Báo cáo hôm nay'}
+                          title={has ? `Sửa báo cáo ngày ${rs[0].date}` : (single ? `Báo cáo ngày ${toDdmmyyyy(range.from)}` : 'Báo cáo hôm nay')}
                         >
                           <span className="material-symbols-outlined text-[18px]">{has ? 'edit' : 'add_chart'}</span>
                         </button>
@@ -407,6 +411,8 @@ function TikTokReportModal({ channel, initialDate, hasTraffic, findReportOnDate,
   const [date, setDate] = useState(initialDate);
   // Bản ghi đã có cho NGÀY đang chọn (cập nhật theo ô ngày trong modal).
   const existing = findReportOnDate(toDdmmyyyy(date));
+  // Ngày đang chọn đã có báo cáo → modal ở chế độ SỬA (đổi tiêu đề + nút).
+  const isEdit = !!existing;
   // Khi ngày đang chọn đã có báo cáo → hỏi có muốn sửa (ghi đè) không.
   const [dupDate, setDupDate] = useState<string | null>(null);
   const [revenueStr, setRevenueStr] = useState('');
@@ -420,7 +426,7 @@ function TikTokReportModal({ channel, initialDate, hasTraffic, findReportOnDate,
   const [followerIncr, setFollowerIncr] = useState('');
 
   useEffect(() => {
-    setRevenueStr(existing?.revenue ? existing.revenue.toLocaleString('vi-VN') : '');
+    setRevenueStr(existing ? existing.revenue.toLocaleString('vi-VN') : '');
     const t = existing?.traffic;
     setViewsReach(t?.viewsReach ? String(t.viewsReach) : '');
     setComment(t?.comment ? String(t.comment) : '');
@@ -462,7 +468,7 @@ function TikTokReportModal({ channel, initialDate, hasTraffic, findReportOnDate,
         <div className="p-6 overflow-y-auto">
           <div className="flex items-start justify-between gap-3 mb-5">
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Báo cáo TikTok ngày</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{isEdit ? 'Sửa báo cáo TikTok ngày' : 'Báo cáo TikTok ngày'}</p>
               <h2 className="text-lg font-bold text-slate-900 font-display truncate" title={channel.name}>{channel.name}</h2>
             </div>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-700 flex-shrink-0">
@@ -515,8 +521,8 @@ function TikTokReportModal({ channel, initialDate, hasTraffic, findReportOnDate,
               <button onClick={onClose} className="px-4 py-2 text-xs font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">Hủy</button>
               <button onClick={submit} disabled={!canSubmit}
                 className={`flex items-center gap-1.5 px-5 py-2 text-white text-xs font-bold rounded-xl shadow-soft transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${accent.btn}`}>
-                <span className="material-symbols-outlined text-[16px]">send</span>
-                Gửi báo cáo
+                <span className="material-symbols-outlined text-[16px]">{isEdit ? 'save' : 'send'}</span>
+                {isEdit ? 'Cập nhật' : 'Gửi báo cáo'}
               </button>
             </div>
           </div>

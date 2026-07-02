@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { DailyReport, AffiliateChannel, Employee, ChecklistItem, UserSession } from '../types';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  BarChart, Bar, Cell,
 } from 'recharts';
 import { dailySeries } from '../lib/analytics';
 import ContentChecklistComponent from './ContentChecklistComponent';
+import { FacebookIcon, TikTokIcon } from './BrandIcons';
 
 interface DashboardComponentProps {
   reports: DailyReport[];
@@ -20,28 +20,54 @@ interface DashboardComponentProps {
   onDeleteChecklistItem: (id: string) => void;
 }
 
-// ── Chỉ tiêu doanh số THÁNG theo kênh (copy tháng 6 theo ảnh — sửa tự do ở đây) ──
-const CHANNEL_TARGETS: Record<string, number> = {
-  'DrKam VN Official': 10_008_000,
-  'KOC - Happy Daily': 50_000_000,
-  'KOC - Nhà của CamCam': 20_000_000,
-  'KOC - Gia đình MinhHee': 10_000_000,
-  'KOC - Bảo Châu': 20_000_000,
-  'FB AI - duocsikhanh': 70_000_000,
-  'FB AI - conghaing': 70_000_000,
-  'FB AI - ynni1809': 50_000_000,
-};
-const CATEGORY_TARGET_OVERRIDE: Record<string, number> = { 'tt-ai': 30_000_000 };
+// Chuẩn hoá tên kênh (bỏ dấu, viết thường, bỏ ký tự đặc biệt) — dùng để khớp kênh theo tên.
+const norm = (s: string) => s.normalize('NFD').toLowerCase().replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
 
 type CatKey = 'tt-brand' | 'tt-real' | 'tt-ai' | 'fb-ai' | 'fb-brand' | 'other';
-const CATEGORIES: { key: CatKey; label: string; color: string }[] = [
-  { key: 'tt-brand', label: 'TikTok — Thương hiệu', color: '#0F172A' },
-  { key: 'tt-real', label: 'TikTok — KOC người thật', color: '#D32027' },
-  { key: 'tt-ai', label: 'TikTok — KOC AI', color: '#7C3AED' },
-  { key: 'fb-ai', label: 'Facebook AI (Shopee)', color: '#2563EB' },
-  { key: 'fb-brand', label: 'Facebook — Thương hiệu', color: '#0891B2' },
-  { key: 'other', label: 'Khác', color: '#64748B' },
+
+// ── Hạng mục BÁO CÁO CHUNG (khớp file Excel tháng — sửa tự do ở đây) ──
+// Mỗi hạng mục: nhãn hiển thị, chỉ tiêu THÁNG, và cách khớp kênh (match).
+// Mục tiêu tuần = monthlyTarget / 4. Báo cáo không khớp hạng mục nào → gom vào "Khác".
+type BadgeKind = 'fb' | 'tiktok' | 'koc' | 'other';
+type LineItem = {
+  id: string; label: string; monthlyTarget: number; badge: BadgeKind;
+  match: (ch: AffiliateChannel | undefined, r: DailyReport) => boolean;
+};
+const nameIs = (...keys: string[]) =>
+  (ch: AffiliateChannel | undefined, r: DailyReport) => keys.includes(norm(ch?.name ?? r.channelName));
+const LINE_ITEMS: LineItem[] = [
+  { id: 'drkam', label: 'DrKam VN Official', monthlyTarget: 0, badge: 'tiktok',
+    match: (ch) => ch?.platform === 'TikTok' && ch?.channelType === 'Brand' },
+  { id: 'happy', label: 'KOC – Happy Daily', monthlyTarget: 50_000_000, badge: 'koc', match: nameIs('happyydaily', 'happydaily') },
+  { id: 'camcam', label: 'KOC – Nhà của CamCam', monthlyTarget: 20_000_000, badge: 'koc', match: nameIs('nhacuacamcam') },
+  { id: 'minhhee', label: 'KOC – Gia đình MinhHee', monthlyTarget: 10_000_000, badge: 'koc', match: nameIs('giadinhminhhee') },
+  { id: 'baochau', label: 'KOC – Bảo Châu', monthlyTarget: 20_000_000, badge: 'koc', match: nameIs('baochauday', 'baochau') },
+  { id: 'ttai', label: 'TikTok AI (gộp 8 kênh)', monthlyTarget: 30_000_000, badge: 'tiktok',
+    match: (ch) => ch?.platform === 'TikTok' && ch?.channelType === 'AI KOC' },
+  { id: 'fbkhanh', label: 'FB AI – Khánh/duocsikhanh', monthlyTarget: 70_000_000, badge: 'fb', match: nameIs('duocsikhanh') },
+  { id: 'fbhai', label: 'FB AI – Hải/conghaing', monthlyTarget: 70_000_000, badge: 'fb', match: nameIs('conghaing') },
+  { id: 'fbnhi', label: 'FB AI – Nhi/ynni1809', monthlyTarget: 50_000_000, badge: 'fb', match: nameIs('ynni1809') },
 ];
+
+// Dải màu theo % hoàn thành (khớp chú thích dưới biểu đồ) + icon trạng thái.
+function completionStyle(p: number | null): { bar: string; text: string; icon: string | null } {
+  if (p == null) return { bar: '#CBD5E1', text: '#94A3B8', icon: null };
+  if (p >= 100) return { bar: '#16A34A', text: '#15803D', icon: 'check_circle' };
+  if (p >= 80) return { bar: '#2563EB', text: '#2563EB', icon: 'check_circle' };
+  if (p >= 50) return { bar: '#F59E0B', text: '#D97706', icon: 'remove' };
+  if (p >= 40) return { bar: '#F97316', text: '#EA580C', icon: 'remove' };
+  return { bar: '#EF4444', text: '#E11D48', icon: 'cancel' };
+}
+
+// Số "đẹp" cho trục (thuật toán nice-number) — vd max 70tr → trục 0/20/40/60/80tr.
+function niceNum(range: number, round: boolean): number {
+  const exp = Math.floor(Math.log10(range || 1));
+  const f = range / Math.pow(10, exp);
+  const nf = round
+    ? (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10)
+    : (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10);
+  return nf * Math.pow(10, exp);
+}
 
 const vnd = (v: number) => new Intl.NumberFormat('vi-VN').format(Math.round(v)) + ' đ';
 const vndShort = (v: number) => {
@@ -162,31 +188,30 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
     return `${yy}-${mm}` === monthKey && dd;
   });
 
-  type Row = { name: string; cat: CatKey; weeks: number[]; total: number; target: number };
-  const rowMap = new Map<string, Row>();
+  type Row = { id: string; label: string; badge: BadgeKind; target: number; weeks: number[]; total: number };
+  const rowById = new Map<string, Row>();
+  LINE_ITEMS.forEach((li) => rowById.set(li.id, { id: li.id, label: li.label, badge: li.badge, target: li.monthlyTarget, weeks: [0, 0, 0, 0], total: 0 }));
+  rowById.set('other', { id: 'other', label: 'Khác', badge: 'other', target: 0, weeks: [0, 0, 0, 0], total: 0 });
   monthReports.forEach((r) => {
-    const day = Number(r.date.split('/')[0]);
-    const wi = weekIndex(day);
-    let row = rowMap.get(r.channelName);
-    if (!row) {
-      row = { name: r.channelName, cat: catKeyOf(r, chMeta), weeks: [0, 0, 0, 0], total: 0, target: CHANNEL_TARGETS[r.channelName] ?? 0 };
-      rowMap.set(r.channelName, row);
-    }
+    const wi = weekIndex(Number(r.date.split('/')[0]));
+    const ch = chMeta.get(r.channelName);
+    const li = LINE_ITEMS.find((x) => x.match(ch, r));
+    const row = rowById.get(li ? li.id : 'other')!;
     row.weeks[wi] += r.revenue;
     row.total += r.revenue;
   });
+  // Danh sách phẳng đúng thứ tự Excel; dòng "Khác" chỉ hiện khi có doanh thu lạc hạng mục.
+  const rows = [
+    ...LINE_ITEMS.map((li) => rowById.get(li.id)!),
+    ...(rowById.get('other')!.total > 0 ? [rowById.get('other')!] : []),
+  ];
 
-  const grouped = CATEGORIES.map((c) => {
-    const rows = [...rowMap.values()].filter((r) => r.cat === c.key).sort((a, b) => b.total - a.total);
-    const subWeeks = [0, 1, 2, 3].map((i) => rows.reduce((s, r) => s + r.weeks[i], 0));
-    const subTotal = rows.reduce((s, r) => s + r.total, 0);
-    const subTarget = rows.reduce((s, r) => s + r.target, 0) || (CATEGORY_TARGET_OVERRIDE[c.key] ?? 0);
-    return { ...c, rows, subWeeks, subTotal, subTarget };
-  }).filter((g) => g.rows.length > 0);
-
-  const grandTotal = grouped.reduce((s, g) => s + g.subTotal, 0);
-  const grandTarget = grouped.reduce((s, g) => s + g.subTarget, 0);
-  const grandWeeks = [0, 1, 2, 3].map((i) => grouped.reduce((s, g) => s + g.subWeeks[i], 0));
+  const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+  const grandTarget = LINE_ITEMS.reduce((s, li) => s + li.monthlyTarget, 0);
+  const grandWeeks = [0, 1, 2, 3].map((i) => rows.reduce((s, r) => s + r.weeks[i], 0));
+  const grandPct = pct(grandTotal, grandTarget);
+  const withTarget = LINE_ITEMS.filter((li) => li.monthlyTarget > 0);
+  const reached = withTarget.filter((li) => rowById.get(li.id)!.total >= li.monthlyTarget).length;
 
   const revTikTok = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('tt')).reduce((s, r) => s + r.revenue, 0);
   const revFacebook = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('fb')).reduce((s, r) => s + r.revenue, 0);
@@ -196,7 +221,6 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
   const delta = prevTotal ? Math.round(((grandTotal - prevTotal) / prevTotal) * 1000) / 10 : null;
 
   const series = dailySeries(monthReports, monthFromIso, monthToIso);
-  const catBar = grouped.map((g) => ({ label: g.label, value: g.subTotal, color: g.color }));
   const weekLabel = (i: number) => {
     const last = lastDayOfMonth(monthKey);
     return `Tuần ${i + 1} (${[1, 8, 15, 22][i]}–${[7, 14, 21, last][i]}/${m})`;
@@ -219,23 +243,54 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
         </div>
       </div>
 
-      {/* KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="Tổng doanh số" value={vnd(grandTotal)} icon="payments" tone="rose"
-          sub={delta == null ? 'Chưa có kỳ trước' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta)}% so tháng trước`}
-          subTone={delta == null ? 'muted' : delta >= 0 ? 'up' : 'down'} />
-        <KpiCard label="Doanh số TikTok" value={vnd(revTikTok)} icon="smart_display" tone="slate" />
-        <KpiCard label="Doanh số Facebook" value={vnd(revFacebook)} icon="storefront" tone="blue" />
-        <KpiCard label="% đạt chỉ tiêu" value={grandTarget ? `${pct(grandTotal, grandTarget)}%` : '—'} icon="target" tone="green"
-          sub={grandTarget ? `Chỉ tiêu ${vndShort(grandTarget)}` : 'Chưa đặt chỉ tiêu'} subTone="muted" />
+      {/* Tổng doanh thu hiện tại vs KPI — realtime theo báo cáo ngày */}
+      <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Tổng doanh thu hiện tại · tháng {m}/{y}</p>
+            <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums mt-1">{vnd(grandTotal)}</div>
+            <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1 flex-wrap">
+              <span className="material-symbols-outlined text-[13px] text-green-600">sync</span>
+              Tự cập nhật theo báo cáo mỗi ngày
+              {delta != null && (
+                <span className={`ml-1 font-semibold ${delta >= 0 ? 'text-green-700' : 'text-rose-600'}`}>
+                  · {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}% so tháng trước
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">KPI tháng</p>
+            <div className="text-lg font-bold text-slate-700 tabular-nums">{grandTarget ? vnd(grandTarget) : '—'}</div>
+            <span className={`inline-block mt-1 px-2.5 py-0.5 rounded-full text-sm font-extrabold ${pctColor(grandPct)}`}>{grandPct == null ? '—' : grandPct + '%'}</span>
+          </div>
+        </div>
+        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mt-4">
+          <div className="h-full rounded-full bg-[#D32027] transition-all duration-500" style={{ width: `${Math.min(grandPct ?? 0, 100)}%` }} />
+        </div>
       </div>
 
-      {/* Biểu đồ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-white rounded-2xl p-4 border border-slate-200/70 soft-shadow">
-          <h3 className="text-sm font-bold text-slate-800 mb-3">Doanh số theo ngày</h3>
-          <div className="h-[240px]">
-            <ResponsiveContainer width="100%" height="100%">
+      {/* KPI phụ */}
+      <div className="grid grid-cols-3 gap-3">
+        <KpiCard label="Doanh số TikTok" value={vnd(revTikTok)} iconNode={<TikTokIcon className="w-[18px] h-[18px]" />} tone="slate" />
+        <KpiCard label="Doanh số Facebook" value={vnd(revFacebook)} iconNode={<FacebookIcon className="w-[18px] h-[18px]" />} tone="blue" />
+        <KpiCard label="Hạng mục đạt KPI" value={`${reached}/${withTarget.length}`} icon="target" tone="green"
+          sub={withTarget.length ? 'Số hạng mục ≥ 100% chỉ tiêu' : 'Chưa đặt chỉ tiêu'} subTone="muted" />
+      </div>
+
+      {/* Biểu đồ 1 — Thực hiện vs Mục tiêu (thanh tiến độ tự vẽ) */}
+      <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
+        <h3 className="text-base font-bold text-slate-800 mb-4">Thực hiện vs Mục tiêu theo hạng mục</h3>
+        <div className="overflow-x-auto">
+          <TargetProgressChart rows={rows} />
+        </div>
+      </div>
+
+      {/* Biểu đồ 2 — Doanh số theo ngày */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200/70 soft-shadow">
+        <h3 className="text-sm font-bold text-slate-800 mb-3">Doanh số theo ngày</h3>
+        <div className="h-[240px]">
+          <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={series} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
@@ -252,37 +307,20 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/70 soft-shadow">
-          <h3 className="text-sm font-bold text-slate-800 mb-3">Doanh số theo nhóm kênh</h3>
-          <div className="h-[240px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={catBar} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
-                <XAxis type="number" tickFormatter={vndShort} tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                <YAxis type="category" dataKey="label" tick={{ fontSize: 9, fill: '#64748B' }} width={92} />
-                <Tooltip formatter={(v) => vnd(Number(v))} />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                  {catBar.map((c, i) => <Cell key={i} fill={c.color} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
 
-      {/* Bảng kênh × tuần */}
+      {/* Bảng hạng mục × tuần */}
       <div className="bg-white rounded-2xl border border-slate-200/70 soft-shadow overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-800">Chi tiết theo kênh — Chỉ tiêu / Thực hiện / % (tháng {m}/{y})</h3>
+          <h3 className="text-sm font-bold text-slate-800">Báo cáo chung theo hạng mục — tháng {m}/{y}</h3>
           <span className="text-xs font-bold text-[#D32027]">Tổng: {vnd(grandTotal)}</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse min-w-[860px]">
+          <table className="w-full text-xs border-collapse min-w-[760px]">
             <thead>
               <tr className="text-[10px] text-slate-500 uppercase tracking-wider bg-slate-50">
-                <th className="sticky left-0 z-10 bg-slate-50 px-4 py-2.5 text-left font-bold border-b border-slate-200">Kênh</th>
-                <th className="px-3 py-2.5 text-right font-bold border-b border-slate-200">Chỉ tiêu</th>
-                <th className="px-3 py-2.5 text-right font-bold border-b border-slate-200">Thực hiện</th>
+                <th className="sticky left-0 z-10 bg-slate-50 px-4 py-2.5 text-left font-bold border-b border-slate-200">Hạng mục</th>
+                <th className="px-3 py-2.5 text-right font-bold border-b border-slate-200 whitespace-nowrap">Mục tiêu</th>
+                <th className="px-3 py-2.5 text-right font-bold border-b border-slate-200 whitespace-nowrap">Thực hiện</th>
                 <th className="px-3 py-2.5 text-center font-bold border-b border-slate-200">%</th>
                 {[0, 1, 2, 3].map((i) => (
                   <th key={i} className="px-3 py-2.5 text-right font-bold border-b border-slate-200 whitespace-nowrap" title={weekLabel(i)}>T{i + 1}</th>
@@ -290,69 +328,40 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
               </tr>
             </thead>
             <tbody>
-              {grouped.map((g) => {
-                const p = pct(g.subTotal, g.subTarget);
+              {rows.map((r) => {
+                const rp = pct(r.total, r.target);
                 return (
-                  <React.Fragment key={g.key}>
-                    <tr className="bg-slate-50/60">
-                      <td className="sticky left-0 z-10 bg-slate-50/60 px-4 py-2 font-bold text-slate-700 border-b border-slate-100">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: g.color }} />{g.label}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-500 border-b border-slate-100">{g.subTarget ? vndShort(g.subTarget) : '—'}</td>
-                      <td className="px-3 py-2 text-right font-extrabold text-slate-900 border-b border-slate-100">{vndShort(g.subTotal)}</td>
-                      <td className="px-3 py-2 text-center border-b border-slate-100">
-                        <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(p)}`}>{p == null ? '—' : p + '%'}</span>
-                      </td>
-                      {g.subWeeks.map((w, i) => (
-                        <td key={i} className="px-3 py-2 text-right font-semibold text-slate-600 border-b border-slate-100">{w ? vndShort(w) : '—'}</td>
-                      ))}
-                    </tr>
-                    {g.rows.map((r) => {
-                      const rp = pct(r.total, r.target);
-                      return (
-                        <tr key={r.name} className="hover:bg-rose-50/30">
-                          <td className="sticky left-0 z-10 bg-white px-4 py-1.5 pl-8 text-slate-600 truncate max-w-[220px] border-b border-slate-50" title={r.name}>{r.name}</td>
-                          <td className="px-3 py-1.5 text-right text-slate-400 border-b border-slate-50">{r.target ? vndShort(r.target) : '—'}</td>
-                          <td className="px-3 py-1.5 text-right font-bold text-slate-800 border-b border-slate-50">{vndShort(r.total)}</td>
-                          <td className="px-3 py-1.5 text-center border-b border-slate-50">
-                            <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(rp)}`}>{rp == null ? '—' : rp + '%'}</span>
-                          </td>
-                          {r.weeks.map((w, i) => (
-                            <td key={i} className="px-3 py-1.5 text-right text-slate-500 font-mono border-b border-slate-50">{w ? vndShort(w) : '—'}</td>
-                          ))}
-                        </tr>
-                      );
-                    })}
-                  </React.Fragment>
+                  <tr key={r.id} className="hover:bg-rose-50/30">
+                    <td className="sticky left-0 z-10 bg-white px-4 py-2 font-semibold text-slate-700 truncate max-w-[240px] border-b border-slate-50" title={r.label}>{r.label}</td>
+                    <td className="px-3 py-2 text-right text-slate-400 border-b border-slate-50">{r.target ? vndShort(r.target) : '—'}</td>
+                    <td className="px-3 py-2 text-right font-bold text-slate-900 border-b border-slate-50">{r.total ? vndShort(r.total) : '—'}</td>
+                    <td className="px-3 py-2 text-center border-b border-slate-50">
+                      <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(rp)}`}>{rp == null ? '—' : rp + '%'}</span>
+                    </td>
+                    {r.weeks.map((w, i) => (
+                      <td key={i} className="px-3 py-2 text-right text-slate-500 font-mono border-b border-slate-50">{w ? vndShort(w) : '—'}</td>
+                    ))}
+                  </tr>
                 );
               })}
-              {grouped.length === 0 && (
-                <tr><td colSpan={7} className="py-10 text-center text-slate-400">Chưa có báo cáo doanh số nào trong tháng này.</td></tr>
-              )}
             </tbody>
-            {grouped.length > 0 && (
-              <tfoot>
-                <tr className="text-[11px] bg-slate-100">
-                  <td className="sticky left-0 z-10 bg-slate-100 px-4 py-2.5 font-extrabold text-slate-700 uppercase border-t-2 border-slate-200">Tổng cộng</td>
-                  <td className="px-3 py-2.5 text-right font-bold text-slate-600 border-t-2 border-slate-200">{grandTarget ? vndShort(grandTarget) : '—'}</td>
-                  <td className="px-3 py-2.5 text-right font-extrabold text-[#D32027] border-t-2 border-slate-200">{vndShort(grandTotal)}</td>
-                  <td className="px-3 py-2.5 text-center border-t-2 border-slate-200">
-                    <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(pct(grandTotal, grandTarget))}`}>
-                      {pct(grandTotal, grandTarget) == null ? '—' : pct(grandTotal, grandTarget) + '%'}
-                    </span>
-                  </td>
-                  {grandWeeks.map((w, i) => (
-                    <td key={i} className="px-3 py-2.5 text-right font-bold text-slate-700 border-t-2 border-slate-200">{w ? vndShort(w) : '—'}</td>
-                  ))}
-                </tr>
-              </tfoot>
-            )}
+            <tfoot>
+              <tr className="text-[11px] bg-slate-100">
+                <td className="sticky left-0 z-10 bg-slate-100 px-4 py-2.5 font-extrabold text-slate-700 uppercase border-t-2 border-slate-200">Tổng cộng</td>
+                <td className="px-3 py-2.5 text-right font-bold text-slate-600 border-t-2 border-slate-200">{grandTarget ? vndShort(grandTarget) : '—'}</td>
+                <td className="px-3 py-2.5 text-right font-extrabold text-[#D32027] border-t-2 border-slate-200">{vndShort(grandTotal)}</td>
+                <td className="px-3 py-2.5 text-center border-t-2 border-slate-200">
+                  <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(grandPct)}`}>{grandPct == null ? '—' : grandPct + '%'}</span>
+                </td>
+                {grandWeeks.map((w, i) => (
+                  <td key={i} className="px-3 py-2.5 text-right font-bold text-slate-700 border-t-2 border-slate-200">{w ? vndShort(w) : '—'}</td>
+                ))}
+              </tr>
+            </tfoot>
           </table>
         </div>
         <div className="px-4 py-2 flex items-center gap-4 text-[10px] text-slate-400 border-t border-slate-100">
-          <span>T1–T4 = 4 tuần trong tháng</span>
+          <span>T1 (1–7) · T2 (8–14) · T3 (15–21) · T4 (22–cuối tháng) · Thực hiện tự cộng từ báo cáo ngày</span>
           <button onClick={() => onGotoView('doanhso')} className="ml-auto text-[#D32027] font-bold hover:underline flex items-center gap-1">
             Xem doanh số chi tiết <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
           </button>
@@ -385,7 +394,6 @@ function DoanhSoNgay({ reports, channels }: { reports: DailyReport[]; channels: 
 
   // Gán người phụ trách cố định cho một số kênh (khi manager_name trong DB trống).
   // Khớp theo tên đã chuẩn hoá (bỏ dấu tiếng Việt, viết thường, bỏ dấu cách/chấm/gạch) — sửa tự do ở đây.
-  const norm = (s: string) => s.normalize('NFD').toLowerCase().replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
   const MANAGER_OVERRIDE: Record<string, string> = {
     // TikTok Brand
     'drkampharmaofficial': 'Nguyễn Công Hải',
@@ -482,9 +490,100 @@ function DoanhSoNgay({ reports, channels }: { reports: DailyReport[]; channels: 
   );
 }
 
+/* ════════════════════════════════════════════════════════════════
+   Biểu đồ thanh: Thực hiện vs Mục tiêu theo hạng mục (tự vẽ bằng CSS)
+   Thanh Thực hiện (tô màu theo % hoàn thành) phủ lên track Mục tiêu.
+   ════════════════════════════════════════════════════════════════ */
+function TargetProgressChart({ rows }: {
+  rows: { id: string; label: string; badge: BadgeKind; target: number; total: number }[];
+}) {
+  // Giữ nguyên thứ tự hạng mục theo Excel (không sắp xếp lại).
+  const data = rows;
+  const rawMax = Math.max(1, ...data.map((r) => Math.max(r.target, r.total)));
+  const step = niceNum(niceNum(rawMax, false) / 4, true);
+  const axisMax = Math.max(step, Math.ceil(rawMax / step) * step);
+  const ticks: number[] = [];
+  for (let v = 0; v <= axisMax + 1; v += step) ticks.push(v);
+  const leftOf = (v: number) => `${(v / axisMax) * 100}%`;
+
+  return (
+    <div className="min-w-[620px]">
+      {/* Trục ngang + tiêu đề 2 cột phải */}
+      <div className="flex items-center gap-3 pb-1">
+        <div className="w-48 shrink-0" />
+        <div className="relative flex-1 h-4">
+          {ticks.map((t, i) => (
+            <span key={i}
+              className={`absolute text-[10px] text-slate-400 tabular-nums ${i === 0 ? '' : i === ticks.length - 1 ? '-translate-x-full' : '-translate-x-1/2'}`}
+              style={{ left: leftOf(t) }}>
+              {t === 0 ? '0' : vndShort(t)}
+            </span>
+          ))}
+        </div>
+        <div className="w-24 shrink-0 text-right text-[10px] font-bold text-slate-500 leading-tight">Thực hiện /<br />Mục tiêu</div>
+        <div className="w-20 shrink-0 text-right text-[10px] font-bold text-slate-500">% hoàn thành</div>
+      </div>
+
+      {/* Mỗi hạng mục 1 dòng */}
+      {data.map((r) => {
+        const p = pct(r.total, r.target);
+        const st = completionStyle(p);
+        return (
+          <div key={r.id} className="flex items-center gap-3 py-2 border-t border-slate-50">
+            <div className="w-48 shrink-0 flex items-center gap-2 min-w-0">
+              <ItemBadge kind={r.badge} />
+              <span className="text-xs font-semibold text-slate-700 truncate" title={r.label}>{r.label}</span>
+            </div>
+            <div className="relative flex-1 h-5">
+              {ticks.map((t, i) => (
+                <div key={i} className="absolute top-0 bottom-0 border-l border-dashed border-slate-100" style={{ left: leftOf(t) }} />
+              ))}
+              {r.target > 0 && (
+                <div className="absolute top-1/2 left-0 -translate-y-1/2 h-2.5 bg-slate-200/80 rounded-full" style={{ width: leftOf(r.target) }} />
+              )}
+              <div className="absolute top-1/2 left-0 -translate-y-1/2 h-2.5 rounded-full transition-all duration-500"
+                style={{ width: leftOf(Math.min(r.total, axisMax)), background: st.bar }} />
+            </div>
+            <div className="w-24 shrink-0 text-right text-[11px] font-semibold text-slate-600 tabular-nums">
+              {vndShort(r.total)} <span className="text-slate-300">/</span> {r.target ? vndShort(r.target) : '—'}
+            </div>
+            <div className="w-20 shrink-0 flex items-center justify-end gap-0.5">
+              <span className="text-sm font-extrabold tabular-nums" style={{ color: st.text }}>{p == null ? '—' : p + '%'}</span>
+              {st.icon && <span className="material-symbols-outlined text-[16px]" style={{ color: st.text }}>{st.icon}</span>}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Chú thích màu */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-4 pt-3 border-t border-slate-100 text-[10px] text-slate-500">
+        <span className="flex items-center gap-1.5"><span className="w-4 h-2 rounded-full bg-slate-200/80" /> Mục tiêu</span>
+        <span className="font-semibold text-slate-600">% hoàn thành:</span>
+        {([['#16A34A', '≥ 100%'], ['#2563EB', '80–99%'], ['#F59E0B', '50–79%'], ['#F97316', '40–49%'], ['#EF4444', '< 40%']] as const).map(([c, l]) => (
+          <span key={l} className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{ background: c }} /> {l}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Badge nền tảng của từng hạng mục — logo thật của Facebook / TikTok.
+function ItemBadge({ kind }: { kind: BadgeKind }) {
+  if (kind === 'fb') return <FacebookIcon className="w-6 h-6 shrink-0 text-[#1877F2]" />;
+  if (kind === 'tiktok') return (
+    <span className="w-6 h-6 rounded-full bg-slate-900 flex items-center justify-center shrink-0">
+      <TikTokIcon className="w-3.5 h-3.5 text-white" />
+    </span>
+  );
+  if (kind === 'koc') return (
+    <span className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 text-[8px] font-extrabold tracking-tight">KOC</span>
+  );
+  return <span className="w-6 h-6 rounded-full bg-slate-300 shrink-0" />;
+}
+
 // ── Thẻ KPI ─────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, icon, tone, sub, subTone = 'muted' }: {
-  label: string; value: string; icon: string; tone: 'rose' | 'slate' | 'blue' | 'green';
+function KpiCard({ label, value, icon, iconNode, tone, sub, subTone = 'muted' }: {
+  label: string; value: string; icon?: string; iconNode?: React.ReactNode; tone: 'rose' | 'slate' | 'blue' | 'green';
   sub?: string; subTone?: 'up' | 'down' | 'muted';
 }) {
   const toneCls: Record<string, string> = {
@@ -497,7 +596,7 @@ function KpiCard({ label, value, icon, tone, sub, subTone = 'muted' }: {
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
         <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${toneCls[tone]}`}>
-          <span className="material-symbols-outlined text-[18px]">{icon}</span>
+          {iconNode ?? <span className="material-symbols-outlined text-[18px]">{icon}</span>}
         </span>
       </div>
       <div className="text-lg font-extrabold text-slate-900 tracking-tight tabular-nums">{value}</div>
