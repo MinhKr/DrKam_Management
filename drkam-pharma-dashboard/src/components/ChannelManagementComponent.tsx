@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AffiliateChannel, Employee } from '../types';
+import { FacebookIcon, TikTokIcon } from './BrandIcons';
 
 interface ChannelManagementProps {
   channels: AffiliateChannel[];
@@ -246,9 +247,11 @@ export default function ChannelManagementComponent({ channels, employees, onAddC
                           ? 'bg-blue-50 text-blue-600 border border-blue-200'
                           : 'bg-orange-50 text-orange-600 border border-orange-200'
                       }`}>
-                        <span className="material-symbols-outlined text-[14px]">
-                          {c.platform === 'TikTok' ? 'music_note' : c.platform === 'Facebook' ? 'dns' : 'storefront'}
-                        </span>
+                        {c.platform === 'TikTok'
+                          ? <TikTokIcon className="w-3.5 h-3.5" />
+                          : c.platform === 'Facebook'
+                          ? <FacebookIcon className="w-3.5 h-3.5" />
+                          : <span className="material-symbols-outlined text-[14px]">storefront</span>}
                         <span>{c.platform}</span>
                       </span>
                     </td>

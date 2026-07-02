@@ -3,6 +3,7 @@ import { DailyReport, AffiliateChannel, UserSession, FbPage } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import BrandTrafficDashboard from './BrandTrafficDashboard';
 import KocCompetitionDashboard from './KocCompetitionDashboard';
+import { FacebookIcon } from './BrandIcons';
 
 type ConfirmState = { message: string; onConfirm: () => void } | null;
 
@@ -287,7 +288,7 @@ function KocInhouseView({
 
       <div>
         <h1 className="text-xl font-bold text-slate-900 font-display flex items-center gap-2">
-          <span className="material-symbols-outlined text-blue-600 text-2xl">groups</span>
+          <FacebookIcon className="w-6 h-6 text-[#1877F2]" />
           <span>Facebook — KOC inhouse (theo ID Shopee)</span>
         </h1>
       </div>
@@ -408,7 +409,7 @@ function KocInhouseView({
           <section className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden flex flex-col">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-2">
               <h2 className="text-base font-bold text-slate-900 font-display flex items-center gap-2">
-                <span className="material-symbols-outlined text-blue-600 text-xl">dns</span>
+                <FacebookIcon className="w-5 h-5 text-[#1877F2]" />
                 <span>Kênh Facebook</span>
                 <span className="text-xs font-normal text-slate-400">({pagesOf(selectedGroup).length})</span>
               </h2>
@@ -443,8 +444,8 @@ function KocInhouseView({
                 pagesOf(selectedGroup).map((p) => (
                   <div key={p.id} className="px-5 py-3 flex items-center justify-between hover:bg-slate-50/50">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
-                        <span className="material-symbols-outlined text-[18px]">public</span>
+                      <span className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                        <FacebookIcon className="w-[18px] h-[18px] text-[#1877F2]" />
                       </span>
                       <div className="min-w-0">
                         <p className="font-semibold text-slate-800 text-sm truncate">{p.name}</p>
@@ -742,7 +743,7 @@ function BrandView({ reports, channels, session, onReportDay, onAddChannel }: Fa
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 font-display flex items-center gap-2">
-            <span className="material-symbols-outlined text-blue-600 text-2xl">verified</span>
+            <FacebookIcon className="w-6 h-6 text-[#1877F2]" />
             <span>Facebook — Kênh thương hiệu</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">Báo cáo traffic nhập tay theo từng page, mỗi ngày · 8 chỉ số</p>
@@ -815,7 +816,9 @@ function BrandView({ reports, channels, session, onReportDay, onAddChannel }: Fa
               <tbody className="divide-y divide-slate-100">
                 {rows.map(({ ch, rs, agg }) => {
                   const has = rs.length > 0;
-                  const reportDate = single ? range.from : today;
+                  // Đã có báo cáo trong khoảng → SỬA đúng ngày báo cáo gần nhất (rs[0]),
+                  // KHÔNG nhảy về hôm nay (bug cũ: sửa ở view nhiều ngày lại ghi vào hôm nay).
+                  const reportDate = has ? toIsoDate(rs[0].date) : (single ? range.from : today);
                   const muted = !has ? 'text-slate-300' : '';
                   return (
                     <tr key={ch.id} className="group hover:bg-rose-50/40 transition-colors">
@@ -834,7 +837,7 @@ function BrandView({ reports, channels, session, onReportDay, onAddChannel }: Fa
                         <button
                           onClick={() => setModal({ channel: ch, date: reportDate })}
                           className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-[#D32027] transition-colors"
-                          title={single ? `Báo cáo ngày ${toDdmmyyyy(range.from)}` : 'Báo cáo hôm nay'}
+                          title={has ? `Sửa báo cáo ngày ${rs[0].date}` : (single ? `Báo cáo ngày ${toDdmmyyyy(range.from)}` : 'Báo cáo hôm nay')}
                         >
                           <span className="material-symbols-outlined text-[18px]">{has ? 'edit' : 'add_chart'}</span>
                         </button>
@@ -901,6 +904,8 @@ function BrandReportModal({ channel, initialDate, accentIndex, findReportOnDate,
   const [date, setDate] = useState(initialDate);
   // Bản ghi đã có cho NGÀY đang chọn (cập nhật theo ô ngày trong modal).
   const existing = findReportOnDate(toDdmmyyyy(date));
+  // Ngày đang chọn đã có báo cáo → modal ở chế độ SỬA (đổi tiêu đề + nút).
+  const isEdit = !!existing;
   // Khi ngày đang chọn đã có báo cáo → hỏi có muốn sửa (ghi đè) không.
   const [dupDate, setDupDate] = useState<string | null>(null);
   const [viewsReach, setViewsReach] = useState('');
@@ -955,7 +960,7 @@ function BrandReportModal({ channel, initialDate, accentIndex, findReportOnDate,
         <div className="p-6 overflow-y-auto">
           <div className="flex items-start justify-between gap-3 mb-5">
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Báo cáo traffic ngày</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{isEdit ? 'Sửa báo cáo traffic ngày' : 'Báo cáo traffic ngày'}</p>
               <h2 className="text-lg font-bold text-slate-900 font-display truncate" title={channel.name}>{channel.name}</h2>
             </div>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-700 flex-shrink-0">
@@ -992,8 +997,8 @@ function BrandReportModal({ channel, initialDate, accentIndex, findReportOnDate,
               <button onClick={onClose} className="px-4 py-2 text-xs font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">Hủy</button>
               <button onClick={submit} disabled={!canSubmit}
                 className={`flex items-center gap-1.5 px-5 py-2 text-white text-xs font-bold rounded-xl shadow-soft transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${accent.btn}`}>
-                <span className="material-symbols-outlined text-[16px]">send</span>
-                Gửi báo cáo
+                <span className="material-symbols-outlined text-[16px]">{isEdit ? 'save' : 'send'}</span>
+                {isEdit ? 'Cập nhật' : 'Gửi báo cáo'}
               </button>
             </div>
           </div>

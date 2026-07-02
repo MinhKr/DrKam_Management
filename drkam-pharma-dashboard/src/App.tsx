@@ -30,6 +30,7 @@ import TargetKPIComponent from './components/TargetKPIComponent';
 import DetailedStatisticsComponent from './components/DetailedStatisticsComponent';
 import AuditLogsComponent from './components/AuditLogsComponent';
 import ContentChecklistComponent from './components/ContentChecklistComponent';
+import { FacebookIcon, TikTokIcon } from './components/BrandIcons';
 
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import * as repo from './data/repositories';
@@ -1018,8 +1019,8 @@ export default function App() {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-fuchsia-600 bg-fuchsia-50 flex-shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">music_note</span>
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-900 text-white flex-shrink-0">
+                      <TikTokIcon className="w-[17px] h-[17px]" />
                     </span>
                     <span>TikTok</span>
                   </div>
@@ -1070,8 +1071,8 @@ export default function App() {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-blue-600 bg-blue-50 flex-shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">public</span>
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 text-[#1877F2] flex-shrink-0">
+                      <FacebookIcon className="w-[19px] h-[19px]" />
                     </span>
                     <span>Facebook</span>
                   </div>
