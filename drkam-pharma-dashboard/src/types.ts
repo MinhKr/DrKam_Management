@@ -124,7 +124,6 @@ export const INITIAL_CHANNELS: AffiliateChannel[] = [
   { id: "t7", name: "bao_chau_day",    brandCategory: "KOC Người thật", platform: "TikTok", channelType: "Real KOC", linkedShop: false, auditId: "bao_chau_day",    managerName: "Trần Thị Bích", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true, trafficActive: false } },
   // ── TIKTOK — KOC inhouse (không gắn shop) · Kênh AI: chỉ doanh thu ──
   { id: "t8",  name: "koi_928tramtram", brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "koi_928tramtram", managerName: "Nguyễn Văn An", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true,  trafficActive: false } },
-  { id: "t9",  name: "tinh642002",     brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "tinh642002",     managerName: "Nguyễn Văn An", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true,  trafficActive: false } },
   { id: "t10", name: "doisongsuckhoe86", brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "doisongsuckhoe86", managerName: "Phạm Minh Tâm", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: false, trafficActive: false } },
   { id: "t11", name: "ngoc.huong259",  brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "ngoc.huong259",  managerName: "Phạm Minh Tâm", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true,  trafficActive: false } },
   { id: "t12", name: "haidang0136",    brandCategory: "KOC AI", platform: "TikTok", channelType: "AI KOC", linkedShop: false, auditId: "haidang0136",    managerName: "Trần Thị Bích", managerAvatar: AV, status: "Đang nuôi", tracking: { revenueActive: true,  trafficActive: false } },
@@ -259,7 +258,6 @@ function genTikTokSampleReports(): DailyReport[] {
     { name: 'bao_chau_day',    days: 15, seed: 10, rev: 4_600_000 },
     // ── Kênh AI ──
     { name: 'koi_928tramtram', days: 14, seed: 3,  rev: 4_100_000 },
-    { name: 'tinh642002',      days: 12, seed: 6,  rev: 3_300_000 },
     { name: 'ngoc.huong259',   days: 9,  seed: 9,  rev: 2_400_000 },
     { name: 'haidang0136',     days: 13, seed: 11, rev: 3_100_000 },
     { name: 'minhquan8046',    days: 10, seed: 12, rev: 2_050_000 },

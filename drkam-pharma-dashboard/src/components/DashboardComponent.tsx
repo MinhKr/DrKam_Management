@@ -35,25 +35,30 @@ type LineItem = {
 };
 const nameIs = (...keys: string[]) =>
   (ch: AffiliateChannel | undefined, r: DailyReport) => keys.includes(norm(ch?.name ?? r.channelName));
+// ── KPI tháng 7 (tổng doanh số video inhouse = 650.000.000, tự cộng từ các dòng) ──
 const LINE_ITEMS: LineItem[] = [
-  { id: 'drkam', label: 'DrKam VN Official', monthlyTarget: 0, badge: 'tiktok',
-    match: (ch) => ch?.platform === 'TikTok' && ch?.channelType === 'Brand' },
-  { id: 'happy', label: 'KOC – Happy Daily', monthlyTarget: 50_000_000, badge: 'koc', match: nameIs('happyydaily', 'happydaily') },
+  { id: 'drkampharma', label: 'DrKam Pharma Official', monthlyTarget: 40_000_000, badge: 'tiktok', match: nameIs('drkampharmaofficial') },
+  { id: 'drkamvn', label: 'DrKam VN', monthlyTarget: 40_000_000, badge: 'tiktok', match: nameIs('drkamvn') },
+  { id: 'drkamvnofficial', label: 'DrKam VN Official', monthlyTarget: 15_000_000, badge: 'tiktok', match: nameIs('drkamvnofficial') },
+  { id: 'happy', label: 'KOC – Happy Daily', monthlyTarget: 100_000_000, badge: 'koc', match: nameIs('happyydaily', 'happydaily') },
   { id: 'camcam', label: 'KOC – Nhà của CamCam', monthlyTarget: 20_000_000, badge: 'koc', match: nameIs('nhacuacamcam') },
-  { id: 'minhhee', label: 'KOC – Gia đình MinhHee', monthlyTarget: 10_000_000, badge: 'koc', match: nameIs('giadinhminhhee') },
-  { id: 'baochau', label: 'KOC – Bảo Châu', monthlyTarget: 20_000_000, badge: 'koc', match: nameIs('baochauday', 'baochau') },
-  { id: 'ttai', label: 'TikTok AI (gộp 8 kênh)', monthlyTarget: 30_000_000, badge: 'tiktok',
+  { id: 'minhhee', label: 'KOC – Gia đình MinhHee', monthlyTarget: 15_000_000, badge: 'koc', match: nameIs('giadinhminhhee') },
+  { id: 'baochau', label: 'KOC – Bảo Châu', monthlyTarget: 15_000_000, badge: 'koc', match: nameIs('baochauday', 'baochau') },
+  { id: 'ttai', label: 'TikTok AI (tất cả kênh TikTok AI)', monthlyTarget: 100_000_000, badge: 'tiktok',
     match: (ch) => ch?.platform === 'TikTok' && ch?.channelType === 'AI KOC' },
-  { id: 'fbkhanh', label: 'FB AI – Khánh/duocsikhanh', monthlyTarget: 70_000_000, badge: 'fb', match: nameIs('duocsikhanh') },
-  { id: 'fbhai', label: 'FB AI – Hải/conghaing', monthlyTarget: 70_000_000, badge: 'fb', match: nameIs('conghaing') },
-  { id: 'fbnhi', label: 'FB AI – Nhi/ynni1809', monthlyTarget: 50_000_000, badge: 'fb', match: nameIs('ynni1809') },
+  { id: 'fbkhanh', label: 'FB AI – Khánh/duocsikhanh', monthlyTarget: 50_000_000, badge: 'fb', match: nameIs('duocsikhanh') },
+  { id: 'fbhai', label: 'FB AI – Hải/conghaing', monthlyTarget: 60_000_000, badge: 'fb', match: nameIs('conghaing') },
+  { id: 'fbnhi', label: 'FB AI – Nhi/ynni1809', monthlyTarget: 10_000_000, badge: 'fb', match: nameIs('ynni1809') },
+  { id: 'fbminh', label: 'FB AI – Minh/leminh139148', monthlyTarget: 10_000_000, badge: 'fb', match: nameIs('leminh139148') },
+  // Facebook Ads: chỉ set KPI, CHƯA gắn ô nhập/kênh (thực hiện = 0 cho tới khi chốt với team).
+  { id: 'fbads', label: 'Facebook Ads', monthlyTarget: 175_000_000, badge: 'fb', match: () => false },
 ];
 
 // VIEW / REACH — chỉ tiêu THÁNG (tuần = tháng ÷ 4); Thực hiện = tổng reach (viewsReach) các tuần.
 // reach nhập theo tuần ở form TikTok/Facebook thương hiệu.
 const VIEW_REACH: { id: string; label: string; badge: BadgeKind; monthlyTarget: number; plat: 'tt' | 'fb' }[] = [
-  { id: 'tt-view',  label: 'Lượt view TikTok',        badge: 'tiktok', monthlyTarget: 5_000_000,  plat: 'tt' },
-  { id: 'fb-reach', label: 'Lượt tiếp cận Facebook',  badge: 'fb',     monthlyTarget: 10_000_000, plat: 'fb' },
+  { id: 'tt-view',  label: 'Lượt view TikTok',        badge: 'tiktok', monthlyTarget: 4_000_000, plat: 'tt' },
+  { id: 'fb-reach', label: 'Lượt tiếp cận Facebook',  badge: 'fb',     monthlyTarget: 5_000_000, plat: 'fb' },
 ];
 
 // Dải màu theo % hoàn thành (khớp chú thích dưới biểu đồ) + icon trạng thái.
@@ -457,7 +462,6 @@ function DoanhSoNgay({ reports, channels }: { reports: DailyReport[]; channels: 
     'baochauday': 'Đặng Kim Khánh',
     // TikTok AI
     'koi928tramtram': 'Đặng Kim Khánh',
-    'tinh642002': 'Đặng Kim Khánh',
     'doisongsuckhoe86': 'Đặng Kim Khánh',
     'ngochuong259': 'Nguyễn Công Hải',
     'haidang0136': 'Nguyễn Công Hải',
