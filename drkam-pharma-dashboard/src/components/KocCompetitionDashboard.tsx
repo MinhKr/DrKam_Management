@@ -123,7 +123,11 @@ export default function KocCompetitionDashboard({ reports, from, to, members }: 
                 const color = colorOf.get(m.managerName);
                 return (
                   <div key={m.managerName} className="flex items-center gap-3">
-                    <span className="text-lg w-7 text-center flex-shrink-0">{MEDALS[i] || `#${i + 1}`}</span>
+                    <span className="w-7 flex justify-center flex-shrink-0">
+                      {MEDALS[i]
+                        ? <span className="text-lg leading-none">{MEDALS[i]}</span>
+                        : <span className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 font-bold text-xs tabular-nums">{i + 1}</span>}
+                    </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span className="flex items-center gap-1.5 min-w-0">

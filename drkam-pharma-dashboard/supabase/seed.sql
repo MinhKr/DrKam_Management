@@ -24,7 +24,6 @@ values
 
   -- TikTok — KOC inhouse (AI): chỉ doanh thu
   ('koi_928tramtram',   'KOC AI', 'TikTok', 'AI KOC', 'false', 'Đang nuôi', true, false, null),
-  ('tinh642002',        'KOC AI', 'TikTok', 'AI KOC', 'false', 'Đang nuôi', true, false, null),
   ('doisongsuckhoe86',  'KOC AI', 'TikTok', 'AI KOC', 'false', 'Đang nuôi', true, false, null),
   ('ngoc.huong259',     'KOC AI', 'TikTok', 'AI KOC', 'false', 'Đang nuôi', true, false, null),
   ('haidang0136',       'KOC AI', 'TikTok', 'AI KOC', 'false', 'Đang nuôi', true, false, null),

@@ -230,7 +230,7 @@ audit_logs
 
 **TikTok – Kênh thương hiệu (gắn shop):** `drkampharmaofficial`, `drkamvn`, `drkamvnofficial`
 **TikTok – KOC inhouse (người thật):** `happyy.daily`, `giadinhminhhee`, `nhacuacamcam`, `bao_chau_day`
-**TikTok – KOC inhouse (AI):** `koi_928tramtram`, `tinh642002`, `doisongsuckhoe86`, `ngoc.huong259`, `haidang0136`, `minhquan8046`
+**TikTok – KOC inhouse (AI):** `koi_928tramtram`, `doisongsuckhoe86`, `ngoc.huong259`, `haidang0136`, `minhquan8046`
 **Facebook – Kênh thương hiệu:** `DrKam - Sống khỏe cùng Chuyên gia`, `DrKam - Bác sĩ Răng Miệng Họng của mọi gia đình`
 **Facebook – KOC inhouse (fanpage AI):** `conghaing`, `ynni1809`, `duocsikhanh`
 

@@ -24,7 +24,6 @@ const TASK_TEMPLATES: { name: string; tasks: string[] }[] = [
       '[FB] SỐNG KHỎE CÙNG CHUYÊN GIA',
       '[FB] BÁC SĨ RĂNG MIỆNG HỌNG',
       '[TIKTOK AI] haidang0136',
-      '[TIKTOK AI] tinh642002',
       '[TIKTOK AI] minhquan8046',
       '[TIKTOK KOC] bao_chau_day',
       '[FANPAGE FB AI] duocsikhanh',
