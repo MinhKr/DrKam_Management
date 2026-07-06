@@ -196,6 +196,23 @@ export const INITIAL_CHANNELS: AffiliateChannel[] = [
     managerAvatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuAwxcNk3h_dSy-QxPJwh7IZAx4IPd69V4i_4FlgAIlvGpHoE4f-UZIj64GPyBokv3MGwEUuU4DVvOS81ZV1ab3ZbJuSzeY9ZAUh68pyIlXV1GQlhMqsnDe9GgkijJuB1d63sf4q171JOYdQiXM5rFRPd6Hcd38tUF2isSe2BxoOEf3mcf7uun3rlRhQQb-klabcjUgssUIDmF8PD7MnjvbOichafwaOsnBSNFY1RMIRVMTjWYedKiTdu5PPWrflyzqwB9hfglsHmTZ7",
     status: "Đang nuôi",
     tracking: { revenueActive: false, trafficActive: true }
+  },
+  // Facebook — Facebook Ads: CHỈ nhập doanh thu (không traffic). trafficActive:false
+  // để không lọt vào danh sách "Kênh thương hiệu" (view chỉ traffic). Tên phải khớp
+  // đúng "Facebook Ads" để báo cáo gắn được kênh (findChannelId theo tên) và để dòng
+  // "Facebook Ads" ở Tổng quan cộng đúng doanh thu.
+  {
+    id: "fbads",
+    name: "Facebook Ads",
+    brandCategory: "Facebook Ads",
+    platform: "Facebook",
+    channelType: "Brand",
+    linkedShop: false,
+    auditId: "facebook-ads",
+    managerName: "Nguyễn Văn An",
+    managerAvatar: AV,
+    status: "Đã ra số",
+    tracking: { revenueActive: true, trafficActive: false }
   }
 ];
 
