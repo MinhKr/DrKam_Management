@@ -24,6 +24,7 @@ import LoginComponent from './components/LoginComponent';
 import DashboardComponent from './components/DashboardComponent';
 import TikTokReportComponent, { TikTokDayRecord, TikTokView } from './components/TikTokReportComponent';
 import FacebookReportComponent from './components/FacebookReportComponent';
+import FacebookAdsComponent from './components/FacebookAdsComponent';
 import ChannelManagementComponent from './components/ChannelManagementComponent';
 import EmployeeManagementComponent from './components/EmployeeManagementComponent';
 import TargetKPIComponent from './components/TargetKPIComponent';
@@ -38,7 +39,7 @@ import { getCurrentSession, getCurrentUserId, signOut } from './data/auth';
 
 // Phiên bản dữ liệu mẫu (demo). Tăng giá trị này mỗi khi đổi dữ liệu INITIAL_* để
 // tự nạp lại trên trình duyệt cũ (xóa localStorage demo cũ), không cần xóa cache thủ công.
-const SEED_VERSION = '2026-06-10-koc-fill-channels-v2';
+const SEED_VERSION = '2026-07-06-facebook-ads-channel';
 let demoMigrated = false;
 function migrateDemoData() {
   if (typeof window === 'undefined') return;
@@ -689,7 +690,7 @@ export default function App() {
   const canAccessTab = (tab: string) => {
     // TẠM KHOÁ mọi mục ngoài TikTok & Facebook cho MỌI vai trò (giữ nguyên code, chỉ chặn truy cập).
     // Mở lại sau: thêm tab vào ALLOWED_TABS hoặc bỏ chặn này.
-    const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'checklist'];
+    const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'fb-ads', 'checklist'];
     if (!ALLOWED_TABS.includes(tab)) return false;
 
     // (Phân quyền theo vai trò trước đây — giữ lại để khôi phục khi mở khoá:)
@@ -765,6 +766,15 @@ export default function App() {
             onUpdateChannel={handleUpdateChannel}
             onAddChannel={handleAddChannel}
             view={activeTab === 'fb-brand' ? 'brand' : 'koc'}
+          />
+        );
+      case 'fb-ads':
+        return (
+          <FacebookAdsComponent
+            reports={reports}
+            session={session}
+            onAddReport={handleAddReport}
+            onDeleteReport={handleDeleteReport}
           />
         );
       case 'checklist':
@@ -1067,7 +1077,7 @@ export default function App() {
                 <button
                   onClick={() => setFbMenuOpen((o) => !o)}
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                    activeTab === 'fb-koc' || activeTab === 'fb-brand'
+                    activeTab === 'fb-koc' || activeTab === 'fb-brand' || activeTab === 'fb-ads'
                       ? 'bg-rose-50 text-[#D32027]'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`}
@@ -1104,6 +1114,17 @@ export default function App() {
                     >
                       <span className="material-symbols-outlined text-[16px] text-blue-500">verified</span>
                       <span>Kênh thương hiệu</span>
+                    </button>
+                    <button
+                      onClick={() => navigateToTab('fb-ads')}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-left cursor-pointer ${
+                        activeTab === 'fb-ads'
+                          ? 'bg-rose-50 text-[#D32027]'
+                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[16px] text-blue-500">ads_click</span>
+                      <span>Facebook Ads</span>
                     </button>
                   </div>
                 )}

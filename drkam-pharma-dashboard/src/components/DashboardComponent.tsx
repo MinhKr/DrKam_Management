@@ -50,8 +50,8 @@ const LINE_ITEMS: LineItem[] = [
   { id: 'fbhai', label: 'FB AI – Hải/conghaing', monthlyTarget: 60_000_000, badge: 'fb', match: nameIs('conghaing') },
   { id: 'fbnhi', label: 'FB AI – Nhi/ynni1809', monthlyTarget: 10_000_000, badge: 'fb', match: nameIs('ynni1809') },
   { id: 'fbminh', label: 'FB AI – Minh/leminh139148', monthlyTarget: 10_000_000, badge: 'fb', match: nameIs('leminh139148') },
-  // Facebook Ads: chỉ set KPI, CHƯA gắn ô nhập/kênh (thực hiện = 0 cho tới khi chốt với team).
-  { id: 'fbads', label: 'Facebook Ads', monthlyTarget: 175_000_000, badge: 'fb', match: () => false },
+  // Facebook Ads: doanh thu nhập ở mục Facebook > Facebook Ads (kênh tên "Facebook Ads").
+  { id: 'fbads', label: 'Facebook Ads', monthlyTarget: 175_000_000, badge: 'fb', match: nameIs('facebookads') },
 ];
 
 // VIEW / REACH — chỉ tiêu THÁNG (tuần = tháng ÷ 4); Thực hiện = tổng reach (viewsReach) các tuần.
@@ -240,10 +240,6 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
   const revTikTok = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('tt')).reduce((s, r) => s + r.revenue, 0);
   const revFacebook = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('fb')).reduce((s, r) => s + r.revenue, 0);
 
-  const prevKey = shiftMonth(monthKey, -1);
-  const prevTotal = reports.filter((r) => { const [, mm, yy] = r.date.split('/'); return `${yy}-${mm}` === prevKey; }).reduce((s, r) => s + r.revenue, 0);
-  const delta = prevTotal ? Math.round(((grandTotal - prevTotal) / prevTotal) * 1000) / 10 : null;
-
   const series = dailySeries(monthReports, monthFromIso, monthToIso);
   const weekLabel = (i: number) => {
     const last = lastDayOfMonth(monthKey);
@@ -276,11 +272,6 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
             <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1 flex-wrap">
               <span className="material-symbols-outlined text-[13px] text-green-600">sync</span>
               Tự cập nhật theo báo cáo mỗi ngày
-              {delta != null && (
-                <span className={`ml-1 font-semibold ${delta >= 0 ? 'text-green-700' : 'text-rose-600'}`}>
-                  · {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}% so tháng trước
-                </span>
-              )}
             </p>
           </div>
           <div className="text-right">
