@@ -36,8 +36,15 @@ File này sẽ:
 1. Đặt `department = 'Media'`, `role = 'Nhân viên'`, tên hiển thị cho Khải & Sơn.
 2. Seed **KPI tháng 6** (Khải 6 chỉ số, Sơn 2 chỉ số) + **7 đề xuất cải tiến**.
 
+Sau đó chạy tiếp file **báo cáo ngày T6** (dòng công việc chi tiết):
+```
+supabase/data/media_seed_t6_logs.sql
+```
+Seed **121 dòng công việc thật** (Khải 63 · Sơn 58) từ 2 sheet. Số lượng video ở Tổng quan
+Media **tự đếm** từ các dòng loại video (99 video) → biểu đồ/donut/thẻ thống kê T6 hiện đúng.
+Chạy lại an toàn (xóa dữ liệu T6 cũ của 2 người rồi seed lại).
+
 > Nếu báo lỗi *"Chưa có tài khoản Khải/Sơn"* → quay lại Bước 2.
-> Báo cáo ngày (dòng công việc) **không seed** — nhập trực tiếp trong app, hoặc yêu cầu bổ sung file seed.
 
 ## Bước 4 — Chạy app ở chế độ cloud
 ```
