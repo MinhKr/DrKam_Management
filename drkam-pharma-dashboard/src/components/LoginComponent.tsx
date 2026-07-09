@@ -7,16 +7,32 @@ interface LoginComponentProps {
   onLoginSuccess: (session: UserSession) => void;
 }
 
+// Avatar demo dùng chung (khớp INITIAL_EMPLOYEES).
+const AV_ADMIN = "https://lh3.googleusercontent.com/aida-public/AB6AXuAwxcNk3h_dSy-QxPJwh7IZAx4IPd69V4i_4FlgAIlvGpHoE4f-UZIj64GPyBokv3MGwEUuU4DVvOS81ZV1ab3ZbJuSzeY9ZAUh68pyIlXV1GQlhMqsnDe9GgkijJuB1d63sf4q171JOYdQiXM5rFRPd6Hcd38tUF2isSe2BxoOEf3mcf7uun3rlRhQQb-klabcjUgssUIDmF8PD7MnjvbOichafwaOsnBSNFY1RMIRVMTjWYedKiTdu5PPWrflyzqwB9hfglsHmTZ7";
+const AV_LEADER = "https://lh3.googleusercontent.com/aida-public/AB6AXuA7hJqbL0fQIqlo1FE3j4-WZeqTHw9cn0ga5_nxJXHO3hwKU5C-XJqfMIYYWJjYkI9UnaG4W_mmJ7z8QUlbxQ7YEow_HLbhZYA3FV3w2VgxdzlqIp4oB7TXAhzNG7620ml3yJ0apWRP7ynDUgBVvDzYSXMjoVtTM4bxOMGeXu7QNgwLsznEorRWpcXV-0H0Dh86o59C4oVRi4urL_DCGG9BRqyHPxMAIIs4AOuvVPY6FamKTifQkXK5OQbA2dIPyVLhtinhe2InKOon";
+const AV_NV = "https://lh3.googleusercontent.com/aida-public/AB6AXuCA92GDkUbWvXrn22ZL-2GncLt7Id8ZSDOUJZqHbkIVe-CAKEETqOY0HWsDcQmZCwGn_pKGKFg-nexGWG2fu_xpawe2Gi3p6aAQ4EeEJpkvIDQrWFcobLYGXAEfmrqy4JWO4V-jRu9cYCYspqKYu83glAtBkmA15CEVA6BLuLzI-fYbochgbj3DXz_hAOPzfSKLb8TBzaZDMgBaM-UAwD7T4sO5CD04JuclO-qyumbM97sJh7nudS6RagQMoEmgD2cVYDjyvDuOvy6k";
+
+// Các tài khoản mô phỏng ở chế độ demo (không nối Supabase).
+type DemoAccount = { key: string; label: string; name: string; email: string; role: UserSession['role']; department?: string; avatar: string; active: string };
+const DEMO_ACCOUNTS: DemoAccount[] = [
+  { key: 'admin',      label: 'Admin',      name: 'Nguyễn Văn An',       email: 'an.nguyen@drkam.vn',   role: 'Admin',      avatar: AV_ADMIN,  active: 'bg-slate-900 text-white border-slate-900' },
+  { key: 'leader',     label: 'Leader',     name: 'Trần Thị Bích',       email: 'bich.tran@drkam.vn',   role: 'Leader',     avatar: AV_LEADER, active: 'bg-amber-600 text-white border-amber-600' },
+  { key: 'nv',         label: 'Nhân Viên',  name: 'Hoàng Yến Nhi',       email: 'nhi.hoang@drkam.vn',   role: 'Nhân viên',  avatar: AV_NV,     active: 'bg-green-700 text-white border-green-700' },
+  { key: 'media-lead', label: 'Media · Khải', name: 'Nguyễn Trọng Khải', email: 'khaint@drkam.vn', role: 'Nhân viên', department: 'Media', avatar: AV_LEADER, active: 'bg-[#D32027] text-white border-[#D32027]' },
+  { key: 'media-nv',   label: 'Media · Sơn',  name: 'Vũ Văn Sơn',        email: 'sonvv@drkam.vn',      role: 'Nhân viên', department: 'Media', avatar: AV_NV,     active: 'bg-[#D32027] text-white border-[#D32027]' },
+];
+
 export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) {
   const cloud = isSupabaseConfigured;
   const [email, setEmail] = useState(cloud ? '' : 'an.nguyen@drkam.vn');
   const [password, setPassword] = useState(cloud ? '' : '••••••••');
   const [showPassword, setShowPassword] = useState(false);
-  const [role, setRole] = useState<'Admin' | 'Leader' | 'Nhân viên'>('Admin');
+  const [demoKey, setDemoKey] = useState('admin');
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false); // popup hướng dẫn quên mật khẩu
+  const account = DEMO_ACCOUNTS.find((a) => a.key === demoKey) ?? DEMO_ACCOUNTS[0];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,19 +56,14 @@ export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) 
       return;
     }
 
-    // Chế độ demo: tự đăng nhập theo vai trò đã chọn
-    const avatar = role === 'Admin'
-      ? "https://lh3.googleusercontent.com/aida-public/AB6AXuAwxcNk3h_dSy-QxPJwh7IZAx4IPd69V4i_4FlgAIlvGpHoE4f-UZIj64GPyBokv3MGwEUuU4DVvOS81ZV1ab3ZbJuSzeY9ZAUh68pyIlXV1GQlhMqsnDe9GgkijJuB1d63sf4q171JOYdQiXM5rFRPd6Hcd38tUF2isSe2BxoOEf3mcf7uun3rlRhQQb-klabcjUgssUIDmF8PD7MnjvbOichafwaOsnBSNFY1RMIRVMTjWYedKiTdu5PPWrflyzqwB9hfglsHmTZ7"
-      : role === 'Leader'
-      ? "https://lh3.googleusercontent.com/aida-public/AB6AXuA7hJqbL0fQIqlo1FE3j4-WZeqTHw9cn0ga5_nxJXHO3hwKU5C-XJqfMIYYWJjYkI9UnaG4W_mmJ7z8QUlbxQ7YEow_HLbhZYA3FV3w2VgxdzlqIp4oB7TXAhzNG7620ml3yJ0apWRP7ynDUgBVvDzYSXMjoVtTM4bxOMGeXu7QNgwLsznEorRWpcXV-0H0Dh86o59C4oVRi4urL_DCGG9BRqyHPxMAIIs4AOuvVPY6FamKTifQkXK5OQbA2dIPyVLhtinhe2InKOon"
-      : "https://lh3.googleusercontent.com/aida-public/AB6AXuCA92GDkUbWvXrn22ZL-2GncLt7Id8ZSDOUJZqHbkIVe-CAKEETqOY0HWsDcQmZCwGn_pKGKFg-nexGWG2fu_xpawe2Gi3p6aAQ4EeEJpkvIDQrWFcobLYGXAEfmrqy4JWO4V-jRu9cYCYspqKYu83glAtBkmA15CEVA6BLuLzI-fYbochgbj3DXz_hAOPzfSKLb8TBzaZDMgBaM-UAwD7T4sO5CD04JuclO-qyumbM97sJh7nudS6RagQMoEmgD2cVYDjyvDuOvy6k";
-
+    // Chế độ demo: tự đăng nhập theo tài khoản mô phỏng đã chọn.
     onLoginSuccess({
       isLoggedIn: true,
-      name: role === 'Admin' ? 'Nguyễn Văn An' : role === 'Leader' ? 'Trần Thị Bích' : 'Hoàng Yến Nhi',
+      name: account.name,
       email: email,
-      role: role,
-      avatar: avatar
+      role: account.role,
+      avatar: account.avatar,
+      department: account.department,
     });
   };
 
@@ -196,51 +207,26 @@ export default function LoginComponent({ onLoginSuccess }: LoginComponentProps) 
                 Mô phỏng phân quyền đăng nhập:
               </label>
               <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRole('Admin');
-                    setEmail('an.nguyen@drkam.vn');
-                  }}
-                  className={`py-2 px-2 text-xs font-bold rounded-lg border transition-all ${
-                    role === 'Admin'
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  Admin
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRole('Leader');
-                    setEmail('bich.tran@drkam.vn');
-                  }}
-                  className={`py-2 px-2 text-xs font-bold rounded-lg border transition-all ${
-                    role === 'Leader'
-                      ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  Leader
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRole('Nhân viên');
-                    setEmail('nhi.hoang@drkam.vn');
-                  }}
-                  className={`py-2 px-2 text-xs font-bold rounded-lg border transition-all ${
-                    role === 'Nhân viên'
-                      ? 'bg-green-700 text-white border-green-700 shadow-sm'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  Nhân Viên
-                </button>
+                {DEMO_ACCOUNTS.map((a) => (
+                  <button
+                    key={a.key}
+                    type="button"
+                    onClick={() => {
+                      setDemoKey(a.key);
+                      setEmail(a.email);
+                    }}
+                    className={`py-2 px-2 text-xs font-bold rounded-lg border transition-all ${
+                      demoKey === a.key
+                        ? `${a.active} shadow-sm`
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {a.label}
+                  </button>
+                ))}
               </div>
               <p className="text-[11px] text-gray-500 mt-2 italic text-center">
-                * Click chọn nút vai trò ở trên để tự động điền email mô phỏng thích hợp
+                * 2 nút <b className="text-[#D32027]">Media</b> đăng nhập vào màn riêng của team Media
               </p>
             </div>
             )}

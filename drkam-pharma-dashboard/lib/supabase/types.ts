@@ -172,6 +172,78 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['content_checklists']['Insert']>;
         Relationships: [];
       };
+      media_task_logs: {
+        Row: {
+          id: string;
+          log_date: string;
+          employee_id: string;
+          employee_name: string;
+          content_type: string;
+          script_no: string | null;
+          task: string;
+          quantity: number | null;
+          progress: 'Hoàn thành' | 'Đang làm' | 'Chưa làm';
+          product_link: string | null;
+          deadline: string | null;
+          note: string | null;
+          approval: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['media_task_logs']['Row'],
+          'id' | 'created_at' | 'updated_at'
+        > & { id?: string; created_at?: string; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['media_task_logs']['Insert']>;
+        Relationships: [];
+      };
+      media_kpi_entries: {
+        Row: {
+          id: string;
+          period: string;
+          employee_id: string;
+          employee_name: string;
+          role_scope: 'Leader' | 'NV';
+          stt: number;
+          group_name: string;
+          metric: string;
+          target_value: number;
+          unit: 'number' | 'currency' | 'percent';
+          weight: number;
+          actual_value: number;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['media_kpi_entries']['Row'],
+          'id' | 'created_at' | 'updated_at'
+        > & { id?: string; created_at?: string; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['media_kpi_entries']['Insert']>;
+        Relationships: [];
+      };
+      media_improvements: {
+        Row: {
+          id: string;
+          period: string;
+          stt: number;
+          issue: string;
+          proposal: string;
+          benefit: string | null;
+          priority: 'Cao' | 'Trung bình' | 'Thấp';
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['media_improvements']['Row'],
+          'id' | 'created_at' | 'updated_at'
+        > & { id?: string; created_at?: string; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['media_improvements']['Insert']>;
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: { [_ in never]: never };

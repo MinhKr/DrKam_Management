@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tổng quan Media - DrKam</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-container": "#6b6d6e",
+                        "surface": "#fff8f7",
+                        "primary-container": "#d32027",
+                        "on-surface": "#281716",
+                        "on-primary-fixed-variant": "#930010",
+                        "surface-dim": "#f2d3d0",
+                        "on-secondary-fixed-variant": "#474746",
+                        "inverse-surface": "#3f2c2a",
+                        "surface-bright": "#fff8f7",
+                        "secondary-container": "#e2dfde",
+                        "on-primary-fixed": "#410003",
+                        "secondary-fixed": "#e5e2e1",
+                        "surface-container-low": "#fff0ef",
+                        "surface-container": "#ffe9e7",
+                        "on-error": "#ffffff",
+                        "error": "#ba1a1a",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#ffb3ad",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-container": "#eeeff0",
+                        "tertiary-fixed": "#e1e3e4",
+                        "error-container": "#ffdad6",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#454748",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "tertiary-fixed-dim": "#c5c7c8",
+                        "secondary": "#5f5e5e",
+                        "surface-container-highest": "#fbdbd8",
+                        "on-tertiary-fixed": "#191c1d",
+                        "inverse-on-surface": "#ffedeb",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed-dim": "#ffb3ad",
+                        "outline-variant": "#e5bdb9",
+                        "outline": "#916f6c",
+                        "primary-fixed": "#ffdad6",
+                        "primary": "#ac0015",
+                        "on-background": "#281716",
+                        "on-secondary-container": "#636262",
+                        "tertiary": "#525556",
+                        "on-primary-container": "#ffeae8",
+                        "background": "#fff8f7",
+                        "surface-container-high": "#ffe2de",
+                        "on-surface-variant": "#5c403d",
+                        "surface-tint": "#be091b",
+                        "surface-variant": "#fbdbd8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "sm": "8px",
+                        "gutter": "20px",
+                        "md": "16px",
+                        "unit": "4px",
+                        "container-max": "1440px",
+                        "lg": "24px",
+                        "xl": "32px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Montserrat"],
+                        "label-lg": ["Montserrat"],
+                        "headline-lg": ["Montserrat"],
+                        "headline-sm": ["Montserrat"],
+                        "label-sm": ["Montserrat"],
+                        "body-lg": ["Montserrat"],
+                        "display-lg": ["Montserrat"],
+                        "headline-md": ["Montserrat"],
+                        "headline-lg-mobile": ["Montserrat"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-lg": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .ambient-shadow-lvl1 {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+        }
+        .ambient-shadow-lvl2:hover {
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="hidden md:flex h-screen w-64 fixed left-0 top-0 border-r border-outline-variant shadow-sm flex-col bg-surface z-40">
+<div class="flex flex-col h-full py-6">
+<div class="px-6 mb-8 flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">D</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">DrKam</h1>
+<p class="font-label-sm text-label-sm text-secondary">TEAM MEDIA</p>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto">
+<ul class="space-y-2">
+<!-- Active Tab -->
+<li>
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-fixed text-primary border-l-4 border-primary rounded-r-lg font-semibold transition-transform duration-150 scale-[0.98]" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-label-lg text-label-lg">Tổng quan Media</span>
+</a>
+</li>
+<!-- Inactive Tabs -->
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary font-medium hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">assessment</span>
+<span class="font-label-lg text-label-lg">Báo cáo ngày</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary font-medium hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">assignment</span>
+<span class="font-label-lg text-label-lg">Nhật ký công việc</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary font-medium hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">monitoring</span>
+<span class="font-label-lg text-label-lg">KPI tháng</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary font-medium hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">lightbulb</span>
+<span class="font-label-lg text-label-lg">Đề xuất cải tiến</span>
+</a>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<!-- TopNavBar -->
+<header class="hidden md:flex fixed top-0 right-0 w-[calc(100%-16rem)] z-50 bg-surface/80 backdrop-blur-md shadow-sm justify-between items-center h-16 px-8 ml-64">
+<div class="flex items-center">
+<span class="font-headline-sm text-headline-sm text-primary font-bold">TEAM MEDIA</span>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-full text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary w-64" placeholder="Tìm kiếm..." type="text"/>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<p class="font-label-sm text-label-sm font-semibold">Nguyễn Trọng Khải</p>
+<p class="text-xs text-secondary">Leader</p>
+</div>
+<img alt="Profile" class="w-10 h-10 rounded-full border-2 border-primary object-cover" data-alt="Professional portrait photograph of an Asian male team leader in his 30s. He is wearing a crisp white collared shirt. Soft, natural lighting highlights his confident expression. Shot against a clean, light gray corporate studio background. High resolution, corporate modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqXOFm-7WRSTfGjo7D5Ldqz0_ZXPSMzRr50elwxw2W0WXbY6XUOFP9iZ4VMSp_6aE8794ewBZDdGy1yw5XANWb-bhbXPKin-guFs8m1tACZsyb58ymSi1MhqGFF96tZV2-S4T4Ds-GbnWqCuBSh6KrP3EHII9IvmQgUA25NmodALL0l31rDWNc519pM27T0anNwNN0aPIxTWRxpAB1g-VbTf071NxDriye0BQtZrptawjr1OzPTV0WMQ"/>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="w-full md:ml-64 pt-20 px-4 md:px-6 pb-12">
+<div class="max-w-7xl mx-auto space-y-6">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+<h2 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface">Tổng quan Media</h2>
+<div class="flex items-center bg-surface-container-low rounded-lg p-1 border border-outline-variant">
+<button class="p-2 text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<span class="px-4 font-label-lg text-label-lg font-semibold min-w-[120px] text-center">Tháng 6/2026</span>
+<button class="p-2 text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Metrics Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- Card 1 -->
+<div class="bg-surface rounded-xl p-6 ambient-shadow-lvl1 ambient-shadow-lvl2 transition-all relative overflow-hidden border border-outline-variant">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
+<div class="flex justify-between items-start mb-4">
+<p class="font-label-lg text-label-lg text-secondary">Tổng video tháng</p>
+<div class="p-2 bg-primary-container/20 rounded-lg text-primary">
+<span class="material-symbols-outlined">videocam</span>
+</div>
+</div>
+<h3 class="font-display-lg text-display-lg text-on-surface">218</h3>
+<p class="text-sm text-emerald-600 font-medium flex items-center gap-1 mt-2">
+<span class="material-symbols-outlined text-sm">trending_up</span> +12% so với tháng trước
+                    </p>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface rounded-xl p-6 ambient-shadow-lvl1 ambient-shadow-lvl2 transition-all relative overflow-hidden border border-outline-variant">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
+<div class="flex justify-between items-start mb-4">
+<p class="font-label-lg text-label-lg text-secondary">Tổng Reach</p>
+<div class="p-2 bg-blue-100 rounded-lg text-blue-600">
+<span class="material-symbols-outlined">visibility</span>
+</div>
+</div>
+<h3 class="font-headline-lg text-headline-lg text-on-surface mt-2">8.023.259</h3>
+<p class="text-sm text-emerald-600 font-medium flex items-center gap-1 mt-2">
+<span class="material-symbols-outlined text-sm">trending_up</span> +5.2% so với tháng trước
+                    </p>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface rounded-xl p-6 ambient-shadow-lvl1 ambient-shadow-lvl2 transition-all relative overflow-hidden border border-outline-variant">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-amber-500"></div>
+<div class="flex justify-between items-start mb-4">
+<p class="font-label-lg text-label-lg text-secondary">Doanh thu TikTok Seller</p>
+<div class="p-2 bg-amber-100 rounded-lg text-amber-600">
+<span class="material-symbols-outlined">shopping_bag</span>
+</div>
+</div>
+<h3 class="font-headline-lg text-headline-lg text-on-surface mt-2">452M₫</h3>
+<p class="text-sm text-secondary font-medium flex items-center gap-1 mt-2">
+                        Mục tiêu: 500M₫
+                    </p>
+</div>
+<!-- Card 4 -->
+<div class="bg-surface rounded-xl p-6 ambient-shadow-lvl1 ambient-shadow-lvl2 transition-all relative overflow-hidden border border-outline-variant">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500"></div>
+<div class="flex justify-between items-start mb-4">
+<p class="font-label-lg text-label-lg text-secondary">Doanh thu Facebook ADS</p>
+<div class="p-2 bg-indigo-100 rounded-lg text-indigo-600">
+<span class="material-symbols-outlined">campaign</span>
+</div>
+</div>
+<h3 class="font-headline-lg text-headline-lg text-on-surface mt-2">820M₫</h3>
+<p class="text-sm text-emerald-600 font-medium flex items-center gap-1 mt-2">
+<span class="material-symbols-outlined text-sm">trending_up</span> Đạt 102% KPI
+                    </p>
+</div>
+</div>
+<!-- Charts Section (Bento Grid Style) -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Donut Chart -->
+<div class="bg-surface rounded-xl p-6 ambient-shadow-lvl1 border border-outline-variant lg:col-span-1 flex flex-col">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-6">Tỷ trọng video theo loại</h3>
+<div class="flex-1 flex items-center justify-center relative min-h-[250px]">
+<canvas id="typeChart"></canvas>
+<div class="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
+<span class="text-3xl font-bold text-on-surface">218</span>
+<span class="text-sm text-secondary">Video</span>
+</div>
+</div>
+<div class="mt-4 grid grid-cols-2 gap-2">
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-primary"></span><span class="text-xs">Ads FB (65)</span></div>
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-500"></span><span class="text-xs">Tiktok (82)</span></div>
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-500"></span><span class="text-xs">Reels (40)</span></div>
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-indigo-500"></span><span class="text-xs">Youtube (15)</span></div>
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500"></span><span class="text-xs">Livestream (10)</span></div>
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-gray-400"></span><span class="text-xs">Khác (6)</span></div>
+</div>
+</div>
+<!-- Line Chart -->
+<div class="bg-surface rounded-xl p-6 ambient-shadow-lvl1 border border-outline-variant lg:col-span-2 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Sản lượng video theo ngày</h3>
+<div class="flex gap-2">
+<span class="px-3 py-1 bg-surface-container-low rounded-full text-xs font-medium border border-outline-variant">Tuần này</span>
+</div>
+</div>
+<div class="flex-1 w-full chart-container">
+<canvas id="productionChart"></canvas>
+</div>
+</div>
+</div>
+<!-- Bottom Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Personnel Table -->
+<div class="bg-surface rounded-xl p-6 ambient-shadow-lvl1 border border-outline-variant lg:col-span-2 overflow-hidden">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Sản lượng theo nhân sự</h3>
+<button class="text-primary hover:text-primary-fixed-variant text-sm font-semibold flex items-center">
+                            Xem chi tiết <span class="material-symbols-outlined text-sm ml-1">arrow_forward</span>
+</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant/50 text-secondary font-label-sm text-label-sm uppercase tracking-wider">
+<th class="pb-3 px-2 font-medium">Nhân sự</th>
+<th class="pb-3 px-2 font-medium text-center">Vai trò</th>
+<th class="pb-3 px-2 font-medium text-right">Tổng Video</th>
+<th class="pb-3 px-2 font-medium text-right">Tổng Reach</th>
+<th class="pb-3 px-2 font-medium text-right">% KPI</th>
+</tr>
+</thead>
+<tbody class="text-body-md">
+<tr class="border-b border-outline-variant/30 hover:bg-surface-container-low/50 transition-colors">
+<td class="py-4 px-2">
+<div class="flex items-center gap-3">
+<div class="relative">
+<img alt="Khải" class="w-10 h-10 rounded-full object-cover border-2 border-primary" data-alt="Professional headshot of a confident Asian male team leader in a corporate environment. Short neat hair, wearing a dark blazer over a light shirt. Soft studio lighting. High resolution, modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA7QoHwOUl2HE_2KdIj7hUyE4h_Lud4RtLaCFyDKtLZi2xTUyIoWAq9ccX072SCSVRgWRCLP6OH-0IZwCqzwjzZdbS_nBP3yMe9paHgzh3oWDI9bf-Mrxid6aOBMcJNpDlsbSJ0dFUWZw1yKhaFpb8zdGTL3J9pc7e0bi5tAD1NuRCs8smzue9yOmVAFTAXE4GhotJ9Vppjq1DCw40PBZNx6OryxlD4RdYOAucY2ka4rjrgqGulN6t8xA"/>
+<span class="absolute -bottom-1 -right-1 bg-primary text-white text-[10px] font-bold px-1 rounded">LEAD</span>
+</div>
+<span class="font-semibold text-on-surface">Nguyễn Trọng Khải</span>
+</div>
+</td>
+<td class="py-4 px-2 text-center">
+<span class="inline-block px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">Quản lý / Edit</span>
+</td>
+<td class="py-4 px-2 text-right font-medium">95</td>
+<td class="py-4 px-2 text-right text-secondary">3.5M</td>
+<td class="py-4 px-2 text-right">
+<div class="flex items-center justify-end gap-2">
+<span class="text-emerald-600 font-semibold">105%</span>
+<div class="w-16 h-1.5 bg-secondary-container rounded-full overflow-hidden">
+<div class="w-full h-full bg-emerald-500 rounded-full"></div>
+</div>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/50 transition-colors">
+<td class="py-4 px-2">
+<div class="flex items-center gap-3">
+<img alt="Sơn" class="w-10 h-10 rounded-full object-cover border border-outline-variant" data-alt="Professional headshot of a young creative Asian male video editor. Wearing a casual stylish t-shirt. Friendly expression. Soft studio lighting against a light gray background. High resolution, modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-LwFV2X1HhELCtssIF_9jMt8JEfXpY09E6LnYMOWI01pE7r0Cw9pUDcz4rbNoDnHQD3MOmv6WctK5YIxr1ADIPs-GOrPk3fBcD30SrB5Z5Cb_bcRhogagLREQ65wPzVDYZbiqiLivgvrRqMzup1j27dMjhrnhBXOUGD8X3eEAQWWrLvGoSlJp9LVZl7XT5fnLnfAsGDF5-4H4EbWt1G0CO-lBxYLAZ5PwGhlH7oEiUcx6DNbqsBQQFQ"/>
+<span class="font-medium text-on-surface">Vũ Văn Sơn</span>
+</div>
+</td>
+<td class="py-4 px-2 text-center">
+<span class="inline-block px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">Video Editor</span>
+</td>
+<td class="py-4 px-2 text-right font-medium">123</td>
+<td class="py-4 px-2 text-right text-secondary">4.5M</td>
+<td class="py-4 px-2 text-right">
+<div class="flex items-center justify-end gap-2">
+<span class="text-emerald-600 font-semibold">112%</span>
+<div class="w-16 h-1.5 bg-secondary-container rounded-full overflow-hidden">
+<div class="w-full h-full bg-emerald-500 rounded-full"></div>
+</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- KPI Progress Block -->
+<div class="bg-surface rounded-xl p-6 ambient-shadow-lvl1 border border-outline-variant lg:col-span-1 bg-gradient-to-br from-surface to-surface-container-low">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-6 text-center">Tiến độ KPI Tháng</h3>
+<div class="flex flex-col items-center mb-8">
+<div class="relative w-32 h-32 flex items-center justify-center">
+<!-- SVG Circular Progress -->
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 100 100">
+<circle cx="50" cy="50" fill="none" r="45" stroke="#ffe9e7" stroke-width="8"></circle>
+<circle cx="50" cy="50" fill="none" r="45" stroke="#ac0015" stroke-dasharray="283" stroke-dashoffset="25" stroke-linecap="round" stroke-width="8"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="text-3xl font-bold text-primary">108%</span>
+</div>
+</div>
+<div class="mt-4 px-4 py-1.5 bg-primary text-white rounded-full text-sm font-semibold inline-flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-sm">stars</span> Xuất sắc
+                        </div>
+</div>
+<div class="space-y-4">
+<div>
+<div class="flex justify-between text-sm mb-1">
+<span class="font-medium">Nguyễn Trọng Khải</span>
+<span class="font-bold text-primary">105%</span>
+</div>
+<div class="w-full h-2 bg-secondary-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 100%;"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-sm mb-1">
+<span class="font-medium">Vũ Văn Sơn</span>
+<span class="font-bold text-primary">112%</span>
+</div>
+<div class="w-full h-2 bg-secondary-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 100%;"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+        // Chart.js Configuration
+        document.addEventListener('DOMContentLoaded', function() {
+            // Setup global defaults
+            Chart.defaults.font.family = 'Montserrat, sans-serif';
+            Chart.defaults.color = '#5f5e5e';
+
+            // Donut Chart
+            const typeCtx = document.getElementById('typeChart').getContext('2d');
+            new Chart(typeCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Ads FB', 'Tiktok', 'Reels', 'Youtube', 'Livestream', 'Khác'],
+                    datasets: [{
+                        data: [65, 82, 40, 15, 10, 6],
+                        backgroundColor: [
+                            '#ac0015', // primary
+                            '#3b82f6', // blue
+                            '#f59e0b', // amber
+                            '#6366f1', // indigo
+                            '#10b981', // emerald
+                            '#9ca3af'  // gray
+                        ],
+                        borderWidth: 0,
+                        cutout: '75%'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(40, 23, 22, 0.9)',
+                            padding: 12,
+                            cornerRadius: 8,
+                            titleFont: { size: 13, family: 'Montserrat' },
+                            bodyFont: { size: 13, family: 'Montserrat' }
+                        }
+                    }
+                }
+            });
+
+            // Line Chart
+            const prodCtx = document.getElementById('productionChart').getContext('2d');
+            
+            // Create gradients
+            let gradientKhai = prodCtx.createLinearGradient(0, 0, 0, 300);
+            gradientKhai.addColorStop(0, 'rgba(172, 0, 21, 0.2)');
+            gradientKhai.addColorStop(1, 'rgba(172, 0, 21, 0)');
+
+            let gradientSon = prodCtx.createLinearGradient(0, 0, 0, 300);
+            gradientSon.addColorStop(0, 'rgba(59, 130, 246, 0.2)');
+            gradientSon.addColorStop(1, 'rgba(59, 130, 246, 0)');
+
+            new Chart(prodCtx, {
+                type: 'line',
+                data: {
+                    labels: ['01/06', '05/06', '10/06', '15/06', '20/06', '25/06', '30/06'],
+                    datasets: [
+                        {
+                            label: 'Khải (Lead)',
+                            data: [3, 5, 4, 8, 5, 7, 6],
+                            borderColor: '#ac0015',
+                            backgroundColor: gradientKhai,
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#ac0015',
+                            pointBorderWidth: 2,
+                            pointRadius: 4
+                        },
+                        {
+                            label: 'Sơn (Editor)',
+                            data: [4, 6, 8, 7, 9, 8, 10],
+                            borderColor: '#3b82f6',
+                            backgroundColor: gradientSon,
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#3b82f6',
+                            pointBorderWidth: 2,
+                            pointRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            align: 'end',
+                            labels: {
+                                usePointStyle: true,
+                                boxWidth: 8,
+                                font: { size: 12, family: 'Montserrat', weight: '500' }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(40, 23, 22, 0.9)',
+                            padding: 12,
+                            cornerRadius: 8,
+                            titleFont: { size: 13, family: 'Montserrat' },
+                            bodyFont: { size: 13, family: 'Montserrat' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false,
+                                drawBorder: false
+                            },
+                            ticks: {
+                                font: { size: 11 }
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: '#f3f4f6',
+                                drawBorder: false
+                            },
+                            beginAtZero: true,
+                            ticks: {
+                                font: { size: 11 },
+                                stepSize: 2
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body></html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nhật Ký Công Việc - TEAM MEDIA</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-container": "#6b6d6e",
+                      "surface": "#fff8f7",
+                      "primary-container": "#d32027",
+                      "on-surface": "#281716",
+                      "on-primary-fixed-variant": "#930010",
+                      "surface-dim": "#f2d3d0",
+                      "on-secondary-fixed-variant": "#474746",
+                      "inverse-surface": "#3f2c2a",
+                      "surface-bright": "#fff8f7",
+                      "secondary-container": "#e2dfde",
+                      "on-primary-fixed": "#410003",
+                      "secondary-fixed": "#e5e2e1",
+                      "surface-container-low": "#fff0ef",
+                      "surface-container": "#ffe9e7",
+                      "on-error": "#ffffff",
+                      "error": "#ba1a1a",
+                      "secondary-fixed-dim": "#c8c6c5",
+                      "on-primary": "#ffffff",
+                      "inverse-primary": "#ffb3ad",
+                      "on-tertiary": "#ffffff",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary-container": "#eeeff0",
+                      "tertiary-fixed": "#e1e3e4",
+                      "error-container": "#ffdad6",
+                      "on-error-container": "#93000a",
+                      "on-tertiary-fixed-variant": "#454748",
+                      "on-secondary-fixed": "#1c1b1b",
+                      "tertiary-fixed-dim": "#c5c7c8",
+                      "secondary": "#5f5e5e",
+                      "surface-container-highest": "#fbdbd8",
+                      "on-tertiary-fixed": "#191c1d",
+                      "inverse-on-surface": "#ffedeb",
+                      "surface-container-lowest": "#ffffff",
+                      "primary-fixed-dim": "#ffb3ad",
+                      "outline-variant": "#e5bdb9",
+                      "outline": "#916f6c",
+                      "primary-fixed": "#ffdad6",
+                      "primary": "#ac0015",
+                      "on-background": "#281716",
+                      "on-secondary-container": "#636262",
+                      "tertiary": "#525556",
+                      "on-primary-container": "#ffeae8",
+                      "background": "#fff8f7",
+                      "surface-container-high": "#ffe2de",
+                      "on-surface-variant": "#5c403d",
+                      "surface-tint": "#be091b",
+                      "surface-variant": "#fbdbd8"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xs": "4px",
+                      "sm": "8px",
+                      "gutter": "20px",
+                      "md": "16px",
+                      "unit": "4px",
+                      "container-max": "1440px",
+                      "lg": "24px",
+                      "xl": "32px"
+              },
+              "fontFamily": {
+                      "body-md": ["Montserrat"],
+                      "label-lg": ["Montserrat"],
+                      "headline-lg": ["Montserrat"],
+                      "headline-sm": ["Montserrat"],
+                      "label-sm": ["Montserrat"],
+                      "body-lg": ["Montserrat"],
+                      "display-lg": ["Montserrat"],
+                      "headline-md": ["Montserrat"],
+                      "headline-lg-mobile": ["Montserrat"]
+              },
+              "fontSize": {
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "label-lg": ["14px", {"lineHeight": "20px", "fontWeight": "600"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                      "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .fill-icon {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen antialiased">
+<!-- TopNavBar -->
+<nav class="fixed top-0 right-0 w-[calc(100%-16rem)] z-50 bg-surface/80 dark:bg-surface-container/80 backdrop-blur-md shadow-sm flex justify-between items-center h-16 px-8 ml-64">
+<div class="flex items-center w-96">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-full text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" placeholder="Tìm kiếm..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<button class="relative text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined fill-icon text-[24px]">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-primary rounded-full"></span>
+</button>
+<div class="flex items-center gap-3 border-l border-outline-variant pl-6">
+<div class="text-right hidden md:block">
+<p class="font-label-sm text-label-sm text-on-surface">Nguyễn Trọng Khải</p>
+<p class="text-[10px] text-on-surface-variant font-medium uppercase tracking-wider">Leader</p>
+</div>
+<div class="w-10 h-10 rounded-full border-2 border-primary overflow-hidden">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a young Asian male team leader in a corporate modern office, soft lighting, sharp focus, wearing a dark blazer over a simple white t-shirt, exuding confidence and approachability." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBCaJe7WWj-KScizf_-LxQs9iuzBfiAp_rnXugUnFHU0pv6qlHcLLUFcdICRtQmMILrcXxMvG4mewwbY7nLIM23gGj4IjNBAeLVAYznM3OcgtsmyyHpcj0qeFuruZsfYrxErhn0ZUuZw0Kth0wjbreZLUu9VywkT8P3oo3w4XAdBhEcsC-GNznA8PV3-5ew7I-8-A7-vpzFykYN3tgCJ_UU25M26yAwr0z0YtV8hUu2Mp5u1B-S0bp8CQ"/>
+</div>
+</div>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-surface border-r border-outline-variant shadow-sm flex flex-col py-6 z-40">
+<div class="px-6 mb-8 flex items-center gap-3">
+<div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-on-primary font-headline-md">
+                K
+            </div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">DrKam</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant tracking-widest uppercase">TEAM MEDIA</p>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1 pr-4">
+<a class="flex items-center gap-3 px-4 py-3 text-secondary font-medium hover:bg-surface-container-high transition-colors duration-200 rounded-r-lg" href="#">
+<span class="material-symbols-outlined text-[22px]">dashboard</span>
+<span class="font-label-lg text-label-lg">Tổng quan Media</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary font-medium hover:bg-surface-container-high transition-colors duration-200 rounded-r-lg" href="#">
+<span class="material-symbols-outlined text-[22px]">assessment</span>
+<span class="font-label-lg text-label-lg">Báo cáo ngày</span>
+</a>
+<!-- Active Tab -->
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-fixed text-on-primary-fixed border-l-4 border-primary rounded-r-lg font-semibold scale-[0.98] transition-transform duration-150" href="#">
+<span class="material-symbols-outlined fill-icon text-[22px] text-primary">assignment</span>
+<span class="font-label-lg text-label-lg text-primary">Nhật ký công việc</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary font-medium hover:bg-surface-container-high transition-colors duration-200 rounded-r-lg" href="#">
+<span class="material-symbols-outlined text-[22px]">monitoring</span>
+<span class="font-label-lg text-label-lg">KPI tháng</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary font-medium hover:bg-surface-container-high transition-colors duration-200 rounded-r-lg" href="#">
+<span class="material-symbols-outlined text-[22px]">lightbulb</span>
+<span class="font-label-lg text-label-lg">Đề xuất cải tiến</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content -->
+<main class="ml-64 pt-24 px-8 pb-12">
+<!-- Header & Actions -->
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">Nhật ký công việc</h2>
+<p class="text-on-surface-variant font-body-md text-body-md">Theo dõi tiến độ và chi tiết công việc hàng ngày của nhóm.</p>
+</div>
+<div class="flex items-center gap-4">
+<!-- Filters -->
+<div class="flex bg-surface rounded-lg border border-outline-variant shadow-sm p-1">
+<select class="bg-transparent border-none text-body-md text-on-surface focus:ring-0 py-1.5 pl-3 pr-8 cursor-pointer">
+<option>Tất cả nhân sự</option>
+<option>Nguyễn Trọng Khải</option>
+<option>Vũ Văn Sơn</option>
+</select>
+<div class="w-px bg-outline-variant my-1 mx-2"></div>
+<div class="flex items-center px-3 cursor-pointer hover:bg-surface-container-low rounded">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant mr-2">calendar_today</span>
+<span class="text-body-md text-on-surface">Hôm nay</span>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant ml-1">expand_more</span>
+</div>
+</div>
+<!-- Primary Action -->
+<button class="bg-primary hover:bg-on-primary-fixed-variant text-on-primary rounded-lg font-label-lg text-label-lg px-5 py-2.5 flex items-center gap-2 shadow-sm transition-colors">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                    Thêm dòng
+                </button>
+</div>
+</div>
+<!-- Data Table Card -->
+<div class="bg-surface rounded-xl shadow-sm border border-outline-variant overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container border-b border-outline-variant">
+<th class="py-3 px-4 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider w-12">Thứ</th>
+<th class="py-3 px-4 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider w-24">Ngày</th>
+<th class="py-3 px-4 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Content</th>
+<th class="py-3 px-4 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider w-20">KB</th>
+<th class="py-3 px-4 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Công việc</th>
+<th class="py-3 px-4 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider text-center w-16">SL</th>
+<th class="py-3 px-4 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider w-32">Tiến độ</th>
+<th class="py-3 px-4 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider text-center w-16">Link</th>
+<th class="py-3 px-4 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider w-20">Hạn</th>
+<th class="py-3 px-4 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Ghi chú</th>
+<th class="py-3 px-4 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider text-center w-24">Duyệt</th>
+</tr>
+</thead>
+<tbody class="text-body-md text-on-surface divide-y divide-outline-variant">
+<!-- Date Group 1 -->
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="py-3 px-4 font-medium text-on-surface border-r border-outline-variant/30" rowspan="2">Thứ 3</td>
+<td class="py-3 px-4 text-on-surface-variant border-r border-outline-variant/30" rowspan="2">24/10/2023</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-surface-tint/10 text-primary">Video Edit</span>
+</td>
+<td class="py-3 px-4 font-mono text-xs text-on-surface-variant">KB-102</td>
+<td class="py-3 px-4 font-medium text-on-surface">Edit video xào BLV Quang Huy 3</td>
+<td class="py-3 px-4 text-center">1</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium border border-primary/20 text-primary bg-primary/5 w-full justify-center">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                                Đang làm
+                            </span>
+</td>
+<td class="py-3 px-4 text-center">
+<a class="text-tertiary hover:text-primary transition-colors" href="#"><span class="material-symbols-outlined text-[18px]">link</span></a>
+</td>
+<td class="py-3 px-4 text-on-surface-variant">15:00</td>
+<td class="py-3 px-4 text-on-surface-variant text-sm truncate max-w-[150px]">-</td>
+<td class="py-3 px-4 text-center">
+<span class="material-symbols-outlined text-[20px] text-outline-variant">pending</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-tertiary/10 text-tertiary">BS Nguyên</span>
+</td>
+<td class="py-3 px-4 font-mono text-xs text-on-surface-variant">KB-103</td>
+<td class="py-3 px-4 font-medium text-on-surface">Edit video BS Nguyên 338</td>
+<td class="py-3 px-4 text-center">1</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium border border-outline-variant text-on-surface-variant bg-surface w-full justify-center">
+<span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span>
+                                Chưa làm
+                            </span>
+</td>
+<td class="py-3 px-4 text-center">
+<span class="text-outline-variant">-</span>
+</td>
+<td class="py-3 px-4 text-on-surface-variant">17:30</td>
+<td class="py-3 px-4 text-on-surface-variant text-sm truncate max-w-[150px]">Chờ file raw</td>
+<td class="py-3 px-4 text-center">
+<span class="material-symbols-outlined text-[20px] text-outline-variant">pending</span>
+</td>
+</tr>
+<!-- Date Group 2 -->
+<tr class="hover:bg-surface-container-lowest transition-colors border-t-2 border-surface-variant">
+<td class="py-3 px-4 font-medium text-on-surface border-r border-outline-variant/30">Thứ 4</td>
+<td class="py-3 px-4 text-on-surface-variant border-r border-outline-variant/30">25/10/2023</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-secondary/10 text-secondary">Meeting</span>
+</td>
+<td class="py-3 px-4 text-center text-on-surface-variant">-</td>
+<td class="py-3 px-4 font-medium text-on-surface">Họp team MKT</td>
+<td class="py-3 px-4 text-center">-</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium border border-secondary/20 text-secondary bg-surface-container-low w-full justify-center">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+                                Hoàn thành
+                            </span>
+</td>
+<td class="py-3 px-4 text-center">
+<span class="text-outline-variant">-</span>
+</td>
+<td class="py-3 px-4 text-on-surface-variant">09:00</td>
+<td class="py-3 px-4 text-on-surface-variant text-sm truncate max-w-[150px]">Lên plan T11</td>
+<td class="py-3 px-4 text-center">
+<span class="material-symbols-outlined text-[20px] text-secondary fill-icon">verified</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</main>
+</body></html>

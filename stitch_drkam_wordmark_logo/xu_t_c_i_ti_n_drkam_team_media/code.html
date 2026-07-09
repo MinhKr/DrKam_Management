@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+
+<html class="light" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Đề Xuất Cải Tiến - TEAM MEDIA</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-container": "#6b6d6e",
+                        "surface": "#fff8f7",
+                        "primary-container": "#d32027",
+                        "on-surface": "#281716",
+                        "on-primary-fixed-variant": "#930010",
+                        "surface-dim": "#f2d3d0",
+                        "on-secondary-fixed-variant": "#474746",
+                        "inverse-surface": "#3f2c2a",
+                        "surface-bright": "#fff8f7",
+                        "secondary-container": "#e2dfde",
+                        "on-primary-fixed": "#410003",
+                        "secondary-fixed": "#e5e2e1",
+                        "surface-container-low": "#fff0ef",
+                        "surface-container": "#ffe9e7",
+                        "on-error": "#ffffff",
+                        "error": "#ba1a1a",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#ffb3ad",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-container": "#eeeff0",
+                        "tertiary-fixed": "#e1e3e4",
+                        "error-container": "#ffdad6",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#454748",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "tertiary-fixed-dim": "#c5c7c8",
+                        "secondary": "#5f5e5e",
+                        "surface-container-highest": "#fbdbd8",
+                        "on-tertiary-fixed": "#191c1d",
+                        "inverse-on-surface": "#ffedeb",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed-dim": "#ffb3ad",
+                        "outline-variant": "#e5bdb9",
+                        "outline": "#916f6c",
+                        "primary-fixed": "#ffdad6",
+                        "primary": "#ac0015",
+                        "on-background": "#281716",
+                        "on-secondary-container": "#636262",
+                        "tertiary": "#525556",
+                        "on-primary-container": "#ffeae8",
+                        "background": "#fff8f7",
+                        "surface-container-high": "#ffe2de",
+                        "on-surface-variant": "#5c403d",
+                        "surface-tint": "#be091b",
+                        "surface-variant": "#fbdbd8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "sm": "8px",
+                        "gutter": "20px",
+                        "md": "16px",
+                        "unit": "4px",
+                        "container-max": "1440px",
+                        "lg": "24px",
+                        "xl": "32px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Montserrat"],
+                        "label-lg": ["Montserrat"],
+                        "headline-lg": ["Montserrat"],
+                        "headline-sm": ["Montserrat"],
+                        "label-sm": ["Montserrat"],
+                        "body-lg": ["Montserrat"],
+                        "display-lg": ["Montserrat"],
+                        "headline-md": ["Montserrat"],
+                        "headline-lg-mobile": ["Montserrat"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-lg": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1;
+        }
+        
+        /* Ambient Shadows */
+        .shadow-level-1 {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+        }
+        .shadow-level-2 {
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-lg antialiased overflow-x-hidden min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="h-screen w-64 fixed left-0 top-0 bg-surface border-r border-outline-variant shadow-sm z-40 flex flex-col py-6">
+<!-- Brand -->
+<div class="px-6 mb-8 flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container font-headline-sm font-bold">
+                D
+            </div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">DrKam</h1>
+<p class="font-label-sm text-label-sm text-secondary tracking-widest uppercase">TEAM MEDIA</p>
+</div>
+</div>
+<!-- Navigation Links -->
+<div class="flex-1 flex flex-col gap-1 px-2 font-label-lg text-label-lg">
+<a class="flex items-center gap-3 px-4 py-3 text-secondary font-medium hover:bg-surface-container-high transition-colors duration-200 rounded-lg mx-2" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="dashboard">dashboard</span>
+<span>Tổng quan Media</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary font-medium hover:bg-surface-container-high transition-colors duration-200 rounded-lg mx-2" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="assessment">assessment</span>
+<span>Báo cáo ngày</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary font-medium hover:bg-surface-container-high transition-colors duration-200 rounded-lg mx-2" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="assignment">assignment</span>
+<span>Nhật ký công việc</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary font-medium hover:bg-surface-container-high transition-colors duration-200 rounded-lg mx-2" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="monitoring">monitoring</span>
+<span>KPI tháng</span>
+</a>
+<!-- Active Tab -->
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-fixed text-primary border-l-4 border-primary rounded-r-lg font-semibold mx-2 hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px] icon-fill" data-icon="lightbulb">lightbulb</span>
+<span>Đề xuất cải tiến</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Wrapper -->
+<div class="flex-1 ml-64 flex flex-col min-h-screen">
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] z-50 bg-surface/80 backdrop-blur-md shadow-sm h-16 px-8 flex justify-between items-center border-b border-outline-variant/30">
+<!-- Left: Search (from JSON config) -->
+<div class="flex items-center relative w-64">
+<span class="material-symbols-outlined absolute left-3 text-secondary text-[20px]">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-lowest border-1.5 border-outline-variant rounded-xl font-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all" placeholder="Tìm kiếm..." type="text"/>
+</div>
+<!-- Right: Actions & Profile -->
+<div class="flex items-center gap-6">
+<button class="text-on-surface-variant hover:text-primary transition-colors relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-primary rounded-full border border-surface"></span>
+</button>
+<div class="flex items-center gap-3 border-l border-outline-variant pl-6">
+<div class="text-right hidden md:block">
+<p class="font-label-sm text-label-sm font-semibold text-on-surface">Nguyễn Trọng Khải</p>
+<p class="font-label-sm text-[10px] text-primary">Leader</p>
+</div>
+<div class="w-9 h-9 rounded-full border-2 border-primary overflow-hidden">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="A professional headshot of an Asian male in a modern office environment, warm bright lighting, wearing a smart casual dark shirt, sharp focus, corporate modern style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB1OpWdznWltWgfYYaPtgavFjTkjDzESaGLXtV6hNRxdhWf2woWpOHdYPM8eL6CNxKwWNvXc8iH7qjlFVHmb2idgOQTRPfXhcJEQT4l87gglSvkpiESLcF8bxPaZ007AJ5Yp6S7RBvRtbWNhbIUwvS2TlOhO_-iDCH4qplIRUVQ6sjQduuKhuptSxlfeimfTOfwY4zUNLj4bIYDgSbbeb8QQ77BzJY-uVq6THyGffYoP_j_kzPIbGRBEA"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Page Content Canvas -->
+<main class="flex-1 p-8 mt-16 bg-background">
+<!-- Page Header Controls -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-background mb-1">Đề xuất cải tiến</h2>
+<p class="font-body-md text-body-md text-secondary">Quản lý và theo dõi các sáng kiến nâng cao hiệu suất làm việc.</p>
+</div>
+<div class="flex items-center gap-4">
+<!-- Month Selector -->
+<div class="relative">
+<select class="appearance-none bg-surface-container-lowest border-1.5 border-outline-variant text-on-surface font-label-lg text-label-lg rounded-xl pl-4 pr-10 py-2.5 hover:border-outline focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-sm">
+<option value="10-2023">Tháng 10/2023</option>
+<option value="09-2023">Tháng 09/2023</option>
+<option value="08-2023">Tháng 08/2023</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-secondary pointer-events-none text-[20px]">calendar_month</span>
+</div>
+<!-- Add Button -->
+<button class="bg-primary hover:bg-surface-tint text-on-primary font-label-lg text-label-lg px-5 py-2.5 rounded-xl shadow-level-1 hover:shadow-level-2 transition-all duration-200 flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                        Thêm đề xuất
+                    </button>
+</div>
+</div>
+<!-- Content Grid (Cards Layout prioritizing High Priority) -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+<!-- Card 1: High Priority (Chưa có review nội bộ) -->
+<article class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-level-1 relative overflow-hidden flex flex-col group hover:shadow-level-2 transition-shadow duration-300">
+<!-- Accent Bar -->
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-error"></div>
+<div class="p-5 flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-4">
+<!-- Priority Badge -->
+<div class="bg-error-container text-on-error-container px-3 py-1 rounded-full font-label-sm text-[11px] font-bold uppercase tracking-wider flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">priority_high</span>
+                                Ưu tiên: Cao
+                            </div>
+<button class="text-secondary hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</div>
+<div class="mb-4 flex-1">
+<h3 class="font-headline-sm text-headline-sm text-on-background mb-2">Chưa có review nội bộ</h3>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">
+<span class="font-semibold text-on-surface">Đề xuất:</span> Thêm bước leader duyệt bản draft trên frame.io trước khi publish.
+                            </p>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant/30">
+<div class="flex items-start gap-2 text-primary-container">
+<span class="material-symbols-outlined text-[18px] mt-0.5">trending_up</span>
+<p class="font-body-md text-[13px] font-medium leading-tight">
+                                    Giảm thiểu sai sót, nâng cao chất lượng content đầu ra.
+                                </p>
+</div>
+</div>
+</div>
+</article>
+<!-- Card 2: High Priority (Quá tải nhân sự) -->
+<article class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-level-1 relative overflow-hidden flex flex-col group hover:shadow-level-2 transition-shadow duration-300">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-error"></div>
+<div class="p-5 flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-4">
+<div class="bg-error-container text-on-error-container px-3 py-1 rounded-full font-label-sm text-[11px] font-bold uppercase tracking-wider flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">priority_high</span>
+                                Ưu tiên: Cao
+                            </div>
+<button class="text-secondary hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</div>
+<div class="mb-4 flex-1">
+<h3 class="font-headline-sm text-headline-sm text-on-background mb-2">Quá tải nhân sự edit video</h3>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">
+<span class="font-semibold text-on-surface">Đề xuất:</span> Thuê thêm freelancer theo dự án hoặc tuyển thêm 1 intern.
+                            </p>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant/30">
+<div class="flex items-start gap-2 text-primary-container">
+<span class="material-symbols-outlined text-[18px] mt-0.5">trending_up</span>
+<p class="font-body-md text-[13px] font-medium leading-tight">
+                                    Đảm bảo tiến độ ra video, giảm tình trạng burnout cho team hiện tại.
+                                </p>
+</div>
+</div>
+</div>
+</article>
+<!-- Card 3: Medium Priority (Thiếu thư viện template) -->
+<article class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-level-1 relative overflow-hidden flex flex-col group hover:shadow-level-2 transition-shadow duration-300">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary"></div>
+<div class="p-5 flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-4">
+<div class="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full font-label-sm text-[11px] font-bold uppercase tracking-wider flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">drag_handle</span>
+                                Ưu tiên: Trung bình
+                            </div>
+<button class="text-secondary hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</div>
+<div class="mb-4 flex-1">
+<h3 class="font-headline-sm text-headline-sm text-on-background mb-2">Thiếu thư viện template</h3>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">
+<span class="font-semibold text-on-surface">Đề xuất:</span> Xây dựng kho motion graphics, text template và SFX dùng chung trên NAS.
+                            </p>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant/30">
+<div class="flex items-start gap-2 text-secondary">
+<span class="material-symbols-outlined text-[18px] mt-0.5">trending_up</span>
+<p class="font-body-md text-[13px] font-medium leading-tight">
+                                    Tăng tốc độ dựng 30%, đồng bộ branding cho mọi ấn phẩm.
+                                </p>
+</div>
+</div>
+</div>
+</article>
+<!-- Add New Placeholder Card (Optional UX element) -->
+<article class="bg-surface-container/30 rounded-xl border-2 border-dashed border-outline-variant shadow-none flex flex-col items-center justify-center p-8 min-h-[220px] cursor-pointer hover:bg-surface-container hover:border-primary transition-all duration-200 group">
+<div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center text-primary mb-3 group-hover:bg-primary-container group-hover:text-on-primary-container transition-colors">
+<span class="material-symbols-outlined text-[24px]">add</span>
+</div>
+<p class="font-label-lg text-label-lg text-secondary group-hover:text-primary transition-colors">Tạo đề xuất mới</p>
+</article>
+</div>
+</main>
+</div>
+</body></html>

@@ -14,6 +14,9 @@ import {
   AuditLog,
   FbPage,
   ChecklistItem,
+  MediaTaskLog,
+  MediaKpiEntry,
+  MediaImprovement,
 } from '../types';
 
 type ChannelRow = Database['public']['Tables']['channels']['Row'];
@@ -23,6 +26,9 @@ type TargetRow = Database['public']['Tables']['targets']['Row'];
 type LogRow = Database['public']['Tables']['audit_logs']['Row'];
 type FbPageRow = Database['public']['Tables']['fb_pages']['Row'];
 type ChecklistRow = Database['public']['Tables']['content_checklists']['Row'];
+type MediaLogRow = Database['public']['Tables']['media_task_logs']['Row'];
+type MediaKpiRow = Database['public']['Tables']['media_kpi_entries']['Row'];
+type MediaImprovementRow = Database['public']['Tables']['media_improvements']['Row'];
 
 /**
  * Quy ước nguồn doanh thu (source_platform) suy từ loại kênh của báo cáo.
@@ -179,6 +185,19 @@ export function reportToInsert(
 }
 
 // ── PROFILES ↔ Employee ───────────────────────────────────────
+// Avatar dự phòng (data-URI) khi hồ sơ chưa có ảnh — tránh <img src="">
+// (tài khoản tạo qua Supabase Auth chưa gán avatar). Sinh vòng tròn chữ cái đầu.
+function initialsAvatar(name: string): string {
+  const initials =
+    name.trim().split(/\s+/).slice(-2).map((w) => w[0] || '').join('').toUpperCase() || '?';
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>` +
+    `<rect width='64' height='64' rx='32' fill='#D32027'/>` +
+    `<text x='50%' y='50%' dy='.35em' text-anchor='middle' font-family='Arial,sans-serif' font-size='26' font-weight='bold' fill='white'>${initials}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 export function employeeFromRow(r: ProfileRow): Employee {
   return {
     id: r.id,
@@ -188,7 +207,7 @@ export function employeeFromRow(r: ProfileRow): Employee {
     department: r.department ?? '',
     status: r.status,
     channelCount: r.channel_count,
-    avatar: r.avatar ?? '',
+    avatar: r.avatar || initialsAvatar(r.name),
   };
 }
 
@@ -283,4 +302,161 @@ export function checklistToInsert(
     quantity: item.quantity,
     created_by: createdBy,
   };
+}
+
+// ── MEDIA: BÁO CÁO NGÀY (dòng công việc) ──────────────────────
+export function mediaLogFromRow(r: MediaLogRow): MediaTaskLog {
+  return {
+    id: r.id,
+    date: toUiDate(r.log_date),
+    employeeId: r.employee_id,
+    employeeName: r.employee_name ?? '',
+    contentType: r.content_type ?? 'Khác',
+    scriptNo: r.script_no ?? undefined,
+    task: r.task ?? '',
+    quantity: r.quantity,
+    progress: r.progress,
+    productLink: r.product_link ?? undefined,
+    deadline: r.deadline ?? undefined,
+    note: r.note ?? undefined,
+    approval: r.approval ?? undefined,
+  };
+}
+
+export function mediaLogToInsert(
+  item: MediaTaskLog,
+  createdBy: string,
+): Database['public']['Tables']['media_task_logs']['Insert'] {
+  return {
+    log_date: toDbDate(item.date),
+    employee_id: item.employeeId,
+    employee_name: item.employeeName || '',
+    content_type: item.contentType || 'Khác',
+    script_no: item.scriptNo ?? null,
+    task: item.task || '',
+    quantity: item.quantity ?? null,
+    progress: item.progress,
+    product_link: item.productLink ?? null,
+    deadline: item.deadline ?? null,
+    note: item.note ?? null,
+    approval: item.approval ?? null,
+    created_by: createdBy,
+  };
+}
+
+export function mediaLogToUpdate(
+  patch: Partial<MediaTaskLog>,
+): Database['public']['Tables']['media_task_logs']['Update'] {
+  const u: Database['public']['Tables']['media_task_logs']['Update'] = {};
+  if (patch.date !== undefined) u.log_date = toDbDate(patch.date);
+  if (patch.employeeName !== undefined) u.employee_name = patch.employeeName;
+  if (patch.contentType !== undefined) u.content_type = patch.contentType;
+  if (patch.scriptNo !== undefined) u.script_no = patch.scriptNo ?? null;
+  if (patch.task !== undefined) u.task = patch.task;
+  if (patch.quantity !== undefined) u.quantity = patch.quantity ?? null;
+  if (patch.progress !== undefined) u.progress = patch.progress;
+  if (patch.productLink !== undefined) u.product_link = patch.productLink ?? null;
+  if (patch.deadline !== undefined) u.deadline = patch.deadline ?? null;
+  if (patch.note !== undefined) u.note = patch.note ?? null;
+  if (patch.approval !== undefined) u.approval = patch.approval ?? null;
+  return u;
+}
+
+// ── MEDIA: KPI THÁNG ──────────────────────────────────────────
+export function mediaKpiFromRow(r: MediaKpiRow): MediaKpiEntry {
+  return {
+    id: r.id,
+    period: r.period,
+    employeeId: r.employee_id,
+    employeeName: r.employee_name ?? '',
+    roleScope: r.role_scope,
+    stt: r.stt,
+    groupName: r.group_name ?? '',
+    metric: r.metric ?? '',
+    targetValue: r.target_value,
+    unit: r.unit,
+    weight: r.weight,
+    actualValue: r.actual_value,
+    note: r.note ?? undefined,
+  };
+}
+
+export function mediaKpiToInsert(
+  e: MediaKpiEntry,
+  createdBy: string,
+): Database['public']['Tables']['media_kpi_entries']['Insert'] {
+  return {
+    period: e.period,
+    employee_id: e.employeeId,
+    employee_name: e.employeeName || '',
+    role_scope: e.roleScope,
+    stt: e.stt,
+    group_name: e.groupName || '',
+    metric: e.metric || '',
+    target_value: e.targetValue,
+    unit: e.unit,
+    weight: e.weight,
+    actual_value: e.actualValue,
+    note: e.note ?? null,
+    created_by: createdBy,
+  };
+}
+
+export function mediaKpiToUpdate(
+  patch: Partial<MediaKpiEntry>,
+): Database['public']['Tables']['media_kpi_entries']['Update'] {
+  const u: Database['public']['Tables']['media_kpi_entries']['Update'] = {};
+  if (patch.period !== undefined) u.period = patch.period;
+  if (patch.employeeName !== undefined) u.employee_name = patch.employeeName;
+  if (patch.roleScope !== undefined) u.role_scope = patch.roleScope;
+  if (patch.stt !== undefined) u.stt = patch.stt;
+  if (patch.groupName !== undefined) u.group_name = patch.groupName;
+  if (patch.metric !== undefined) u.metric = patch.metric;
+  if (patch.targetValue !== undefined) u.target_value = patch.targetValue;
+  if (patch.unit !== undefined) u.unit = patch.unit;
+  if (patch.weight !== undefined) u.weight = patch.weight;
+  if (patch.actualValue !== undefined) u.actual_value = patch.actualValue;
+  if (patch.note !== undefined) u.note = patch.note ?? null;
+  return u;
+}
+
+// ── MEDIA: ĐỀ XUẤT CẢI TIẾN ───────────────────────────────────
+export function mediaImprovementFromRow(r: MediaImprovementRow): MediaImprovement {
+  return {
+    id: r.id,
+    period: r.period,
+    stt: r.stt,
+    issue: r.issue ?? '',
+    proposal: r.proposal ?? '',
+    benefit: r.benefit ?? '',
+    priority: r.priority,
+  };
+}
+
+export function mediaImprovementToInsert(
+  item: MediaImprovement,
+  createdBy: string,
+): Database['public']['Tables']['media_improvements']['Insert'] {
+  return {
+    period: item.period,
+    stt: item.stt,
+    issue: item.issue || '',
+    proposal: item.proposal || '',
+    benefit: item.benefit ?? null,
+    priority: item.priority,
+    created_by: createdBy,
+  };
+}
+
+export function mediaImprovementToUpdate(
+  patch: Partial<MediaImprovement>,
+): Database['public']['Tables']['media_improvements']['Update'] {
+  const u: Database['public']['Tables']['media_improvements']['Update'] = {};
+  if (patch.period !== undefined) u.period = patch.period;
+  if (patch.stt !== undefined) u.stt = patch.stt;
+  if (patch.issue !== undefined) u.issue = patch.issue;
+  if (patch.proposal !== undefined) u.proposal = patch.proposal;
+  if (patch.benefit !== undefined) u.benefit = patch.benefit ?? null;
+  if (patch.priority !== undefined) u.priority = patch.priority;
+  return u;
 }

@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Báo cáo ngày - TEAM MEDIA</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-container": "#6b6d6e",
+                        "surface": "#fff8f7",
+                        "primary-container": "#d32027",
+                        "on-surface": "#281716",
+                        "on-primary-fixed-variant": "#930010",
+                        "surface-dim": "#f2d3d0",
+                        "on-secondary-fixed-variant": "#474746",
+                        "inverse-surface": "#3f2c2a",
+                        "surface-bright": "#fff8f7",
+                        "secondary-container": "#e2dfde",
+                        "on-primary-fixed": "#410003",
+                        "secondary-fixed": "#e5e2e1",
+                        "surface-container-low": "#fff0ef",
+                        "surface-container": "#ffe9e7",
+                        "on-error": "#ffffff",
+                        "error": "#ba1a1a",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#ffb3ad",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-container": "#eeeff0",
+                        "tertiary-fixed": "#e1e3e4",
+                        "error-container": "#ffdad6",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#454748",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "tertiary-fixed-dim": "#c5c7c8",
+                        "secondary": "#5f5e5e",
+                        "surface-container-highest": "#fbdbd8",
+                        "on-tertiary-fixed": "#191c1d",
+                        "inverse-on-surface": "#ffedeb",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed-dim": "#ffb3ad",
+                        "outline-variant": "#e5bdb9",
+                        "outline": "#916f6c",
+                        "primary-fixed": "#ffdad6",
+                        "primary": "#ac0015",
+                        "on-background": "#281716",
+                        "on-secondary-container": "#636262",
+                        "tertiary": "#525556",
+                        "on-primary-container": "#ffeae8",
+                        "background": "#fff8f7",
+                        "surface-container-high": "#ffe2de",
+                        "on-surface-variant": "#5c403d",
+                        "surface-tint": "#be091b",
+                        "surface-variant": "#fbdbd8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "sm": "8px",
+                        "gutter": "20px",
+                        "md": "16px",
+                        "unit": "4px",
+                        "container-max": "1440px",
+                        "lg": "24px",
+                        "xl": "32px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Montserrat"],
+                        "label-lg": ["Montserrat"],
+                        "headline-lg": ["Montserrat"],
+                        "headline-sm": ["Montserrat"],
+                        "label-sm": ["Montserrat"],
+                        "body-lg": ["Montserrat"],
+                        "display-lg": ["Montserrat"],
+                        "headline-md": ["Montserrat"],
+                        "headline-lg-mobile": ["Montserrat"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-lg": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Montserrat', sans-serif; }
+        .shadow-soft {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+        }
+        .shadow-hover {
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        }
+        .card-accent {
+            border-left: 4px solid var(--tw-colors-primary);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased">
+<!-- SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r border-outline-variant dark:border-outline shadow-sm bg-surface dark:bg-surface-container-low z-40">
+<div class="flex flex-col h-full py-6">
+<!-- Brand -->
+<div class="px-6 mb-8">
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">DrKam</h1>
+<p class="font-label-lg text-label-lg text-on-surface-variant mt-xs">TEAM MEDIA</p>
+</div>
+<!-- Nav Links -->
+<nav class="flex-1 flex flex-col gap-sm">
+<!-- Inactive -->
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim font-medium hover:bg-surface-container-high dark:hover:bg-tertiary-container transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">dashboard</span>
+<span class="font-label-lg text-label-lg">Tổng quan Media</span>
+</a>
+<!-- Active: Báo cáo ngày -->
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-fixed dark:bg-primary-container text-primary dark:text-on-primary-container border-l-4 border-primary dark:border-primary-fixed rounded-r-lg font-semibold scale-[0.98] transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">assessment</span>
+<span class="font-label-lg text-label-lg">Báo cáo ngày</span>
+</a>
+<!-- Inactive -->
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim font-medium hover:bg-surface-container-high dark:hover:bg-tertiary-container transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">assignment</span>
+<span class="font-label-lg text-label-lg">Nhật ký công việc</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim font-medium hover:bg-surface-container-high dark:hover:bg-tertiary-container transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">monitoring</span>
+<span class="font-label-lg text-label-lg">KPI tháng</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim font-medium hover:bg-surface-container-high dark:hover:bg-tertiary-container transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">lightbulb</span>
+<span class="font-label-lg text-label-lg">Đề xuất cải tiến</span>
+</a>
+</nav>
+</div>
+</aside>
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] z-50 bg-surface/80 dark:bg-surface-container/80 backdrop-blur-md shadow-sm">
+<div class="flex justify-between items-center h-16 px-8 ml-64">
+<!-- Left: Search (Hidden in this context, focusing on title) -->
+<div class="flex items-center gap-md text-primary dark:text-primary-fixed">
+<span class="font-headline-sm text-headline-sm font-bold border-b-2 border-primary pb-xs">BÁO CÁO NGÀY</span>
+</div>
+<!-- Right: Actions & Profile -->
+<div class="flex items-center gap-lg">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="flex items-center gap-sm">
+<img alt="Nguyễn Trọng Khải - Leader" class="w-10 h-10 rounded-full object-cover border-2 border-primary" data-alt="A professional corporate headshot of a young male leader, brightly lit with a clean white background, wearing a smart casual blazer. High resolution, modern aesthetic, subtle depth of field." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBdKo1e3PdWBoCRQXtqQ5H2TxdBGowIKjzUkU2sPpFcvm0rAmQUVmkYspTRecQ2vTIbN3OI9E-xzPBcXgnjwMVDkG1ARtyLOiP4XXEhe6emRsuBdgAGKOkbPTRw46XSfS2KUZCEFwr4-Gj3HRnoBShXlpg81Ay5AAeuw7W2uFT7UknhVc8Nyl_LF0NuaSwIn6nau88bDQNieyOoQXNUPeV4ehLB0gAImHvPlw7R8BKujH3G9ZOHVBGaGw"/>
+<div class="hidden lg:block text-right">
+<p class="font-label-sm text-label-sm font-semibold text-on-surface">Nguyễn Trọng Khải</p>
+<p class="font-label-sm text-label-sm text-primary">Leader</p>
+</div>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-64 pt-24 px-lg pb-xl min-h-screen">
+<div class="max-w-container-max mx-auto space-y-lg">
+<!-- Date Picker Row -->
+<section class="flex justify-between items-center bg-white p-4 rounded-xl shadow-soft border border-secondary-fixed">
+<div class="flex items-center gap-md">
+<label class="font-label-lg text-label-lg text-on-surface-variant" for="report-date">Chọn ngày:</label>
+<div class="relative">
+<input class="pl-4 pr-10 py-2 rounded-lg border-1.5 border-secondary-fixed bg-surface text-on-surface font-body-md focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all" id="report-date" type="date" value="2024-05-20"/>
+</div>
+</div>
+<button class="bg-primary text-white font-label-lg text-label-lg px-6 py-2 rounded-lg hover:bg-on-primary-fixed-variant transition-colors shadow-sm">
+                    Hôm nay
+                </button>
+</section>
+<!-- Data Entry Cards (Bento Grid Style) -->
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-lg">
+<!-- Card: Khải (Leader) -->
+<article class="bg-white rounded-2xl shadow-soft border border-secondary-fixed p-6 relative overflow-hidden group hover:shadow-hover transition-shadow">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
+<div class="flex justify-between items-start mb-6 border-b border-surface-container-highest pb-4">
+<div class="flex items-center gap-md">
+<img alt="Khải" class="w-12 h-12 rounded-full object-cover border-2 border-primary" data-alt="A small circular avatar of a male team leader, professional lighting, clean white background, confident expression." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD-pwbULsRbtGWYws5W6aDOkFGXSkdQm0UNs0BkmJmZuDz3fQNrFlbb1jbpWOfqm-5uNxViJmGuGqKpCpBntPpG8MT4uTEU65JSniGN2gXuuQx-k7ccXFwHDD_9ivlCz-XgMJWzA7o_iqZX3WeRjLScDSslkjbxzE7GhbIEPbAyW2ktjEDh37SUDzne55p507suvGjxEmmEHZqzusn70rIbVqX8uh0MZ-6svs18p9Tv964rNWZxAexw-A"/>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Khải</h3>
+<span class="inline-flex items-center px-2 py-1 rounded-full bg-primary-container text-primary font-label-sm text-[10px] uppercase tracking-wider font-bold mt-1">Leader</span>
+</div>
+</div>
+<div class="text-right">
+<p class="font-label-sm text-label-sm text-on-surface-variant mb-1">Tổng video</p>
+<div class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary text-white font-headline-sm text-headline-sm font-bold">
+                                4
+                            </div>
+</div>
+</div>
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-5">
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">Branding</label>
+<input class="w-full rounded-lg border-secondary-fixed py-1.5 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" min="0" type="number" value="1"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">BS Nguyên</label>
+<input class="w-full rounded-lg border-secondary-fixed py-1.5 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" min="0" type="number" value="1"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">Bán hàng</label>
+<input class="w-full rounded-lg border-secondary-fixed py-1.5 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" min="0" type="number" value="0"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">Xào KOC</label>
+<input class="w-full rounded-lg border-secondary-fixed py-1.5 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" min="0" type="number" value="2"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">ADS FB</label>
+<input class="w-full rounded-lg border-secondary-fixed py-1.5 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" min="0" type="number" value="0"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">FB Daily</label>
+<input class="w-full rounded-lg border-secondary-fixed py-1.5 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" min="0" type="number" value="0"/>
+</div>
+<div class="col-span-2 sm:col-span-3 flex flex-col gap-1 mt-2">
+<label class="font-label-sm text-label-sm text-on-surface-variant">Reach (Tổng view)</label>
+<input class="w-full rounded-lg border-secondary-fixed py-2 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" type="text" value="125,000"/>
+</div>
+<div class="col-span-2 sm:col-span-3 flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">Ghi chú</label>
+<input class="w-full rounded-lg border-secondary-fixed py-2 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" placeholder="Thêm ghi chú..." type="text"/>
+</div>
+</div>
+<div class="mt-6 pt-4 border-t border-surface-container-highest flex justify-end">
+<button class="bg-white text-primary border border-primary font-label-lg text-label-lg px-4 py-1.5 rounded-lg hover:bg-primary-container transition-colors">
+                            Lưu nháp
+                        </button>
+</div>
+</article>
+<!-- Card: Sơn (Nhân viên) -->
+<article class="bg-white rounded-2xl shadow-soft border border-secondary-fixed p-6 relative overflow-hidden group hover:shadow-hover transition-shadow">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-tertiary-fixed-dim"></div>
+<div class="flex justify-between items-start mb-6 border-b border-surface-container-highest pb-4">
+<div class="flex items-center gap-md">
+<img alt="Sơn" class="w-12 h-12 rounded-full object-cover bg-surface-container-highest" data-alt="A small circular avatar of a young male creative staff member, relaxed professional setting, clean white background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2iN567VrfZWtKrEeO1bjHb1_6yz9HOC6HhLWVknlV3XyPHzswr94ZPpcevm2fjH75tSI5tBQMxTpEn-eo-RIwSG3gnm_VTptdTIxQYv0weEt0TPDwQ6girgKcEUzoht4DyEjePeJHcChdE58fIk-H7kyKW2V8BQOjCympjqt7fysoAjOmr2mAV3WbSKsepRweQpYFsDHOyMLIv6v1HKr-4RAAdD1m9UTsBzLuEwCpRFGzRj4UdKgMQw"/>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Sơn</h3>
+<span class="inline-flex items-center px-2 py-1 rounded-full bg-secondary-fixed text-on-surface-variant font-label-sm text-[10px] uppercase tracking-wider font-bold mt-1">Editor</span>
+</div>
+</div>
+<div class="text-right">
+<p class="font-label-sm text-label-sm text-on-surface-variant mb-1">Tổng video</p>
+<div class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-tertiary-container text-white font-headline-sm text-headline-sm font-bold">
+                                6
+                            </div>
+</div>
+</div>
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-5">
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">Branding</label>
+<input class="w-full rounded-lg border-secondary-fixed py-1.5 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" min="0" type="number" value="0"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">BS Nguyên</label>
+<input class="w-full rounded-lg border-secondary-fixed py-1.5 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" min="0" type="number" value="0"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">Bán hàng</label>
+<input class="w-full rounded-lg border-secondary-fixed py-1.5 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" min="0" type="number" value="2"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">Xào KOC</label>
+<input class="w-full rounded-lg border-secondary-fixed py-1.5 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" min="0" type="number" value="1"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">ADS FB</label>
+<input class="w-full rounded-lg border-secondary-fixed py-1.5 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" min="0" type="number" value="2"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">FB Daily</label>
+<input class="w-full rounded-lg border-secondary-fixed py-1.5 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" min="0" type="number" value="1"/>
+</div>
+<div class="col-span-2 sm:col-span-3 flex flex-col gap-1 mt-2">
+<label class="font-label-sm text-label-sm text-on-surface-variant">Reach (Tổng view)</label>
+<input class="w-full rounded-lg border-secondary-fixed py-2 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" type="text" value="85,000"/>
+</div>
+<div class="col-span-2 sm:col-span-3 flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant">Ghi chú</label>
+<input class="w-full rounded-lg border-secondary-fixed py-2 px-3 font-body-md focus:ring-primary focus:border-primary bg-surface-container-lowest" placeholder="Tập trung cắt clip ADS..." type="text"/>
+</div>
+</div>
+<div class="mt-6 pt-4 border-t border-surface-container-highest flex justify-end">
+<button class="bg-white text-primary border border-primary font-label-lg text-label-lg px-4 py-1.5 rounded-lg hover:bg-primary-container transition-colors">
+                            Lưu nháp
+                        </button>
+</div>
+</article>
+</div>
+<!-- Global Action -->
+<div class="flex justify-end pt-4">
+<button class="bg-primary text-white font-headline-sm text-headline-sm px-8 py-3 rounded-xl shadow-md hover:bg-on-primary-fixed-variant hover:shadow-lg transition-all flex items-center gap-2">
+<span class="material-symbols-outlined">send</span>
+                    GỬI BÁO CÁO NGÀY
+                </button>
+</div>
+<!-- History Table Section -->
+<section class="bg-white rounded-2xl shadow-soft border border-secondary-fixed overflow-hidden mt-xl">
+<div class="p-6 border-b border-surface-container-highest flex justify-between items-center bg-surface-container-lowest">
+<h2 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">history</span>
+                        Lịch sử báo cáo ngày
+                    </h2>
+<button class="text-primary font-label-lg text-label-lg hover:underline">Xuất Excel</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low text-on-surface-variant border-b border-secondary-fixed">
+<th class="py-4 px-6 font-label-lg text-label-lg whitespace-nowrap">Ngày</th>
+<th class="py-4 px-6 font-label-lg text-label-lg">Nhân sự</th>
+<th class="py-4 px-6 font-label-lg text-label-lg text-center">Branding</th>
+<th class="py-4 px-6 font-label-lg text-label-lg text-center">BS Nguyên</th>
+<th class="py-4 px-6 font-label-lg text-label-lg text-center">Bán hàng</th>
+<th class="py-4 px-6 font-label-lg text-label-lg text-center">Xào KOC</th>
+<th class="py-4 px-6 font-label-lg text-label-lg text-center">ADS FB</th>
+<th class="py-4 px-6 font-label-lg text-label-lg text-center">FB Daily</th>
+<th class="py-4 px-6 font-label-lg text-label-lg text-center bg-primary-container/20 font-bold text-primary">TỔNG</th>
+<th class="py-4 px-6 font-label-lg text-label-lg text-right">Reach</th>
+<th class="py-4 px-6 font-label-lg text-label-lg w-64">Ghi chú</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-on-surface divide-y divide-surface-container-highest">
+<!-- Row 1 -->
+<tr class="hover:bg-surface transition-colors">
+<td class="py-3 px-6 whitespace-nowrap text-on-surface-variant">19/05/2024</td>
+<td class="py-3 px-6 font-medium">Khải</td>
+<td class="py-3 px-6 text-center text-secondary">2</td>
+<td class="py-3 px-6 text-center text-secondary">1</td>
+<td class="py-3 px-6 text-center text-secondary">-</td>
+<td class="py-3 px-6 text-center text-secondary">1</td>
+<td class="py-3 px-6 text-center text-secondary">-</td>
+<td class="py-3 px-6 text-center text-secondary">1</td>
+<td class="py-3 px-6 text-center font-bold text-primary bg-primary-container/10">5</td>
+<td class="py-3 px-6 text-right font-medium">150,200</td>
+<td class="py-3 px-6 text-sm text-on-surface-variant truncate max-w-xs" title="Video Branding lên xu hướng">Video Branding lên xu hướng</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface transition-colors">
+<td class="py-3 px-6 whitespace-nowrap text-on-surface-variant">19/05/2024</td>
+<td class="py-3 px-6 font-medium">Sơn</td>
+<td class="py-3 px-6 text-center text-secondary">-</td>
+<td class="py-3 px-6 text-center text-secondary">-</td>
+<td class="py-3 px-6 text-center text-secondary">3</td>
+<td class="py-3 px-6 text-center text-secondary">2</td>
+<td class="py-3 px-6 text-center text-secondary">2</td>
+<td class="py-3 px-6 text-center text-secondary">-</td>
+<td class="py-3 px-6 text-center font-bold text-primary bg-primary-container/10">7</td>
+<td class="py-3 px-6 text-right font-medium">92,000</td>
+<td class="py-3 px-6 text-sm text-on-surface-variant truncate max-w-xs">Hoàn thành KPI ADS</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface transition-colors">
+<td class="py-3 px-6 whitespace-nowrap text-on-surface-variant">18/05/2024</td>
+<td class="py-3 px-6 font-medium">Khải</td>
+<td class="py-3 px-6 text-center text-secondary">1</td>
+<td class="py-3 px-6 text-center text-secondary">2</td>
+<td class="py-3 px-6 text-center text-secondary">1</td>
+<td class="py-3 px-6 text-center text-secondary">-</td>
+<td class="py-3 px-6 text-center text-secondary">-</td>
+<td class="py-3 px-6 text-center text-secondary">-</td>
+<td class="py-3 px-6 text-center font-bold text-primary bg-primary-container/10">4</td>
+<td class="py-3 px-6 text-right font-medium">110,500</td>
+<td class="py-3 px-6 text-sm text-on-surface-variant truncate max-w-xs">-</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface transition-colors">
+<td class="py-3 px-6 whitespace-nowrap text-on-surface-variant">18/05/2024</td>
+<td class="py-3 px-6 font-medium">Sơn</td>
+<td class="py-3 px-6 text-center text-secondary">-</td>
+<td class="py-3 px-6 text-center text-secondary">1</td>
+<td class="py-3 px-6 text-center text-secondary">1</td>
+<td class="py-3 px-6 text-center text-secondary">3</td>
+<td class="py-3 px-6 text-center text-secondary">1</td>
+<td class="py-3 px-6 text-center text-secondary">2</td>
+<td class="py-3 px-6 text-center font-bold text-primary bg-primary-container/10">8</td>
+<td class="py-3 px-6 text-right font-medium">105,000</td>
+<td class="py-3 px-6 text-sm text-on-surface-variant truncate max-w-xs">Xào KOC hơi đuối</td>
+</tr>
+</tbody>
+<!-- Footer Summary Row -->
+<tfoot class="bg-primary text-white">
+<tr>
+<td class="py-4 px-6 font-headline-sm text-headline-sm text-right font-bold tracking-wide" colspan="8">
+                                    TỔNG THÁNG
+                                </td>
+<td class="py-4 px-6 text-center font-headline-lg text-headline-lg font-extrabold bg-on-primary-fixed-variant">
+                                    218
+                                </td>
+<td class="py-4 px-6 font-body-md italic text-primary-fixed-dim" colspan="2">
+                                    *Số liệu tính đến ngày hiện tại
+                                </td>
+</tr>
+</tfoot>
+</table>
+</div>
+</section>
+</div>
+</main>
+</body></html>

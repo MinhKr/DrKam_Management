@@ -1,0 +1,75 @@
+/**
+ * Tiện ích dùng chung cho module TEAM MEDIA.
+ * Báo cáo ngày = các dòng công việc (MediaTaskLog). Số lượng video TỰ ĐẾM từ các dòng
+ * có Content là loại video (không tính "Khác").
+ * Công thức KPI (chốt với user): Điểm = Trọng số × (Đạt% ÷ 100), Đạt% chặn trần 120%.
+ * Xếp loại theo tổng điểm: > 100 Xuất sắc · 80–100 Đạt · 60–79 Cần cố gắng · < 60 Cần cải thiện.
+ */
+import {
+  MediaKpiEntry,
+  MediaTaskLog,
+  MEDIA_VIDEO_TYPES,
+} from '../types';
+
+export const KPI_CAP = 120;
+
+const VIDEO_LABELS: string[] = MEDIA_VIDEO_TYPES.map((t) => t.label);
+/** Một dòng công việc được tính là "video" khi Content là 1 trong 6 loại (không phải "Khác"). */
+export const isVideoContent = (content: string): boolean => VIDEO_LABELS.includes(content);
+
+/** Số video trong danh sách dòng công việc (mỗi dòng loại video = 1 video). */
+export const countVideos = (logs: MediaTaskLog[]): number =>
+  logs.reduce((s, l) => s + (isVideoContent(l.contentType) ? 1 : 0), 0);
+
+/** Tổng video theo 6 loại — đếm số dòng công việc mỗi loại (cho donut / bảng tổng hợp). */
+export function videoTypeTotalsFromLogs(logs: MediaTaskLog[]) {
+  return MEDIA_VIDEO_TYPES.map((t) => ({
+    key: t.key,
+    label: t.label,
+    color: t.color,
+    value: logs.reduce((s, l) => s + (l.contentType === t.label ? 1 : 0), 0),
+  }));
+}
+
+// ── KPI ───────────────────────────────────────────────────────
+export const kpiAchieved = (e: MediaKpiEntry): number =>
+  e.targetValue > 0 ? (e.actualValue / e.targetValue) * 100 : 0;
+
+export const kpiScore = (e: MediaKpiEntry): number =>
+  (e.weight * Math.min(kpiAchieved(e), KPI_CAP)) / 100;
+
+export const kpiTotal = (entries: MediaKpiEntry[]): number =>
+  entries.reduce((s, e) => s + kpiScore(e), 0);
+
+export type KpiRank = { label: string; color: string };
+
+export function kpiRank(total: number): KpiRank {
+  if (total > 100) return { label: 'Xuất sắc', color: 'text-green-700 bg-green-50 border-green-200' };
+  if (total >= 80) return { label: 'Đạt', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
+  if (total >= 60) return { label: 'Cần cố gắng', color: 'text-amber-700 bg-amber-50 border-amber-200' };
+  return { label: 'Cần cải thiện', color: 'text-rose-700 bg-rose-50 border-rose-200' };
+}
+
+export function formatKpiValue(v: number, unit: MediaKpiEntry['unit']): string {
+  if (unit === 'currency') {
+    if (v >= 1_000_000) return (v / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + 'tr';
+    return v.toLocaleString('vi-VN');
+  }
+  if (unit === 'percent') return v + '%';
+  return v.toLocaleString('vi-VN');
+}
+
+// ── Ngày tháng ────────────────────────────────────────────────
+/** Lọc theo tháng 'yyyy-mm' (date dạng dd/mm/yyyy). */
+export const inPeriod = (dateDdmmyyyy: string, period: string): boolean => {
+  const [d, m, y] = dateDdmmyyyy.split('/');
+  return !!d && `${y}-${m}` === period;
+};
+
+/** Thứ trong tuần (tiếng Việt) từ ngày dd/mm/yyyy. */
+export function weekdayVi(dateDdmmyyyy: string): string {
+  const [d, m, y] = dateDdmmyyyy.split('/').map(Number);
+  if (!d || !m || !y) return '';
+  const wd = new Date(y, m - 1, d).getDay(); // 0=CN
+  return ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'][wd];
+}

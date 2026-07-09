@@ -38,6 +38,7 @@ export async function getCurrentSession(): Promise<UserSession | null> {
     email: profile?.email || user.email || '',
     role: profile?.role ?? 'Nhân viên',
     avatar: profile?.avatar || FALLBACK_AVATAR,
+    department: profile?.department ?? undefined, // 'Media' → chỉ thấy màn Media
   };
 }
 

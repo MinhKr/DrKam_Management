@@ -10,6 +10,9 @@ import {
   INITIAL_AUDIT_LOGS,
   INITIAL_FB_PAGES,
   INITIAL_CHECKLISTS,
+  INITIAL_MEDIA_LOGS,
+  INITIAL_MEDIA_KPI,
+  INITIAL_MEDIA_IMPROVEMENTS,
   UserSession,
   AffiliateChannel,
   DailyReport,
@@ -17,7 +20,10 @@ import {
   TeamTarget,
   AuditLog,
   FbPage,
-  ChecklistItem
+  ChecklistItem,
+  MediaTaskLog,
+  MediaKpiEntry,
+  MediaImprovement
 } from './types';
 
 import LoginComponent from './components/LoginComponent';
@@ -31,6 +37,9 @@ import TargetKPIComponent from './components/TargetKPIComponent';
 import DetailedStatisticsComponent from './components/DetailedStatisticsComponent';
 import AuditLogsComponent from './components/AuditLogsComponent';
 import ContentChecklistComponent from './components/ContentChecklistComponent';
+import MediaOverviewComponent from './components/MediaOverviewComponent';
+import MediaDailyReportComponent from './components/MediaDailyReportComponent';
+import MediaImprovementComponent from './components/MediaImprovementComponent';
 import { FacebookIcon, TikTokIcon } from './components/BrandIcons';
 
 import { isSupabaseConfigured } from '@/lib/supabase/client';
@@ -39,13 +48,14 @@ import { getCurrentSession, getCurrentUserId, signOut } from './data/auth';
 
 // Phiên bản dữ liệu mẫu (demo). Tăng giá trị này mỗi khi đổi dữ liệu INITIAL_* để
 // tự nạp lại trên trình duyệt cũ (xóa localStorage demo cũ), không cần xóa cache thủ công.
-const SEED_VERSION = '2026-07-06-facebook-ads-channel';
+const SEED_VERSION = '2026-07-09-media-all-nhanvien';
 let demoMigrated = false;
 function migrateDemoData() {
   if (typeof window === 'undefined') return;
   try {
     if (localStorage.getItem('drkam_seed_version') !== SEED_VERSION) {
-      ['drkam_session', 'drkam_channels', 'drkam_reports', 'drkam_employees', 'drkam_targets', 'drkam_logs', 'drkam_fb_pages']
+      ['drkam_session', 'drkam_channels', 'drkam_reports', 'drkam_employees', 'drkam_targets', 'drkam_logs', 'drkam_fb_pages',
+       'drkam_checklists', 'drkam_media_daily', 'drkam_media_logs', 'drkam_media_kpi', 'drkam_media_improvements']
         .forEach((k) => localStorage.removeItem(k));
       localStorage.setItem('drkam_seed_version', SEED_VERSION);
     }
@@ -143,6 +153,27 @@ export default function App() {
     }
   });
 
+  // ── TEAM MEDIA (giai đoạn 1: localStorage; cloud để giai đoạn 2) ──
+  // Báo cáo ngày = các dòng công việc (mediaLogs). Số video tự đếm từ đây.
+  const [mediaLogs, setMediaLogs] = useState<MediaTaskLog[]>(() => {
+    try {
+      const stored = localStorage.getItem('drkam_media_logs');
+      return stored ? JSON.parse(stored) : INITIAL_MEDIA_LOGS;
+    } catch { return INITIAL_MEDIA_LOGS; }
+  });
+  const [mediaKpi, setMediaKpi] = useState<MediaKpiEntry[]>(() => {
+    try {
+      const stored = localStorage.getItem('drkam_media_kpi');
+      return stored ? JSON.parse(stored) : INITIAL_MEDIA_KPI;
+    } catch { return INITIAL_MEDIA_KPI; }
+  });
+  const [mediaImprovements, setMediaImprovements] = useState<MediaImprovement[]>(() => {
+    try {
+      const stored = localStorage.getItem('drkam_media_improvements');
+      return stored ? JSON.parse(stored) : INITIAL_MEDIA_IMPROVEMENTS;
+    } catch { return INITIAL_MEDIA_IMPROVEMENTS; }
+  });
+
   // Active view tab state ("overview", "tiktok-brand"/"tiktok-real-koc"/"tiktok-ai-koc", "fb-koc"/"fb-brand", "channels", "employees", "chi-tieu", "stats", "logs")
   // Mặc định luôn mở mục Tổng quan mỗi khi vào app.
   const [activeTab, setActiveTab] = useState('overview');
@@ -197,6 +228,20 @@ export default function App() {
     if (cloud) return;
     localStorage.setItem('drkam_checklists', JSON.stringify(checklists));
   }, [checklists, cloud]);
+
+  // Team Media (giai đoạn 1: chỉ localStorage).
+  useEffect(() => {
+    if (cloud) return;
+    localStorage.setItem('drkam_media_logs', JSON.stringify(mediaLogs));
+  }, [mediaLogs, cloud]);
+  useEffect(() => {
+    if (cloud) return;
+    localStorage.setItem('drkam_media_kpi', JSON.stringify(mediaKpi));
+  }, [mediaKpi, cloud]);
+  useEffect(() => {
+    if (cloud) return;
+    localStorage.setItem('drkam_media_improvements', JSON.stringify(mediaImprovements));
+  }, [mediaImprovements, cloud]);
 
   // Chế độ DB thật: khôi phục phiên đăng nhập + nạp toàn bộ dữ liệu khi mở app.
   useEffect(() => {
@@ -253,6 +298,17 @@ export default function App() {
         } catch (e) {
           console.warn('Tải checklist thất bại (có thể chưa chạy migration 0004):', errMsg(e));
         }
+        // Team Media — tách riêng để nếu chưa chạy migration 0007 thì phần khác vẫn nạp.
+        try {
+          const [ml, mk, mi] = await Promise.all([
+            repo.loadMediaLogs(),
+            repo.loadMediaKpi(),
+            repo.loadMediaImprovements(),
+          ]);
+          if (active) { setMediaLogs(ml); setMediaKpi(mk); setMediaImprovements(mi); }
+        } catch (e) {
+          console.warn('Tải dữ liệu Media thất bại (có thể chưa chạy migration 0007):', errMsg(e));
+        }
         // Nhật ký chỉ Admin xem được (RLS) — bỏ qua lỗi với vai trò khác.
         try {
           const lg = await repo.loadLogs();
@@ -279,8 +335,9 @@ export default function App() {
   // Login Success
   const handleLoginSuccess = async (newSession: UserSession) => {
     setSession(newSession);
-    // Sau mỗi lần đăng nhập luôn về mục Tổng quan (kể cả đăng nhập lại không tải trang).
-    setActiveTab('overview');
+    // Nick Media → vào thẳng "Tổng quan Media"; còn lại về "Tổng quan".
+    const mediaLogin = newSession.department === 'Media' && newSession.role !== 'Admin';
+    setActiveTab(mediaLogin ? 'media-overview' : 'overview');
     // Ghi log với danh tính NGƯỜI VỪA ĐĂNG NHẬP (không lấy session cũ — lúc này
     // setSession chưa kịp cập nhật nên session.name vẫn là tên mặc định cũ).
     const uid = cloud ? await getCurrentUserId() : null;
@@ -686,12 +743,114 @@ export default function App() {
     if (target) addAuditLog('Checklist', `Xóa đầu việc "${target.label}" — ${target.employeeName}, ngày ${target.date}`);
   };
 
+  // ══════════════════════════════════════════════════════════════
+  //  TEAM MEDIA handlers (giai đoạn 1: chỉ cập nhật state + localStorage)
+  // ══════════════════════════════════════════════════════════════
+  // A. Báo cáo ngày = các dòng công việc chi tiết (cloud: media_task_logs; demo: state).
+  const handleAddMediaLog = async (log: MediaTaskLog) => {
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        const saved = await repo.createMediaLog(log, currentUserId);
+        setMediaLogs(prev => [saved, ...prev]);
+        addAuditLog('Media', `Thêm công việc "${log.task}" — ${log.employeeName}, ngày ${log.date}.`);
+      } catch (e) { alert('Lưu báo cáo Media thất bại: ' + errMsg(e)); }
+      return;
+    }
+    setMediaLogs(prev => [log, ...prev]);
+    addAuditLog('Media', `Thêm công việc "${log.task}" — ${log.employeeName}, ngày ${log.date}.`);
+  };
+  const handleUpdateMediaLog = async (id: string, patch: Partial<MediaTaskLog>) => {
+    if (cloud) {
+      try { await repo.updateMediaLog(id, patch); }
+      catch (e) { alert('Cập nhật báo cáo Media thất bại: ' + errMsg(e)); return; }
+    }
+    setMediaLogs(prev => prev.map(l => (l.id === id ? { ...l, ...patch } : l)));
+  };
+  const handleDeleteMediaLog = async (id: string) => {
+    if (cloud) {
+      try { await repo.deleteMediaLog(id); }
+      catch (e) { alert('Xóa báo cáo Media thất bại: ' + errMsg(e)); return; }
+    }
+    setMediaLogs(prev => prev.filter(l => l.id !== id));
+  };
+
+  // C. KPI tháng (cloud: media_kpi_entries).
+  const handleAddMediaKpi = async (entry: MediaKpiEntry) => {
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        const saved = await repo.createMediaKpi(entry, currentUserId);
+        setMediaKpi(prev => [...prev, saved]);
+        addAuditLog('Media', `Thêm chỉ số KPI "${entry.metric}" (${entry.period}) — ${entry.employeeName}.`);
+      } catch (e) { alert('Lưu KPI Media thất bại: ' + errMsg(e)); }
+      return;
+    }
+    setMediaKpi(prev => [...prev, entry]);
+    addAuditLog('Media', `Thêm chỉ số KPI "${entry.metric}" (${entry.period}) — ${entry.employeeName}.`);
+  };
+  const handleUpdateMediaKpi = async (id: string, patch: Partial<MediaKpiEntry>) => {
+    if (cloud) {
+      try { await repo.updateMediaKpi(id, patch); }
+      catch (e) { alert('Cập nhật KPI Media thất bại: ' + errMsg(e)); return; }
+    }
+    setMediaKpi(prev => prev.map(e => (e.id === id ? { ...e, ...patch } : e)));
+  };
+  const handleDeleteMediaKpi = async (id: string) => {
+    if (cloud) {
+      try { await repo.deleteMediaKpi(id); }
+      catch (e) { alert('Xóa KPI Media thất bại: ' + errMsg(e)); return; }
+    }
+    setMediaKpi(prev => prev.filter(e => e.id !== id));
+  };
+
+  // D. Đề xuất cải tiến (cloud: media_improvements).
+  const handleAddMediaImprovement = async (item: MediaImprovement) => {
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        const saved = await repo.createMediaImprovement(item, currentUserId);
+        setMediaImprovements(prev => [...prev, saved]);
+        addAuditLog('Media', `Thêm đề xuất cải tiến "${item.issue.slice(0, 40)}…" (${item.period}).`);
+      } catch (e) { alert('Lưu đề xuất Media thất bại: ' + errMsg(e)); }
+      return;
+    }
+    setMediaImprovements(prev => [...prev, item]);
+    addAuditLog('Media', `Thêm đề xuất cải tiến "${item.issue.slice(0, 40)}…" (${item.period}).`);
+  };
+  const handleUpdateMediaImprovement = async (id: string, patch: Partial<MediaImprovement>) => {
+    if (cloud) {
+      try { await repo.updateMediaImprovement(id, patch); }
+      catch (e) { alert('Cập nhật đề xuất Media thất bại: ' + errMsg(e)); return; }
+    }
+    setMediaImprovements(prev => prev.map(i => (i.id === id ? { ...i, ...patch } : i)));
+  };
+  const handleDeleteMediaImprovement = async (id: string) => {
+    if (cloud) {
+      try { await repo.deleteMediaImprovement(id); }
+      catch (e) { alert('Xóa đề xuất Media thất bại: ' + errMsg(e)); return; }
+    }
+    setMediaImprovements(prev => prev.filter(i => i.id !== id));
+  };
+
+  // Cờ phân quyền hiển thị Media.
+  const isMediaUser = session.department === 'Media' && session.role !== 'Admin';
+  const isAdmin = session.role === 'Admin';
+
+  // Danh sách tab của module Media.
+  const MEDIA_TABS = ['media-overview', 'media-daily', 'media-improve'];
+
   // Role permissions checking helper
   const canAccessTab = (tab: string) => {
+    // Nick Media (Khải/Sơn): CHỈ truy cập được các màn Media.
+    if (isMediaUser) return MEDIA_TABS.includes(tab);
+
     // TẠM KHOÁ mọi mục ngoài TikTok & Facebook cho MỌI vai trò (giữ nguyên code, chỉ chặn truy cập).
     // Mở lại sau: thêm tab vào ALLOWED_TABS hoặc bỏ chặn này.
     const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'fb-ads', 'checklist'];
-    if (!ALLOWED_TABS.includes(tab)) return false;
+    // Admin xem thêm cả module Media.
+    const allowed = isAdmin ? [...ALLOWED_TABS, ...MEDIA_TABS] : ALLOWED_TABS;
+    if (!allowed.includes(tab)) return false;
 
     // (Phân quyền theo vai trò trước đây — giữ lại để khôi phục khi mở khoá:)
     // if (session.role === 'Nhân viên') {
@@ -710,6 +869,35 @@ export default function App() {
     }
   };
 
+  // Sidebar module Media (flat). Dùng làm sidebar duy nhất cho nick Media,
+  // và là 1 mục nhóm phụ cho Admin.
+  const MEDIA_NAV = [
+    { tab: 'media-overview', label: 'Tổng quan Media',  icon: 'space_dashboard', accent: 'text-[#D32027] bg-rose-50' },
+    { tab: 'media-daily',    label: 'Báo cáo ngày',     icon: 'bar_chart',       accent: 'text-indigo-600 bg-indigo-50' },
+    { tab: 'media-improve',  label: 'Đề xuất cải tiến', icon: 'lightbulb',       accent: 'text-violet-600 bg-violet-50' },
+  ];
+  const renderMediaNav = () => (
+    <div className={isMediaUser ? '' : 'pt-4 border-t border-slate-100 my-2'}>
+      {!isMediaUser && (
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2">Team Media</p>
+      )}
+      {MEDIA_NAV.map((item) => (
+        <button
+          key={item.tab}
+          onClick={() => navigateToTab(item.tab)}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+            activeTab === item.tab ? 'bg-rose-50 text-[#D32027]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <span className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${item.accent}`}>
+            <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
+          </span>
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+
   // If user session is not logged in, render the login page directly
   if (!session || !session.isLoggedIn) {
     return <LoginComponent onLoginSuccess={handleLoginSuccess} />;
@@ -717,6 +905,21 @@ export default function App() {
 
   // Render main tab view based on selection
   const renderTabContent = () => {
+    // Nick Media mở nhầm tab ngoài Media (vd sau khi reload demo) → về Tổng quan Media.
+    if (isMediaUser && !MEDIA_TABS.includes(activeTab)) {
+      return (
+        <MediaOverviewComponent
+          logs={mediaLogs}
+          kpiEntries={mediaKpi}
+          employees={employees}
+          session={session}
+          onNavigateToTab={navigateToTab}
+          onAddKpi={handleAddMediaKpi}
+          onUpdateKpi={handleUpdateMediaKpi}
+          onDeleteKpi={handleDeleteMediaKpi}
+        />
+      );
+    }
     switch (activeTab) {
       case 'overview':
         return (
@@ -787,6 +990,40 @@ export default function App() {
             onAddItem={handleAddChecklistItem}
             onUpdateItem={handleUpdateChecklistItem}
             onDeleteItem={handleDeleteChecklistItem}
+          />
+        );
+      case 'media-overview':
+        return (
+          <MediaOverviewComponent
+            logs={mediaLogs}
+            kpiEntries={mediaKpi}
+            employees={employees}
+            session={session}
+            onNavigateToTab={navigateToTab}
+            onAddKpi={handleAddMediaKpi}
+            onUpdateKpi={handleUpdateMediaKpi}
+            onDeleteKpi={handleDeleteMediaKpi}
+          />
+        );
+      case 'media-daily':
+        return (
+          <MediaDailyReportComponent
+            logs={mediaLogs}
+            employees={employees}
+            session={session}
+            onAdd={handleAddMediaLog}
+            onUpdate={handleUpdateMediaLog}
+            onDelete={handleDeleteMediaLog}
+          />
+        );
+      case 'media-improve':
+        return (
+          <MediaImprovementComponent
+            items={mediaImprovements}
+            session={session}
+            onAdd={handleAddMediaImprovement}
+            onUpdate={handleUpdateMediaImprovement}
+            onDelete={handleDeleteMediaImprovement}
           />
         );
       case 'channels':
@@ -999,7 +1236,7 @@ export default function App() {
 
             {/* Navigation Tab options */}
             <nav className="flex flex-col gap-1">
-              
+              {isMediaUser ? renderMediaNav() : (<>
               <button
                 onClick={() => navigateToTab('overview')}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
@@ -1235,7 +1472,10 @@ export default function App() {
                 </button>
 
               </div>
-              
+
+              {/* Module Media — chỉ Admin thấy thêm ở đây (nick Media đã render riêng ở trên) */}
+              {isAdmin && renderMediaNav()}
+              </>)}
             </nav>
           </div>
 

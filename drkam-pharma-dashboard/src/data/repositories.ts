@@ -12,6 +12,9 @@ import {
   AuditLog,
   FbPage,
   ChecklistItem,
+  MediaTaskLog,
+  MediaKpiEntry,
+  MediaImprovement,
 } from '../types';
 import {
   channelFromRow,
@@ -26,6 +29,15 @@ import {
   fbPageToInsert,
   checklistFromRow,
   checklistToInsert,
+  mediaLogFromRow,
+  mediaLogToInsert,
+  mediaLogToUpdate,
+  mediaKpiFromRow,
+  mediaKpiToInsert,
+  mediaKpiToUpdate,
+  mediaImprovementFromRow,
+  mediaImprovementToInsert,
+  mediaImprovementToUpdate,
 } from './mappers';
 
 function db() {
@@ -259,5 +271,98 @@ export async function updateChecklistItem(
 
 export async function deleteChecklistItem(id: string): Promise<void> {
   const { error } = await db().from('content_checklists').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── MEDIA: BÁO CÁO NGÀY (media_task_logs) ─────────────────────
+export async function loadMediaLogs(): Promise<MediaTaskLog[]> {
+  const { data, error } = await db()
+    .from('media_task_logs')
+    .select('*')
+    .order('log_date', { ascending: false })
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mediaLogFromRow);
+}
+
+export async function createMediaLog(item: MediaTaskLog, createdBy: string): Promise<MediaTaskLog> {
+  const { data, error } = await db()
+    .from('media_task_logs')
+    .insert(mediaLogToInsert(item, createdBy))
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mediaLogFromRow(data);
+}
+
+export async function updateMediaLog(id: string, patch: Partial<MediaTaskLog>): Promise<void> {
+  const { error } = await db().from('media_task_logs').update(mediaLogToUpdate(patch)).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteMediaLog(id: string): Promise<void> {
+  const { error } = await db().from('media_task_logs').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── MEDIA: KPI THÁNG (media_kpi_entries) ──────────────────────
+export async function loadMediaKpi(): Promise<MediaKpiEntry[]> {
+  const { data, error } = await db()
+    .from('media_kpi_entries')
+    .select('*')
+    .order('period', { ascending: false })
+    .order('stt', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mediaKpiFromRow);
+}
+
+export async function createMediaKpi(e: MediaKpiEntry, createdBy: string): Promise<MediaKpiEntry> {
+  const { data, error } = await db()
+    .from('media_kpi_entries')
+    .insert(mediaKpiToInsert(e, createdBy))
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mediaKpiFromRow(data);
+}
+
+export async function updateMediaKpi(id: string, patch: Partial<MediaKpiEntry>): Promise<void> {
+  const { error } = await db().from('media_kpi_entries').update(mediaKpiToUpdate(patch)).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteMediaKpi(id: string): Promise<void> {
+  const { error } = await db().from('media_kpi_entries').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── MEDIA: ĐỀ XUẤT CẢI TIẾN (media_improvements) ──────────────
+export async function loadMediaImprovements(): Promise<MediaImprovement[]> {
+  const { data, error } = await db()
+    .from('media_improvements')
+    .select('*')
+    .order('period', { ascending: false })
+    .order('stt', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mediaImprovementFromRow);
+}
+
+export async function createMediaImprovement(item: MediaImprovement, createdBy: string): Promise<MediaImprovement> {
+  const { data, error } = await db()
+    .from('media_improvements')
+    .insert(mediaImprovementToInsert(item, createdBy))
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mediaImprovementFromRow(data);
+}
+
+export async function updateMediaImprovement(id: string, patch: Partial<MediaImprovement>): Promise<void> {
+  const { error } = await db().from('media_improvements').update(mediaImprovementToUpdate(patch)).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteMediaImprovement(id: string): Promise<void> {
+  const { error } = await db().from('media_improvements').delete().eq('id', id);
   if (error) throw error;
 }
