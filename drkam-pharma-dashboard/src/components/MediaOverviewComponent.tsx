@@ -65,15 +65,8 @@ export default function MediaOverviewComponent(props: Props) {
 const nowMonthKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 
 function OverviewDashboard({ logs, kpiEntries, employees, onNavigateToTab }: Props) {
-  // Các tháng có dữ liệu (từ báo cáo ngày + KPI).
-  const dataMonths = useMemo(() => {
-    const set = new Set<string>();
-    logs.forEach((l) => { const [d, m, y] = l.date.split('/'); if (d) set.add(`${y}-${m}`); });
-    kpiEntries.forEach((e) => set.add(e.period));
-    return [...set].sort().reverse();
-  }, [logs, kpiEntries]);
-  // Ô chọn tháng dạng lịch (input type=month) — chọn bất kỳ tháng nào, mặc định tháng có dữ liệu mới nhất.
-  const [period, setPeriod] = useState(dataMonths[0] ?? nowMonthKey());
+  // Ô chọn tháng dạng lịch (input type=month) — LUÔN mặc định tháng hiện tại; đổi tay để xem tháng khác.
+  const [period, setPeriod] = useState(nowMonthKey());
 
   const rows = useMemo(() => logs.filter((l) => inPeriod(l.date, period)), [logs, period]);
   const staff = employees.filter((e) => e.department === 'Media' && e.status === 'Hoạt động');
@@ -286,11 +279,8 @@ function DailySnapshot({ logs, employees, session }: { logs: MediaTaskLog[]; emp
   const [activeId, setActiveId] = useState(selfId ?? staff[0]?.id ?? '');
   const active = staff.find((s) => s.id === activeId) ?? staff[0];
 
-  const latestIso = useMemo(() => {
-    const isos = logs.map((l) => { const [d, m, y] = l.date.split('/'); return d ? `${y}-${m}-${d}` : ''; }).filter(Boolean).sort();
-    return isos[isos.length - 1] ?? snapIsoToday();
-  }, [logs]);
-  const [dateIso, setDateIso] = useState(latestIso);
+  // LUÔN mặc định hôm nay (tháng hiện tại); đổi tay hoặc bấm "Hôm nay" để về lại.
+  const [dateIso, setDateIso] = useState(snapIsoToday());
   const date = snapToDd(dateIso);
   const isToday = dateIso === snapIsoToday();
 
