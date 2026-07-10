@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { withMediaActuals } from './lib/media';
 import {
   INITIAL_SESSION,
   INITIAL_CHANNELS,
@@ -167,6 +168,11 @@ export default function App() {
       return stored ? JSON.parse(stored) : INITIAL_MEDIA_KPI;
     } catch { return INITIAL_MEDIA_KPI; }
   });
+  // KPI Media với "Thực tế" tự tính từ team Content (số video + doanh thu TikTok/FB Ads).
+  const mediaKpiWithActuals = useMemo(
+    () => withMediaActuals(mediaKpi, mediaLogs, channels, reports),
+    [mediaKpi, mediaLogs, channels, reports],
+  );
   const [mediaImprovements, setMediaImprovements] = useState<MediaImprovement[]>(() => {
     try {
       const stored = localStorage.getItem('drkam_media_improvements');
@@ -910,7 +916,7 @@ export default function App() {
       return (
         <MediaOverviewComponent
           logs={mediaLogs}
-          kpiEntries={mediaKpi}
+          kpiEntries={mediaKpiWithActuals}
           employees={employees}
           session={session}
           onNavigateToTab={navigateToTab}
@@ -996,7 +1002,7 @@ export default function App() {
         return (
           <MediaOverviewComponent
             logs={mediaLogs}
-            kpiEntries={mediaKpi}
+            kpiEntries={mediaKpiWithActuals}
             employees={employees}
             session={session}
             onNavigateToTab={navigateToTab}

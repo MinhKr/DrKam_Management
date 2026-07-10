@@ -9,6 +9,8 @@ import {
   MediaKpiEntry,
   MediaTaskLog,
   MEDIA_VIDEO_TYPES,
+  AffiliateChannel,
+  DailyReport,
 } from '../types';
 
 export const KPI_CAP = 120;
@@ -69,4 +71,70 @@ export function weekdayVi(dateDdmmyyyy: string): string {
   if (!d || !m || !y) return '';
   const wd = new Date(y, m - 1, d).getDay(); // 0=CN
   return ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'][wd];
+}
+
+// ── DOANH THU TỰ NỐI TỪ TEAM CONTENT ──────────────────────────
+// "Thực tế" của các chỉ số doanh thu Media tự tính từ báo cáo team Content
+// (kênh TikTok + Facebook Ads), cập nhật realtime khi Content nhập số liệu.
+
+/** Chỉ số "số lượng video sản xuất" — Thực tế tự đếm từ báo cáo ngày. */
+export const isVideoCountMetric = (metric: string): boolean => {
+  const m = metric.toLowerCase();
+  return m.includes('số lượng video') || m.includes('video sản xuất');
+};
+
+// Kênh TikTok tính vào doanh thu Media: Brand + KOC Người thật (Real KOC), TRỪ giadinhminhhee.
+const MEDIA_TIKTOK_EXCLUDE = new Set(['giadinhminhhee']);
+export function mediaTiktokRevenue(channels: AffiliateChannel[], reports: DailyReport[], period: string): number {
+  const names = new Set(channels
+    .filter((c) => c.platform === 'TikTok'
+      && (c.channelType === 'Brand' || c.channelType === 'Real KOC')
+      && !MEDIA_TIKTOK_EXCLUDE.has(c.name))
+    .map((c) => c.name));
+  return reports.reduce((s, r) => s + (names.has(r.channelName) && inPeriod(r.date, period) ? (r.revenue ?? 0) : 0), 0);
+}
+
+/** Doanh thu Facebook Ads (kênh tên "Facebook Ads" — team Content nhập ở màn Facebook Ads). */
+export function mediaFbAdsRevenue(reports: DailyReport[], period: string): number {
+  return reports.reduce((s, r) => s + (r.channelName === 'Facebook Ads' && inPeriod(r.date, period) ? (r.revenue ?? 0) : 0), 0);
+}
+
+/**
+ * Tính "Thực tế" cho chỉ số doanh thu (unit=currency) từ dữ liệu Content.
+ * Trả null nếu chỉ số KHÔNG phải doanh thu tự-nối → giữ nguyên actualValue đang lưu.
+ *   • Có cả "tiktok" + "facebook/ads" (Sơn)  → TikTok÷2 + FB Ads
+ *   • Chỉ "facebook/ads" (Khải)              → FB Ads
+ *   • Chỉ "tiktok" (Khải)                    → TikTok (đủ 100%)
+ */
+export function deriveRevenueActual(e: MediaKpiEntry, tiktok: number, fbAds: number): number | null {
+  if (e.unit !== 'currency') return null;
+  const m = e.metric.toLowerCase();
+  const hasTiktok = m.includes('tiktok');
+  const hasAds = m.includes('facebook') || m.includes('ads');
+  if (hasTiktok && hasAds) return Math.round(tiktok / 2) + fbAds;
+  if (hasAds) return fbAds;
+  if (hasTiktok) return tiktok;
+  return null;
+}
+
+/** Điền actualValue tự động cho toàn bộ KPI: số video (báo cáo ngày) + doanh thu (team Content). */
+export function withMediaActuals(
+  entries: MediaKpiEntry[], logs: MediaTaskLog[],
+  channels: AffiliateChannel[], reports: DailyReport[],
+): MediaKpiEntry[] {
+  const revCache = new Map<string, { tiktok: number; fbAds: number }>();
+  const revFor = (period: string) => {
+    let v = revCache.get(period);
+    if (!v) { v = { tiktok: mediaTiktokRevenue(channels, reports, period), fbAds: mediaFbAdsRevenue(reports, period) }; revCache.set(period, v); }
+    return v;
+  };
+  return entries.map((e) => {
+    if (isVideoCountMetric(e.metric)) {
+      const vids = countVideos(logs.filter((l) => l.employeeId === e.employeeId && inPeriod(l.date, e.period)));
+      return { ...e, actualValue: vids };
+    }
+    const { tiktok, fbAds } = revFor(e.period);
+    const rev = deriveRevenueActual(e, tiktok, fbAds);
+    return rev != null ? { ...e, actualValue: rev } : e;
+  });
 }
