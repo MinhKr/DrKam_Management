@@ -100,6 +100,20 @@ export function mediaFbAdsRevenue(reports: DailyReport[], period: string): numbe
 }
 
 /**
+ * Tổng lượt Reach của 5 kênh THƯƠNG HIỆU (Brand) trên TikTok + Facebook,
+ * trừ kênh "Facebook Ads" (chỉ doanh thu). Lấy cột Views/Reach từ báo cáo team Content.
+ * Hiện gồm: 3 kênh TikTok Brand + 2 page Facebook Brand.
+ */
+export function mediaReach(channels: AffiliateChannel[], reports: DailyReport[], period: string): number {
+  const names = new Set(channels
+    .filter((c) => c.channelType === 'Brand'
+      && (c.platform === 'TikTok' || c.platform === 'Facebook')
+      && c.brandCategory !== 'Facebook Ads')
+    .map((c) => c.name));
+  return reports.reduce((s, r) => s + (names.has(r.channelName) && inPeriod(r.date, period) ? (r.views ?? 0) : 0), 0);
+}
+
+/**
  * Tính "Thực tế" cho chỉ số doanh thu (unit=currency) từ dữ liệu Content.
  * Trả null nếu chỉ số KHÔNG phải doanh thu tự-nối → giữ nguyên actualValue đang lưu.
  *   • Có cả "tiktok" + "facebook/ads" (Sơn)  → TikTok÷2 + FB Ads
@@ -132,6 +146,10 @@ export function withMediaActuals(
     if (isVideoCountMetric(e.metric)) {
       const vids = countVideos(logs.filter((l) => l.employeeId === e.employeeId && inPeriod(l.date, e.period)));
       return { ...e, actualValue: vids };
+    }
+    // Tổng lượt reach đa kênh → tự cộng Views/Reach 5 kênh thương hiệu.
+    if (e.metric.toLowerCase().includes('reach')) {
+      return { ...e, actualValue: mediaReach(channels, reports, e.period) };
     }
     const { tiktok, fbAds } = revFor(e.period);
     const rev = deriveRevenueActual(e, tiktok, fbAds);
