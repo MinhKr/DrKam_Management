@@ -161,76 +161,95 @@ export default function MediaDailyReportComponent({ logs, employees, session, on
         <div className="text-[11px] text-slate-400 italic px-1">Bạn chỉ xem báo cáo của {active?.name}. Đăng nhập đúng nick để chỉnh sửa.</div>
       )}
 
-      {/* Bảng theo ngày (chỉ hiển thị; thêm/sửa bằng popup) */}
-      <div className="bg-white rounded-2xl border border-slate-200/70 soft-shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+      {/* Báo cáo theo ngày — MỖI NGÀY LÀ 1 THẺ, nền xen kẽ trắng / slate-100 để dễ phân cách.
+         Header cột hiển thị 1 lần trên cùng; các thẻ dùng chung colgroup + table-fixed nên cột thẳng hàng. */}
+      <div className="overflow-x-auto">
+        <div className="min-w-[920px] space-y-3">
+          {/* Hàng tiêu đề cột (1 lần) */}
+          <table className="table-fixed w-full text-xs">
+            <colgroup>
+              <col className="w-24" /><col className="w-12" /><col /><col className="w-12" />
+              <col className="w-28" /><col className="w-40" /><col className="w-32" /><col className="w-20" />
+              {canEdit && <col className="w-16" />}
+            </colgroup>
             <thead>
-              <tr className="bg-slate-50/70 text-slate-500 uppercase tracking-wide">
-                <th className="px-3 py-2.5 text-left font-bold w-24">Thứ / Ngày</th>
-                <th className="px-2 py-2.5 text-left font-bold">Content</th>
-                <th className="px-2 py-2.5 text-left font-bold w-12">KB</th>
-                <th className="px-3 py-2.5 text-left font-bold">Công việc</th>
-                <th className="px-2 py-2.5 text-center font-bold w-10">SL</th>
-                <th className="px-2 py-2.5 text-left font-bold">Tiến độ</th>
-                <th className="px-2 py-2.5 text-left font-bold">Link sản phẩm</th>
-                <th className="px-2 py-2.5 text-left font-bold w-20">Hạn</th>
-                <th className="px-2 py-2.5 text-left font-bold">Ghi chú</th>
-                <th className="px-2 py-2.5 text-left font-bold w-20">Duyệt</th>
-                {canEdit && <th className="px-2 py-2.5 w-14"></th>}
+              <tr className="text-slate-500 uppercase tracking-wide text-[11px]">
+                <th className="px-2 py-1.5 text-left font-bold">Content</th>
+                <th className="px-2 py-1.5 text-left font-bold">KB</th>
+                <th className="px-3 py-1.5 text-left font-bold">Công việc</th>
+                <th className="px-2 py-1.5 text-center font-bold">SL</th>
+                <th className="px-2 py-1.5 text-left font-bold">Tiến độ</th>
+                <th className="px-2 py-1.5 text-left font-bold">Link sản phẩm</th>
+                <th className="px-2 py-1.5 text-left font-bold">Ghi chú</th>
+                <th className="px-2 py-1.5 text-left font-bold">Duyệt</th>
+                {canEdit && <th className="px-2 py-1.5"></th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {byDay.length === 0 ? (
-                <tr><td colSpan={11} className="py-10 text-center text-slate-400">Chưa có báo cáo {filterMode === 'day' ? `ngày ${dayDd}` : `trong ${monthLabel(period).toLowerCase()}`}.</td></tr>
-              ) : byDay.map(([day, items]) => {
-                const dayVideos = items.filter((l) => isVideoContent(l.contentType)).length;
-                return items.map((l, idx) => (
-                  <tr key={l.id} className="align-top hover:bg-rose-50/20">
-                    {idx === 0 && (
-                      <td rowSpan={items.length} className="px-3 py-2 whitespace-nowrap border-r border-slate-100 bg-slate-50/40 align-top">
-                        <div className="font-bold text-slate-700">{weekdayVi(day)}</div>
-                        <div className="font-mono text-[11px] text-slate-500">{day}</div>
-                        <div className="mt-1 text-[10px] font-bold text-[#D32027]">{dayVideos} video</div>
-                      </td>
-                    )}
-                    <td className="px-2 py-2">
-                      <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap"
-                        style={{ background: `${contentColor(l.contentType)}1a`, color: contentColor(l.contentType) }}>{l.contentType}</span>
-                    </td>
-                    <td className="px-2 py-2 font-mono text-slate-400">{l.scriptNo || '–'}</td>
-                    <td className="px-3 py-2 text-slate-700 min-w-[200px] max-w-[320px] whitespace-pre-line leading-relaxed">{l.task}</td>
-                    <td className="px-2 py-2 text-center tabular-nums text-slate-600">{l.quantity ?? '–'}</td>
-                    <td className="px-2 py-2">
-                      <button type="button" onClick={canEdit ? () => cycleProgress(l) : undefined} disabled={!canEdit}
-                        className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${progressStyle(l.progress)} ${canEdit ? 'cursor-pointer' : ''}`}
-                        title={canEdit ? 'Bấm để đổi tiến độ' : ''}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-current" />{l.progress}
-                      </button>
-                    </td>
-                    <td className="px-2 py-2 max-w-[160px]">
-                      {l.productLink
-                        ? <span className="text-slate-500 text-[11px] truncate inline-block max-w-[150px]" title={l.productLink}>{l.productLink}</span>
-                        : <span className="text-slate-300">–</span>}
-                    </td>
-                    <td className="px-2 py-2 text-slate-500 whitespace-nowrap">{l.deadline || '–'}</td>
-                    <td className="px-2 py-2 text-slate-500 max-w-[140px] truncate" title={l.note ?? ''}>{l.note || ''}</td>
-                    <td className="px-2 py-2 text-slate-500 text-[11px]">{l.approval || ''}</td>
-                    {canEdit && (
-                      <td className="px-2 py-2 whitespace-nowrap text-center">
-                        <button onClick={() => setModal(l)} className="text-slate-300 hover:text-[#D32027] transition-colors" title="Sửa">
-                          <span className="material-symbols-outlined text-[16px]">edit</span>
-                        </button>
-                        <button onClick={() => setDialog({ id: l.id, label: l.task || '(trống)' })} className="text-slate-300 hover:text-rose-600 transition-colors ml-1" title="Xóa">
-                          <span className="material-symbols-outlined text-[16px]">delete</span>
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ));
-              })}
-            </tbody>
           </table>
+
+          {byDay.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200/70 soft-shadow py-10 text-center text-slate-400">
+              Chưa có báo cáo {filterMode === 'day' ? `ngày ${dayDd}` : `trong ${monthLabel(period).toLowerCase()}`}.
+            </div>
+          ) : byDay.map(([day, items], di) => {
+            const dayVideos = items.filter((l) => isVideoContent(l.contentType)).length;
+            const tinted = di % 2 === 1; // xen kẽ: ngày lẻ dùng nền slate-100
+            return (
+              <div key={day} className={`rounded-xl border soft-shadow overflow-hidden ${tinted ? 'bg-slate-100 border-slate-200' : 'bg-white border-slate-200/70'}`}>
+                {/* Tiêu đề ngày */}
+                <div className="px-4 py-2.5 flex items-center gap-3 border-l-4 border-l-[#D32027] border-b border-slate-200/60">
+                  <span className="font-bold text-slate-800 text-sm">{weekdayVi(day)}</span>
+                  <span className="font-mono text-[12px] text-slate-500">{day}</span>
+                  <span className="ml-auto text-[11px] font-bold text-[#D32027] bg-rose-50 border border-rose-100 px-2.5 py-0.5 rounded-full whitespace-nowrap">{dayVideos} video</span>
+                </div>
+                {/* Đầu việc trong ngày */}
+                <table className="table-fixed w-full text-xs">
+                  <colgroup>
+                    <col className="w-24" /><col className="w-12" /><col /><col className="w-12" />
+                    <col className="w-28" /><col className="w-40" /><col className="w-32" /><col className="w-20" />
+                    {canEdit && <col className="w-16" />}
+                  </colgroup>
+                  <tbody className="divide-y divide-slate-200/50">
+                    {items.map((l) => (
+                      <tr key={l.id} className="align-top hover:bg-rose-50/30">
+                        <td className="px-2 py-2">
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap"
+                            style={{ background: `${contentColor(l.contentType)}1a`, color: contentColor(l.contentType) }}>{l.contentType}</span>
+                        </td>
+                        <td className="px-2 py-2 font-mono text-slate-400">{l.scriptNo || '–'}</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-pre-line leading-relaxed break-words">{l.task}</td>
+                        <td className="px-2 py-2 text-center tabular-nums text-slate-600">{l.quantity ?? '–'}</td>
+                        <td className="px-2 py-2">
+                          <button type="button" onClick={canEdit ? () => cycleProgress(l) : undefined} disabled={!canEdit}
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${progressStyle(l.progress)} ${canEdit ? 'cursor-pointer' : ''}`}
+                            title={canEdit ? 'Bấm để đổi tiến độ' : ''}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current" />{l.progress}
+                          </button>
+                        </td>
+                        <td className="px-2 py-2">
+                          {l.productLink
+                            ? <span className="text-slate-500 text-[11px] truncate inline-block max-w-full" title={l.productLink}>{l.productLink}</span>
+                            : <span className="text-slate-300">–</span>}
+                        </td>
+                        <td className="px-2 py-2 text-slate-500 truncate" title={l.note ?? ''}>{l.note || ''}</td>
+                        <td className="px-2 py-2 text-slate-500 text-[11px]">{l.approval || ''}</td>
+                        {canEdit && (
+                          <td className="px-2 py-2 whitespace-nowrap text-center">
+                            <button onClick={() => setModal(l)} className="text-slate-300 hover:text-[#D32027] transition-colors" title="Sửa">
+                              <span className="material-symbols-outlined text-[16px]">edit</span>
+                            </button>
+                            <button onClick={() => setDialog({ id: l.id, label: l.task || '(trống)' })} className="text-slate-300 hover:text-rose-600 transition-colors ml-1" title="Xóa">
+                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -326,11 +345,6 @@ function LogModal({ log, personName, onClose, onSubmit }: {
               {PROGRESS.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Hạn</span>
-            <input type="text" value={f.deadline ?? ''} onChange={(e) => set({ deadline: e.target.value })} className={cls} placeholder="vd 15:00 / 30/06" />
-          </label>
-
           <label className="col-span-2 flex flex-col gap-1">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Link sản phẩm</span>
             <input type="text" value={f.productLink ?? ''} onChange={(e) => set({ productLink: e.target.value })} className={cls} placeholder="Tên file / đường dẫn..." />

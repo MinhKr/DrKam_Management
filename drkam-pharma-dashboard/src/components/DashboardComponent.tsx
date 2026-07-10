@@ -456,9 +456,9 @@ function DoanhSoNgay({ reports, channels }: { reports: DailyReport[]; channels: 
     'doisongsuckhoe86': 'Đặng Kim Khánh',
     'ngochuong259': 'Nguyễn Công Hải',
     'haidang0136': 'Nguyễn Công Hải',
-    'minhquan8046': 'Hoàng Yến Nhi',
+    'minhquan8046': 'Lê Đắc Nhật Minh',
     'quinchana82': 'Hoàng Yến Nhi',
-    'anhquan9684': 'Hoàng Yến Nhi',
+    'anhquan9684': 'Lê Đắc Nhật Minh',
     // FB Brand (tên đầy đủ trong app)
     'drkamsongkhoecungchuyengia': 'Đặng Kim Khánh',
     'drkambacsirangmienghongcuamoigiadinh': 'Đặng Kim Khánh',
@@ -466,6 +466,7 @@ function DoanhSoNgay({ reports, channels }: { reports: DailyReport[]; channels: 
     'duocsikhanh': 'Đặng Kim Khánh',
     'conghaing': 'Nguyễn Công Hải',
     'ynni1809': 'Hoàng Yến Nhi',
+    'leminh139148': 'Lê Đắc Nhật Minh',
   };
   const nguoiPT = (ch: AffiliateChannel) => MANAGER_OVERRIDE[norm(ch.name)] ?? ch.managerName ?? '—';
 

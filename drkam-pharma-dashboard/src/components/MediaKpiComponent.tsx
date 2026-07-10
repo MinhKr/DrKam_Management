@@ -258,6 +258,8 @@ export default function MediaKpiComponent({ entries, logs, employees, session, o
 
 const inputCls = 'w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-[#D32027] focus:border-[#D32027] bg-white';
 const numCls = inputCls + ' text-right tabular-nums';
+/** Hiển thị số nguyên trong ô nhập với dấu '.' ngăn cách hàng nghìn (vd 300.000.000). */
+const fmtInt = (n: number) => (n || 0).toLocaleString('vi-VN');
 
 /* ── Popup THIẾT LẬP KPI tháng — 1 form cho CẢ 2 thành viên, chỉ nhập Mục tiêu + Trọng số ──
    Chỉ số / nhóm / đơn vị kế thừa từ tháng trước; Thực tế tự cập nhật từ báo cáo ngày (không nhập ở đây). */
@@ -292,7 +294,7 @@ function SetupKpiModal({ period, templateSource, templateEntries, employees, onC
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm" onClick={onClose}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
-        className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto">
+        className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-slate-900 font-display flex items-center gap-2">
@@ -330,7 +332,7 @@ function SetupKpiModal({ period, templateSource, templateEntries, employees, onC
                       <tr className="text-slate-500 uppercase tracking-wide bg-white border-b border-slate-100">
                         <th className="px-3 py-2 text-left font-bold w-8">STT</th>
                         <th className="px-3 py-2 text-left font-bold">Chỉ số</th>
-                        <th className="px-3 py-2 text-right font-bold w-36">Mục tiêu</th>
+                        <th className="px-3 py-2 text-right font-bold w-44">Mục tiêu</th>
                         <th className="px-3 py-2 text-right font-bold w-28">Trọng số (%)</th>
                       </tr>
                     </thead>
@@ -343,7 +345,7 @@ function SetupKpiModal({ period, templateSource, templateEntries, employees, onC
                             <p className="text-[10px] text-slate-400">{e.groupName}{e.unit === 'currency' ? ' · đơn vị: đồng' : e.unit === 'percent' ? ' · đơn vị: %' : ''}</p>
                           </td>
                           <td className="px-3 py-2">
-                            <input type="text" inputMode="numeric" value={form[e.id]?.targetValue ?? 0}
+                            <input type="text" inputMode="numeric" value={fmtInt(form[e.id]?.targetValue ?? 0)}
                               onChange={(ev) => setField(e.id, 'targetValue', ev.target.value)} className={numCls} />
                           </td>
                           <td className="px-3 py-2">
@@ -436,7 +438,7 @@ function KpiEditModal({ period, entries, employees, onAdd, onUpdate, onDelete, o
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm" onClick={onClose}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
-        className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto">
+        className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-slate-900 font-display flex items-center gap-2">
@@ -472,10 +474,10 @@ function KpiEditModal({ period, entries, employees, onAdd, onUpdate, onDelete, o
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="text-slate-500 uppercase tracking-wide bg-white border-b border-slate-100">
-                        <th className="px-2 py-2 text-left font-bold">Nhóm</th>
+                        <th className="px-2 py-2 text-left font-bold w-32">Nhóm</th>
                         <th className="px-2 py-2 text-left font-bold">Chỉ số</th>
-                        <th className="px-2 py-2 text-left font-bold w-24">Đơn vị</th>
-                        <th className="px-2 py-2 text-right font-bold w-32">Mục tiêu</th>
+                        <th className="px-2 py-2 text-left font-bold w-28">Đơn vị</th>
+                        <th className="px-2 py-2 text-right font-bold w-40">Mục tiêu</th>
                         <th className="px-2 py-2 text-right font-bold w-24">Trọng số</th>
                         <th className="px-2 py-2 w-8"></th>
                       </tr>
@@ -490,7 +492,7 @@ function KpiEditModal({ period, entries, employees, onAdd, onUpdate, onDelete, o
                               {UNIT_OPTS.map((u) => <option key={u.v} value={u.v}>{u.label}</option>)}
                             </select>
                           </td>
-                          <td className="px-2 py-2"><input type="text" inputMode="numeric" value={e.targetValue} onChange={(ev) => upd(e.id, { targetValue: num(ev.target.value) })} className={numCls} /></td>
+                          <td className="px-2 py-2"><input type="text" inputMode="numeric" value={fmtInt(e.targetValue)} onChange={(ev) => upd(e.id, { targetValue: num(ev.target.value) })} className={numCls} /></td>
                           <td className="px-2 py-2"><input type="text" inputMode="numeric" value={e.weight} onChange={(ev) => upd(e.id, { weight: num(ev.target.value) })} className={numCls} /></td>
                           <td className="px-2 py-2 text-center">
                             <button type="button" onClick={() => del(e.id)} className="text-slate-300 hover:text-rose-600" title="Xóa chỉ số">

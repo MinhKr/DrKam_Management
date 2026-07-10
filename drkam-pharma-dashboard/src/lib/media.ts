@@ -51,11 +51,8 @@ export function kpiRank(total: number): KpiRank {
 }
 
 export function formatKpiValue(v: number, unit: MediaKpiEntry['unit']): string {
-  if (unit === 'currency') {
-    if (v >= 1_000_000) return (v / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + 'tr';
-    return v.toLocaleString('vi-VN');
-  }
   if (unit === 'percent') return v + '%';
+  // Tiền & số: hiển thị đầy đủ, có dấu '.' ngăn cách hàng nghìn (vd 300.000.000).
   return v.toLocaleString('vi-VN');
 }
 

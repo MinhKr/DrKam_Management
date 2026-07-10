@@ -184,7 +184,6 @@ export interface Database {
           quantity: number | null;
           progress: 'Hoàn thành' | 'Đang làm' | 'Chưa làm';
           product_link: string | null;
-          deadline: string | null;
           note: string | null;
           approval: string | null;
           created_by: string | null;

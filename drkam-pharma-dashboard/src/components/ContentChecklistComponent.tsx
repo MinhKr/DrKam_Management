@@ -24,7 +24,6 @@ const TASK_TEMPLATES: { name: string; tasks: string[] }[] = [
       '[FB] SỐNG KHỎE CÙNG CHUYÊN GIA',
       '[FB] BÁC SĨ RĂNG MIỆNG HỌNG',
       '[TIKTOK AI] haidang0136',
-      '[TIKTOK AI] minhquan8046',
       '[TIKTOK KOC] bao_chau_day',
       '[FANPAGE FB AI] duocsikhanh',
       'KỊCH BẢN / QUAY',
@@ -38,11 +37,18 @@ const TASK_TEMPLATES: { name: string; tasks: string[] }[] = [
       '[TIKTOK KOC] Nhacuacamcam',
       '[TIKTOK KOC] GiadinhMinhHee',
       '[TIKTOK AI] ngoc.huong259',
-      '[TIKTOK AI] anhquan9684',
       'YOUTUBE',
       '[FANPAGE FB AI] conghaing',
       'KỊCH BẢN / QUAY/EDIT',
       'FEEDBACK VIDEO',
+    ],
+  },
+  {
+    name: 'Lê Đắc Nhật Minh',
+    tasks: [
+      '[TIKTOK AI] minhquan8046',
+      '[TIKTOK AI] anhquan9684',
+      '[FANPAGE FB AI] leminh139148',
     ],
   },
   {
@@ -97,9 +103,9 @@ export default function ContentChecklistComponent({
   const isMine = (emp: Employee) =>
     currentUserId ? emp.id === currentUserId : emp.name === session.name;
 
-  // Nhân sự content đang hoạt động (bỏ Admin). Xếp người của mình lên đầu.
+  // Nhân sự content đang hoạt động (bỏ Admin và team Media). Xếp người của mình lên đầu.
   const staff = [...employees]
-    .filter((e) => e.status === 'Hoạt động' && e.role !== 'Admin')
+    .filter((e) => e.status === 'Hoạt động' && e.role !== 'Admin' && e.department !== 'Media')
     .sort((a, b) => {
       const mine = Number(isMine(b)) - Number(isMine(a));
       return mine !== 0 ? mine : a.name.localeCompare(b.name, 'vi');

@@ -317,7 +317,6 @@ export function mediaLogFromRow(r: MediaLogRow): MediaTaskLog {
     quantity: r.quantity,
     progress: r.progress,
     productLink: r.product_link ?? undefined,
-    deadline: r.deadline ?? undefined,
     note: r.note ?? undefined,
     approval: r.approval ?? undefined,
   };
@@ -337,7 +336,6 @@ export function mediaLogToInsert(
     quantity: item.quantity ?? null,
     progress: item.progress,
     product_link: item.productLink ?? null,
-    deadline: item.deadline ?? null,
     note: item.note ?? null,
     approval: item.approval ?? null,
     created_by: createdBy,
@@ -356,7 +354,6 @@ export function mediaLogToUpdate(
   if (patch.quantity !== undefined) u.quantity = patch.quantity ?? null;
   if (patch.progress !== undefined) u.progress = patch.progress;
   if (patch.productLink !== undefined) u.product_link = patch.productLink ?? null;
-  if (patch.deadline !== undefined) u.deadline = patch.deadline ?? null;
   if (patch.note !== undefined) u.note = patch.note ?? null;
   if (patch.approval !== undefined) u.approval = patch.approval ?? null;
   return u;

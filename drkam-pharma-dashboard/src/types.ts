@@ -134,7 +134,6 @@ export interface MediaTaskLog {
   quantity?: number | null; // Số lượng
   progress: 'Hoàn thành' | 'Đang làm' | 'Chưa làm';
   productLink?: string;  // Link sản phẩm
-  deadline?: string;     // Hạn
   note?: string;         // Ghi chú
   approval?: string;     // TT Duyệt
 }
