@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { MediaKpiEntry, MediaTaskLog, Employee, UserSession, MEDIA_VIDEO_TYPES } from '../types';
-import { kpiAchieved, kpiScore, kpiTotal, kpiRank, formatKpiValue, videoTypeTotalsFromLogs, inPeriod, countVideos } from '../lib/media';
+import { kpiAchieved, kpiScore, kpiTotal, kpiRank, formatKpiValue, videoTypeTotalsFromLogs, inPeriod, mediaVideoActual } from '../lib/media';
 
 interface Props {
   entries: MediaKpiEntry[];
@@ -59,7 +59,7 @@ export default function MediaKpiComponent({ entries, logs, employees, session, o
         period,
         targetValue: 0,
         actualValue: isVideoCountMetric(e.metric)
-          ? countVideos(periodLogs.filter((l) => l.employeeId === e.employeeId))
+          ? mediaVideoActual({ ...e, period }, logs)
           : 0,
         note: '',
       }));
@@ -68,7 +68,7 @@ export default function MediaKpiComponent({ entries, logs, employees, session, o
   // Chỉ số video: Thực tế LUÔN tự đếm từ báo cáo ngày (live) — cho mọi tháng, không nhập tay.
   const withVideoActual = (list: MediaKpiEntry[]): MediaKpiEntry[] =>
     list.map((e) => isVideoCountMetric(e.metric)
-      ? { ...e, actualValue: countVideos(periodLogs.filter((l) => l.employeeId === e.employeeId)) }
+      ? { ...e, actualValue: mediaVideoActual(e, logs) }
       : e);
   const displayEntries = isTemplate ? templateEntries : withVideoActual(periodEntries);
   const groups = useMemo(() => groupByEmployee(displayEntries), [displayEntries]);

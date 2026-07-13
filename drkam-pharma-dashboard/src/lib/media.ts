@@ -83,6 +83,20 @@ export const isVideoCountMetric = (metric: string): boolean => {
   return m.includes('số lượng video') || m.includes('video sản xuất');
 };
 
+/**
+ * Số video "Thực tế" cho 1 chỉ số KPI trong kỳ của nó:
+ *   • Khải (Leader) → tổng CẢ TEAM (Khải + Sơn)
+ *   • Người khác    → của chính mình
+ */
+export function mediaVideoActual(entry: MediaKpiEntry, logs: MediaTaskLog[]): number {
+  const teamTotal = entry.employeeName.trim() === MEDIA_LEADER_NAME;
+  return countVideos(logs.filter((l) =>
+    inPeriod(l.date, entry.period) && (teamTotal || l.employeeId === entry.employeeId)));
+}
+
+// Media Leader — chỉ số "Số lượng video sản xuất" của người này = SẢN LƯỢNG CẢ TEAM.
+const MEDIA_LEADER_NAME = 'Nguyễn Trọng Khải';
+
 // Kênh TikTok tính vào doanh thu Media: Brand + KOC Người thật (Real KOC), TRỪ giadinhminhhee.
 const MEDIA_TIKTOK_EXCLUDE = new Set(['giadinhminhhee']);
 export function mediaTiktokRevenue(channels: AffiliateChannel[], reports: DailyReport[], period: string): number {
@@ -144,8 +158,7 @@ export function withMediaActuals(
   };
   return entries.map((e) => {
     if (isVideoCountMetric(e.metric)) {
-      const vids = countVideos(logs.filter((l) => l.employeeId === e.employeeId && inPeriod(l.date, e.period)));
-      return { ...e, actualValue: vids };
+      return { ...e, actualValue: mediaVideoActual(e, logs) };
     }
     // Tổng lượt reach đa kênh → tự cộng Views/Reach 5 kênh thương hiệu.
     if (e.metric.toLowerCase().includes('reach')) {
