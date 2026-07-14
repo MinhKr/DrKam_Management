@@ -239,6 +239,9 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
 
   const revTikTok = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('tt')).reduce((s, r) => s + r.revenue, 0);
   const revFacebook = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('fb')).reduce((s, r) => s + r.revenue, 0);
+  // KPI theo nền tảng: TikTok gồm badge 'tiktok' + 'koc' (KOC là kênh TikTok), Facebook gồm badge 'fb'.
+  const tkTarget = LINE_ITEMS.filter((li) => li.badge === 'tiktok' || li.badge === 'koc').reduce((s, li) => s + li.monthlyTarget, 0);
+  const fbTarget = LINE_ITEMS.filter((li) => li.badge === 'fb').reduce((s, li) => s + li.monthlyTarget, 0);
 
   const series = dailySeries(monthReports, monthFromIso, monthToIso);
   const weekLabel = (i: number) => {
@@ -287,8 +290,10 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
 
       {/* KPI phụ */}
       <div className="grid grid-cols-3 gap-3">
-        <KpiCard label="Doanh số TikTok" value={vnd(revTikTok)} iconNode={<TikTokIcon className="w-[18px] h-[18px]" />} tone="slate" />
-        <KpiCard label="Doanh số Facebook" value={vnd(revFacebook)} iconNode={<FacebookIcon className="w-[18px] h-[18px]" />} tone="blue" />
+        <KpiCard label="Doanh số TikTok" value={vnd(revTikTok)} iconNode={<TikTokIcon className="w-[18px] h-[18px]" />} tone="slate"
+          target={tkTarget} pctVal={pct(revTikTok, tkTarget)} />
+        <KpiCard label="Doanh số Facebook" value={vnd(revFacebook)} iconNode={<FacebookIcon className="w-[18px] h-[18px]" />} tone="blue"
+          target={fbTarget} pctVal={pct(revFacebook, fbTarget)} />
         <KpiCard label="Hạng mục đạt KPI" value={`${reached}/${withTarget.length}`} icon="target" tone="green"
           sub={withTarget.length ? 'Số hạng mục ≥ 100% chỉ tiêu' : 'Chưa đặt chỉ tiêu'} subTone="muted" />
       </div>
@@ -629,15 +634,18 @@ function ItemBadge({ kind }: { kind: BadgeKind }) {
 }
 
 // ── Thẻ KPI ─────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, icon, iconNode, tone, sub, subTone = 'muted' }: {
+function KpiCard({ label, value, icon, iconNode, tone, sub, subTone = 'muted', target, pctVal }: {
   label: string; value: string; icon?: string; iconNode?: React.ReactNode; tone: 'rose' | 'slate' | 'blue' | 'green';
   sub?: string; subTone?: 'up' | 'down' | 'muted';
+  target?: number; pctVal?: number | null;
 }) {
   const toneCls: Record<string, string> = {
     rose: 'bg-rose-50 text-[#D32027]', slate: 'bg-slate-100 text-slate-800',
     blue: 'bg-blue-50 text-blue-600', green: 'bg-green-50 text-green-700',
   };
   const subCls = subTone === 'up' ? 'text-green-700' : subTone === 'down' ? 'text-rose-600' : 'text-slate-400';
+  const barCls: Record<string, string> = { rose: 'bg-[#D32027]', slate: 'bg-slate-800', blue: 'bg-blue-500', green: 'bg-green-600' };
+  const showKpi = target != null;
   return (
     <div className="bg-white rounded-2xl p-4 border border-slate-200/70 soft-shadow flex flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -646,7 +654,22 @@ function KpiCard({ label, value, icon, iconNode, tone, sub, subTone = 'muted' }:
           {iconNode ?? <span className="material-symbols-outlined text-[18px]">{icon}</span>}
         </span>
       </div>
-      <div className="text-lg font-extrabold text-slate-900 tracking-tight tabular-nums">{value}</div>
+      <div className="flex items-end justify-between gap-2">
+        <div className="text-lg font-extrabold text-slate-900 tracking-tight tabular-nums">{value}</div>
+        {showKpi && (
+          <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-extrabold ${pctColor(pctVal ?? null)}`}>
+            {pctVal == null ? '—' : pctVal + '%'}
+          </span>
+        )}
+      </div>
+      {showKpi && (
+        <>
+          <div className="text-[11px] font-semibold text-slate-400 tabular-nums">/ KPI {target ? vnd(target) : '—'}</div>
+          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-500 ${barCls[tone]}`} style={{ width: `${Math.min(pctVal ?? 0, 100)}%` }} />
+          </div>
+        </>
+      )}
       {sub && <div className={`text-[11px] font-semibold ${subCls}`}>{sub}</div>}
     </div>
   );
