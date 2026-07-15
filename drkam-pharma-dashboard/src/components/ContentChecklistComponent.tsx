@@ -8,7 +8,7 @@ interface ContentChecklistComponentProps {
   session: UserSession;
   currentUserId: string | null;
   onAddItem: (item: ChecklistItem) => void;
-  onUpdateItem: (id: string, patch: { label?: string; quantity?: number }) => void;
+  onUpdateItem: (id: string, patch: { label?: string; quantity?: number; note?: string }) => void;
   onDeleteItem: (id: string) => void;
   readOnly?: boolean; // true = chỉ hiển thị (dùng ở Tổng quan), không cho thêm/sửa
 }
@@ -49,6 +49,7 @@ const TASK_TEMPLATES: { name: string; tasks: string[] }[] = [
       '[TIKTOK AI] minhquan8046',
       '[TIKTOK AI] anhquan9684',
       '[FANPAGE FB AI] leminh139148',
+      'Khác', // điều text / paragraph
     ],
   },
   {
@@ -240,7 +241,7 @@ function EmployeeChecklistCard({
   rows: ChecklistItem[];
   templateTasks: string[];
   onAddItem: (item: ChecklistItem) => void;
-  onUpdateItem: (id: string, patch: { label?: string; quantity?: number }) => void;
+  onUpdateItem: (id: string, patch: { label?: string; quantity?: number; note?: string }) => void;
   onRequestDelete: (id: string, label: string) => void;
 }) {
   // Dòng đã lưu, tra theo nhãn.
@@ -255,6 +256,15 @@ function EmployeeChecklistCard({
       if (qty !== existing.quantity) onUpdateItem(existing.id, { quantity: qty });
     } else if (qty > 0) {
       onAddItem({ id: 'cl_' + Date.now(), date, employeeId: employee.id, employeeName: employee.name, label, quantity: qty });
+    }
+  };
+
+  // Điền mô tả text cho dòng "Khác": chưa có → tạo mới (khi có chữ); có rồi → cập nhật.
+  const commitNote = (label: string, note: string, existing?: ChecklistItem) => {
+    if (existing) {
+      if (note !== (existing.note ?? '')) onUpdateItem(existing.id, { note });
+    } else if (note.trim()) {
+      onAddItem({ id: 'cl_' + Date.now(), date, employeeId: employee.id, employeeName: employee.name, label, quantity: 0, note });
     }
   };
 
@@ -283,7 +293,9 @@ function EmployeeChecklistCard({
             label={label}
             existing={itemByLabel.get(label)}
             readOnly={readOnly}
+            asNote={label === 'Khác'}
             onCommitQty={(qty) => commitQty(label, qty, itemByLabel.get(label))}
+            onCommitNote={(note) => commitNote(label, note, itemByLabel.get(label))}
           />
         ))}
         {extras.map((item) => (
@@ -308,22 +320,26 @@ function EmployeeChecklistCard({
 
 /* Một dòng đầu việc — nhãn (chip nền tảng) + ô số lượng. Ai cũng sửa được. */
 function ChecklistRow({
-  label, existing, custom, readOnly, onCommitQty, onCommitLabel, onDelete,
+  label, existing, custom, readOnly, asNote, onCommitQty, onCommitNote, onCommitLabel, onDelete,
 }: {
   label: string;
   existing?: ChecklistItem;
   custom?: boolean;
   readOnly?: boolean;
+  asNote?: boolean; // dòng nhập MÔ TẢ bằng chữ thay vì số (vd: "Khác" — điều text/paragraph)
   onCommitQty: (qty: number) => void;
+  onCommitNote?: (note: string) => void;
   onCommitLabel?: (label: string) => void;
   onDelete?: () => void;
 }) {
   const { tag, rest } = parseLabel(label);
   const [qty, setQty] = useState(existing ? String(existing.quantity) : '');
   const [labelStr, setLabelStr] = useState(label);
+  const [note, setNote] = useState(existing?.note ?? '');
 
   useEffect(() => { setQty(existing ? String(existing.quantity) : ''); }, [existing?.quantity, existing]);
   useEffect(() => { setLabelStr(label); }, [label]);
+  useEffect(() => { setNote(existing?.note ?? ''); }, [existing?.note, existing]);
 
   const commitQty = () => onCommitQty(parseInt(qty.replace(/\D/g, ''), 10) || 0);
 
@@ -343,12 +359,40 @@ function ChecklistRow({
 
   // Chế độ CHỈ XEM: nhãn + số lượng dạng text, không ô nhập / không xóa.
   if (readOnly) {
+    // Dòng "Khác": nhãn ở trên, mô tả xuống dòng hiển thị đầy đủ (không cắt cụt).
+    if (asNote) {
+      return (
+        <div className="px-3 py-1.5">
+          <p className="text-sm font-semibold text-slate-600">{rest || label}</p>
+          <p className={`text-[13px] leading-snug whitespace-pre-wrap break-words ${existing?.note ? 'text-slate-700' : 'text-slate-300'}`}>
+            {existing?.note || '—'}
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="px-3 py-1 flex items-center gap-2">
         {labelBlock}
         <span className={`w-9 text-right text-[13px] font-mono font-bold ${filled ? 'text-slate-900' : 'text-slate-300'}`}>
           {existing?.quantity ?? 0}
         </span>
+      </div>
+    );
+  }
+
+  // Dòng "Khác" — nhãn cố định + ô nhập MÔ TẢ bằng chữ (điều text/paragraph nhiều dòng).
+  if (asNote) {
+    return (
+      <div className="group px-3 py-1.5 hover:bg-rose-50/30 transition-colors">
+        <span className="text-sm font-semibold text-slate-600">{rest || label}</span>
+        <textarea
+          value={note}
+          rows={2}
+          placeholder="Mô tả công việc..."
+          onChange={(e) => setNote(e.target.value)}
+          onBlur={() => onCommitNote?.(note.trim())}
+          className="mt-1 w-full px-2 py-1 text-sm leading-snug border border-slate-200/70 hover:border-slate-200 focus:border-[#D32027] rounded-md outline-none bg-slate-50/40 focus:bg-white focus:ring-1 focus:ring-[#D32027] transition-colors resize-y"
+        />
       </div>
     );
   }

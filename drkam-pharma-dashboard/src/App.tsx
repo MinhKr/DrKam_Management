@@ -723,7 +723,7 @@ export default function App() {
     addAuditLog('Checklist', `Thêm đầu việc "${item.label}" — ${item.employeeName}, ngày ${item.date}`);
   };
 
-  const handleUpdateChecklistItem = async (id: string, patch: { label?: string; quantity?: number }) => {
+  const handleUpdateChecklistItem = async (id: string, patch: { label?: string; quantity?: number; note?: string }) => {
     if (cloud) {
       try {
         await repo.updateChecklistItem(id, patch);

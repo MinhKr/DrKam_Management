@@ -263,7 +263,7 @@ export async function createChecklistItem(
 
 export async function updateChecklistItem(
   id: string,
-  patch: { label?: string; quantity?: number },
+  patch: { label?: string; quantity?: number; note?: string },
 ): Promise<void> {
   const { error } = await db().from('content_checklists').update(patch).eq('id', id);
   if (error) throw error;

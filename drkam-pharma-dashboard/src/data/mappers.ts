@@ -286,6 +286,7 @@ export function checklistFromRow(r: ChecklistRow): ChecklistItem {
     employeeName: r.employee_name ?? '',
     label: r.label,
     quantity: r.quantity,
+    note: r.note ?? undefined,
     createdBy: r.created_by ?? undefined,
   };
 }
@@ -300,6 +301,7 @@ export function checklistToInsert(
     employee_name: item.employeeName || '',
     label: item.label,
     quantity: item.quantity,
+    note: item.note ?? null,
     created_by: createdBy,
   };
 }
