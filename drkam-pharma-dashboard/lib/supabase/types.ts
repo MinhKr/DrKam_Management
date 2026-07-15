@@ -161,6 +161,7 @@ export interface Database {
           employee_name: string;
           label: string;
           quantity: number;
+          note: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;

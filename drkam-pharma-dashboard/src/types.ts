@@ -98,6 +98,7 @@ export interface ChecklistItem {
   employeeName: string; // tên hiển thị (denormalize, giống channels.managerName)
   label: string;        // nhãn đầu việc, vd "[TIKTOK AI] haidang0136", "SEO WEB"
   quantity: number;     // số lượng cần làm trong ngày
+  note?: string;        // mô tả bằng chữ (dùng cho đầu việc "Khác" — điều text/paragraph, không đo bằng số)
   createdBy?: string;   // uid người tạo (chế độ DB)
 }
 
