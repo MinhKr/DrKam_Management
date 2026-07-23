@@ -17,6 +17,8 @@ import {
   MediaTaskLog,
   MediaKpiEntry,
   MediaImprovement,
+  AdsFbTaskLog,
+  AdsFbTarget,
 } from '../types';
 
 type ChannelRow = Database['public']['Tables']['channels']['Row'];
@@ -29,6 +31,8 @@ type ChecklistRow = Database['public']['Tables']['content_checklists']['Row'];
 type MediaLogRow = Database['public']['Tables']['media_task_logs']['Row'];
 type MediaKpiRow = Database['public']['Tables']['media_kpi_entries']['Row'];
 type MediaImprovementRow = Database['public']['Tables']['media_improvements']['Row'];
+type AdsFbLogRow = Database['public']['Tables']['ads_fb_task_logs']['Row'];
+type AdsFbTargetRow = Database['public']['Tables']['ads_fb_targets']['Row'];
 
 /**
  * Quy ước nguồn doanh thu (source_platform) suy từ loại kênh của báo cáo.
@@ -457,5 +461,127 @@ export function mediaImprovementToUpdate(
   if (patch.proposal !== undefined) u.proposal = patch.proposal;
   if (patch.benefit !== undefined) u.benefit = patch.benefit ?? null;
   if (patch.priority !== undefined) u.priority = patch.priority;
+  return u;
+}
+
+// ── ADS FACEBOOK: BÁO CÁO NGÀY (metrics nhập tay) ─────────────
+export function adsFbLogFromRow(r: AdsFbLogRow): AdsFbTaskLog {
+  return {
+    id: r.id,
+    date: toUiDate(r.log_date),
+    employeeId: r.employee_id,
+    employeeName: r.employee_name ?? '',
+    formType: r.form_type,
+    spend: r.spend,
+    revenue: r.revenue,
+    orders: r.orders,
+    dataCount: r.data_count,
+    messages: r.messages,
+    impressions: r.impressions,
+    clicks: r.clicks,
+    addToCart: r.add_to_cart,
+    campsRunning: r.camps_running,
+    campsTest: r.camps_test,
+    contentTest: r.content_test,
+    optimizeActions: r.optimize_actions,
+    tpRating: r.tp_rating,
+    note: r.note ?? undefined,
+  };
+}
+
+export function adsFbLogToInsert(
+  item: AdsFbTaskLog,
+  createdBy: string,
+): Database['public']['Tables']['ads_fb_task_logs']['Insert'] {
+  return {
+    log_date: toDbDate(item.date),
+    employee_id: item.employeeId,
+    employee_name: item.employeeName || '',
+    form_type: item.formType,
+    spend: item.spend || 0,
+    revenue: item.revenue || 0,
+    orders: item.orders || 0,
+    data_count: item.dataCount || 0,
+    messages: item.messages || 0,
+    impressions: item.impressions || 0,
+    clicks: item.clicks || 0,
+    add_to_cart: item.addToCart || 0,
+    camps_running: item.campsRunning || 0,
+    camps_test: item.campsTest || 0,
+    content_test: item.contentTest || 0,
+    optimize_actions: item.optimizeActions || 0,
+    tp_rating: item.tpRating ?? null,
+    note: item.note ?? null,
+    created_by: createdBy,
+  };
+}
+
+export function adsFbLogToUpdate(
+  patch: Partial<AdsFbTaskLog>,
+): Database['public']['Tables']['ads_fb_task_logs']['Update'] {
+  const u: Database['public']['Tables']['ads_fb_task_logs']['Update'] = {};
+  if (patch.date !== undefined) u.log_date = toDbDate(patch.date);
+  if (patch.employeeName !== undefined) u.employee_name = patch.employeeName;
+  if (patch.formType !== undefined) u.form_type = patch.formType;
+  if (patch.spend !== undefined) u.spend = patch.spend || 0;
+  if (patch.revenue !== undefined) u.revenue = patch.revenue || 0;
+  if (patch.orders !== undefined) u.orders = patch.orders || 0;
+  if (patch.dataCount !== undefined) u.data_count = patch.dataCount || 0;
+  if (patch.messages !== undefined) u.messages = patch.messages || 0;
+  if (patch.impressions !== undefined) u.impressions = patch.impressions || 0;
+  if (patch.clicks !== undefined) u.clicks = patch.clicks || 0;
+  if (patch.addToCart !== undefined) u.add_to_cart = patch.addToCart || 0;
+  if (patch.campsRunning !== undefined) u.camps_running = patch.campsRunning || 0;
+  if (patch.campsTest !== undefined) u.camps_test = patch.campsTest || 0;
+  if (patch.contentTest !== undefined) u.content_test = patch.contentTest || 0;
+  if (patch.optimizeActions !== undefined) u.optimize_actions = patch.optimizeActions || 0;
+  if (patch.tpRating !== undefined) u.tp_rating = patch.tpRating ?? null;
+  if (patch.note !== undefined) u.note = patch.note ?? null;
+  return u;
+}
+
+// ── ADS FACEBOOK: TARGET THÁNG ────────────────────────────────
+export function adsFbTargetFromRow(r: AdsFbTargetRow): AdsFbTarget {
+  return {
+    id: r.id,
+    period: r.period,
+    employeeId: r.employee_id,
+    employeeName: r.employee_name ?? '',
+    spendTarget: r.spend_target,
+    revenueTarget: r.revenue_target,
+    ordersTarget: r.orders_target,
+    daysInMonth: r.days_in_month,
+    note: r.note ?? undefined,
+  };
+}
+
+export function adsFbTargetToInsert(
+  item: AdsFbTarget,
+  createdBy: string,
+): Database['public']['Tables']['ads_fb_targets']['Insert'] {
+  return {
+    period: item.period,
+    employee_id: item.employeeId,
+    employee_name: item.employeeName || '',
+    spend_target: item.spendTarget || 0,
+    revenue_target: item.revenueTarget || 0,
+    orders_target: item.ordersTarget || 0,
+    days_in_month: item.daysInMonth || 30,
+    note: item.note ?? null,
+    created_by: createdBy,
+  };
+}
+
+export function adsFbTargetToUpdate(
+  patch: Partial<AdsFbTarget>,
+): Database['public']['Tables']['ads_fb_targets']['Update'] {
+  const u: Database['public']['Tables']['ads_fb_targets']['Update'] = {};
+  if (patch.period !== undefined) u.period = patch.period;
+  if (patch.employeeName !== undefined) u.employee_name = patch.employeeName;
+  if (patch.spendTarget !== undefined) u.spend_target = patch.spendTarget || 0;
+  if (patch.revenueTarget !== undefined) u.revenue_target = patch.revenueTarget || 0;
+  if (patch.ordersTarget !== undefined) u.orders_target = patch.ordersTarget || 0;
+  if (patch.daysInMonth !== undefined) u.days_in_month = patch.daysInMonth || 30;
+  if (patch.note !== undefined) u.note = patch.note ?? null;
   return u;
 }

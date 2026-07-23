@@ -15,6 +15,8 @@ import {
   MediaTaskLog,
   MediaKpiEntry,
   MediaImprovement,
+  AdsFbTaskLog,
+  AdsFbTarget,
 } from '../types';
 import {
   channelFromRow,
@@ -38,6 +40,12 @@ import {
   mediaImprovementFromRow,
   mediaImprovementToInsert,
   mediaImprovementToUpdate,
+  adsFbLogFromRow,
+  adsFbLogToInsert,
+  adsFbLogToUpdate,
+  adsFbTargetFromRow,
+  adsFbTargetToInsert,
+  adsFbTargetToUpdate,
 } from './mappers';
 
 function db() {
@@ -364,5 +372,67 @@ export async function updateMediaImprovement(id: string, patch: Partial<MediaImp
 
 export async function deleteMediaImprovement(id: string): Promise<void> {
   const { error } = await db().from('media_improvements').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── ADS FACEBOOK: BÁO CÁO NGÀY (ads_fb_task_logs) ─────────────
+export async function loadAdsFbLogs(): Promise<AdsFbTaskLog[]> {
+  const { data, error } = await db()
+    .from('ads_fb_task_logs')
+    .select('*')
+    .order('log_date', { ascending: false })
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(adsFbLogFromRow);
+}
+
+export async function createAdsFbLog(item: AdsFbTaskLog, createdBy: string): Promise<AdsFbTaskLog> {
+  const { data, error } = await db()
+    .from('ads_fb_task_logs')
+    .insert(adsFbLogToInsert(item, createdBy))
+    .select('*')
+    .single();
+  if (error) throw error;
+  return adsFbLogFromRow(data);
+}
+
+export async function updateAdsFbLog(id: string, patch: Partial<AdsFbTaskLog>): Promise<void> {
+  const { error } = await db().from('ads_fb_task_logs').update(adsFbLogToUpdate(patch)).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteAdsFbLog(id: string): Promise<void> {
+  const { error } = await db().from('ads_fb_task_logs').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── ADS FACEBOOK: TARGET THÁNG (ads_fb_targets) ───────────────
+export async function loadAdsFbTargets(): Promise<AdsFbTarget[]> {
+  const { data, error } = await db()
+    .from('ads_fb_targets')
+    .select('*')
+    .order('period', { ascending: false })
+    .order('employee_name', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(adsFbTargetFromRow);
+}
+
+export async function createAdsFbTarget(item: AdsFbTarget, createdBy: string): Promise<AdsFbTarget> {
+  const { data, error } = await db()
+    .from('ads_fb_targets')
+    .insert(adsFbTargetToInsert(item, createdBy))
+    .select('*')
+    .single();
+  if (error) throw error;
+  return adsFbTargetFromRow(data);
+}
+
+export async function updateAdsFbTarget(id: string, patch: Partial<AdsFbTarget>): Promise<void> {
+  const { error } = await db().from('ads_fb_targets').update(adsFbTargetToUpdate(patch)).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteAdsFbTarget(id: string): Promise<void> {
+  const { error } = await db().from('ads_fb_targets').delete().eq('id', id);
   if (error) throw error;
 }

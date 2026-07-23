@@ -24,7 +24,9 @@ import {
   ChecklistItem,
   MediaTaskLog,
   MediaKpiEntry,
-  MediaImprovement
+  MediaImprovement,
+  AdsFbTaskLog,
+  AdsFbTarget
 } from './types';
 
 import LoginComponent from './components/LoginComponent';
@@ -41,6 +43,8 @@ import ContentChecklistComponent from './components/ContentChecklistComponent';
 import MediaOverviewComponent from './components/MediaOverviewComponent';
 import MediaDailyReportComponent from './components/MediaDailyReportComponent';
 import MediaImprovementComponent from './components/MediaImprovementComponent';
+import AdsFbOverviewComponent from './components/AdsFbOverviewComponent';
+import AdsFbDailyReportComponent from './components/AdsFbDailyReportComponent';
 import { FacebookIcon, TikTokIcon } from './components/BrandIcons';
 
 import { isSupabaseConfigured } from '@/lib/supabase/client';
@@ -56,7 +60,8 @@ function migrateDemoData() {
   try {
     if (localStorage.getItem('drkam_seed_version') !== SEED_VERSION) {
       ['drkam_session', 'drkam_channels', 'drkam_reports', 'drkam_employees', 'drkam_targets', 'drkam_logs', 'drkam_fb_pages',
-       'drkam_checklists', 'drkam_media_daily', 'drkam_media_logs', 'drkam_media_kpi', 'drkam_media_improvements']
+       'drkam_checklists', 'drkam_media_daily', 'drkam_media_logs', 'drkam_media_kpi', 'drkam_media_improvements',
+       'drkam_adsfb_logs', 'drkam_adsfb_targets']
         .forEach((k) => localStorage.removeItem(k));
       localStorage.setItem('drkam_seed_version', SEED_VERSION);
     }
@@ -180,6 +185,17 @@ export default function App() {
     } catch { return INITIAL_MEDIA_IMPROVEMENTS; }
   });
 
+  // ── TEAM ADS FACEBOOK ──
+  // Báo cáo ngày = metrics nhập tay (adsFbLogs); target tháng theo nhân viên (adsFbTargets).
+  const [adsFbLogs, setAdsFbLogs] = useState<AdsFbTaskLog[]>(() => {
+    try { const stored = localStorage.getItem('drkam_adsfb_logs'); return stored ? JSON.parse(stored) : []; }
+    catch { return []; }
+  });
+  const [adsFbTargets, setAdsFbTargets] = useState<AdsFbTarget[]>(() => {
+    try { const stored = localStorage.getItem('drkam_adsfb_targets'); return stored ? JSON.parse(stored) : []; }
+    catch { return []; }
+  });
+
   // Active view tab state ("overview", "tiktok-brand"/"tiktok-real-koc"/"tiktok-ai-koc", "fb-koc"/"fb-brand", "channels", "employees", "chi-tieu", "stats", "logs")
   // Mặc định luôn mở mục Tổng quan mỗi khi vào app.
   const [activeTab, setActiveTab] = useState('overview');
@@ -249,6 +265,16 @@ export default function App() {
     localStorage.setItem('drkam_media_improvements', JSON.stringify(mediaImprovements));
   }, [mediaImprovements, cloud]);
 
+  // Team Ads Facebook (demo: localStorage).
+  useEffect(() => {
+    if (cloud) return;
+    localStorage.setItem('drkam_adsfb_logs', JSON.stringify(adsFbLogs));
+  }, [adsFbLogs, cloud]);
+  useEffect(() => {
+    if (cloud) return;
+    localStorage.setItem('drkam_adsfb_targets', JSON.stringify(adsFbTargets));
+  }, [adsFbTargets, cloud]);
+
   // Chế độ DB thật: khôi phục phiên đăng nhập + nạp toàn bộ dữ liệu khi mở app.
   useEffect(() => {
     if (!cloud) return;
@@ -315,6 +341,16 @@ export default function App() {
         } catch (e) {
           console.warn('Tải dữ liệu Media thất bại (có thể chưa chạy migration 0007):', errMsg(e));
         }
+        // Team Ads Facebook — tách riêng để nếu chưa chạy migration 0011 thì phần khác vẫn nạp.
+        try {
+          const [al, at] = await Promise.all([
+            repo.loadAdsFbLogs(),
+            repo.loadAdsFbTargets(),
+          ]);
+          if (active) { setAdsFbLogs(al); setAdsFbTargets(at); }
+        } catch (e) {
+          console.warn('Tải dữ liệu Ads Facebook thất bại (có thể chưa chạy migration 0011):', errMsg(e));
+        }
         // Nhật ký chỉ Admin xem được (RLS) — bỏ qua lỗi với vai trò khác.
         try {
           const lg = await repo.loadLogs();
@@ -341,9 +377,10 @@ export default function App() {
   // Login Success
   const handleLoginSuccess = async (newSession: UserSession) => {
     setSession(newSession);
-    // Nick Media → vào thẳng "Tổng quan Media"; còn lại về "Tổng quan".
+    // Nick Media → "Tổng quan Media"; nick Ads FB → "Tổng quan Ads"; còn lại → "Tổng quan".
     const mediaLogin = newSession.department === 'Media' && newSession.role !== 'Admin';
-    setActiveTab(mediaLogin ? 'media-overview' : 'overview');
+    const adsFbLogin = newSession.department === 'Ads Facebook' && newSession.role !== 'Admin';
+    setActiveTab(mediaLogin ? 'media-overview' : adsFbLogin ? 'adsfb-overview' : 'overview');
     // Ghi log với danh tính NGƯỜI VỪA ĐĂNG NHẬP (không lấy session cũ — lúc này
     // setSession chưa kịp cập nhật nên session.name vẫn là tên mặc định cũ).
     const uid = cloud ? await getCurrentUserId() : null;
@@ -839,23 +876,89 @@ export default function App() {
     setMediaImprovements(prev => prev.filter(i => i.id !== id));
   };
 
+  // ═══════════════════════════════════════════════════════════════
+  //  TEAM ADS FACEBOOK handlers (cloud: ads_fb_*; demo: state + localStorage)
+  // ═══════════════════════════════════════════════════════════════
+  // A. Báo cáo ngày (ads_fb_task_logs).
+  const handleAddAdsFbLog = async (log: AdsFbTaskLog) => {
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        const saved = await repo.createAdsFbLog(log, currentUserId);
+        setAdsFbLogs(prev => [saved, ...prev]);
+        addAuditLog('Ads Facebook', `Thêm báo cáo ${log.formType} — ${log.employeeName}, ngày ${log.date}.`);
+      } catch (e) { alert('Lưu báo cáo Ads thất bại: ' + errMsg(e)); }
+      return;
+    }
+    setAdsFbLogs(prev => [log, ...prev]);
+    addAuditLog('Ads Facebook', `Thêm báo cáo ${log.formType} — ${log.employeeName}, ngày ${log.date}.`);
+  };
+  const handleUpdateAdsFbLog = async (id: string, patch: Partial<AdsFbTaskLog>) => {
+    if (cloud) {
+      try { await repo.updateAdsFbLog(id, patch); }
+      catch (e) { alert('Cập nhật báo cáo Ads thất bại: ' + errMsg(e)); return; }
+    }
+    setAdsFbLogs(prev => prev.map(l => (l.id === id ? { ...l, ...patch } : l)));
+  };
+  const handleDeleteAdsFbLog = async (id: string) => {
+    if (cloud) {
+      try { await repo.deleteAdsFbLog(id); }
+      catch (e) { alert('Xóa báo cáo Ads thất bại: ' + errMsg(e)); return; }
+    }
+    setAdsFbLogs(prev => prev.filter(l => l.id !== id));
+  };
+
+  // B. Target tháng (ads_fb_targets).
+  const handleAddAdsFbTarget = async (item: AdsFbTarget) => {
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        const saved = await repo.createAdsFbTarget(item, currentUserId);
+        setAdsFbTargets(prev => [...prev, saved]);
+        addAuditLog('Ads Facebook', `Đặt target tháng ${item.period} — ${item.employeeName}.`);
+      } catch (e) { alert('Lưu target Ads thất bại: ' + errMsg(e)); }
+      return;
+    }
+    setAdsFbTargets(prev => [...prev, item]);
+    addAuditLog('Ads Facebook', `Đặt target tháng ${item.period} — ${item.employeeName}.`);
+  };
+  const handleUpdateAdsFbTarget = async (id: string, patch: Partial<AdsFbTarget>) => {
+    if (cloud) {
+      try { await repo.updateAdsFbTarget(id, patch); }
+      catch (e) { alert('Cập nhật target Ads thất bại: ' + errMsg(e)); return; }
+    }
+    setAdsFbTargets(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)));
+  };
+  const handleDeleteAdsFbTarget = async (id: string) => {
+    if (cloud) {
+      try { await repo.deleteAdsFbTarget(id); }
+      catch (e) { alert('Xóa target Ads thất bại: ' + errMsg(e)); return; }
+    }
+    setAdsFbTargets(prev => prev.filter(t => t.id !== id));
+  };
+
   // Cờ phân quyền hiển thị Media.
   const isMediaUser = session.department === 'Media' && session.role !== 'Admin';
+  const isAdsFbUser = session.department === 'Ads Facebook' && session.role !== 'Admin';
   const isAdmin = session.role === 'Admin';
 
   // Danh sách tab của module Media.
   const MEDIA_TABS = ['media-overview', 'media-daily', 'media-improve'];
+  // Danh sách tab của module Ads Facebook.
+  const ADS_FB_TABS = ['adsfb-overview', 'adsfb-daily'];
 
   // Role permissions checking helper
   const canAccessTab = (tab: string) => {
     // Nick Media (Khải/Sơn): CHỈ truy cập được các màn Media.
     if (isMediaUser) return MEDIA_TABS.includes(tab);
+    // Nick Ads Facebook: CHỈ truy cập được các màn Ads Facebook.
+    if (isAdsFbUser) return ADS_FB_TABS.includes(tab);
 
     // TẠM KHOÁ mọi mục ngoài TikTok & Facebook cho MỌI vai trò (giữ nguyên code, chỉ chặn truy cập).
     // Mở lại sau: thêm tab vào ALLOWED_TABS hoặc bỏ chặn này.
     const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'fb-ads', 'checklist'];
-    // Admin xem thêm cả module Media.
-    const allowed = isAdmin ? [...ALLOWED_TABS, ...MEDIA_TABS] : ALLOWED_TABS;
+    // Admin xem thêm cả module Media + Ads Facebook.
+    const allowed = isAdmin ? [...ALLOWED_TABS, ...MEDIA_TABS, ...ADS_FB_TABS] : ALLOWED_TABS;
     if (!allowed.includes(tab)) return false;
 
     // (Phân quyền theo vai trò trước đây — giữ lại để khôi phục khi mở khoá:)
@@ -904,6 +1007,33 @@ export default function App() {
     </div>
   );
 
+  // Sidebar module Ads Facebook (flat). Sidebar duy nhất cho nick Ads FB, mục nhóm phụ cho Admin.
+  const ADS_FB_NAV = [
+    { tab: 'adsfb-overview', label: 'Tổng quan Ads', icon: 'space_dashboard', accent: 'text-[#D32027] bg-rose-50' },
+    { tab: 'adsfb-daily',    label: 'Báo cáo ngày',  icon: 'ads_click',       accent: 'text-emerald-600 bg-emerald-50' },
+  ];
+  const renderAdsFbNav = () => (
+    <div className={isAdsFbUser ? '' : 'pt-4 border-t border-slate-100 my-2'}>
+      {!isAdsFbUser && (
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2">Team Ads Facebook</p>
+      )}
+      {ADS_FB_NAV.map((item) => (
+        <button
+          key={item.tab}
+          onClick={() => navigateToTab(item.tab)}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+            activeTab === item.tab ? 'bg-rose-50 text-[#D32027]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <span className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${item.accent}`}>
+            <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
+          </span>
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+
   // If user session is not logged in, render the login page directly
   if (!session || !session.isLoggedIn) {
     return <LoginComponent onLoginSuccess={handleLoginSuccess} />;
@@ -923,6 +1053,21 @@ export default function App() {
           onAddKpi={handleAddMediaKpi}
           onUpdateKpi={handleUpdateMediaKpi}
           onDeleteKpi={handleDeleteMediaKpi}
+        />
+      );
+    }
+    // Nick Ads Facebook mở nhầm tab ngoài Ads FB → về Tổng quan Ads.
+    if (isAdsFbUser && !ADS_FB_TABS.includes(activeTab)) {
+      return (
+        <AdsFbOverviewComponent
+          logs={adsFbLogs}
+          targets={adsFbTargets}
+          employees={employees}
+          session={session}
+          onNavigateToTab={navigateToTab}
+          onAddTarget={handleAddAdsFbTarget}
+          onUpdateTarget={handleUpdateAdsFbTarget}
+          onDeleteTarget={handleDeleteAdsFbTarget}
         />
       );
     }
@@ -1030,6 +1175,31 @@ export default function App() {
             onAdd={handleAddMediaImprovement}
             onUpdate={handleUpdateMediaImprovement}
             onDelete={handleDeleteMediaImprovement}
+          />
+        );
+      case 'adsfb-overview':
+        return (
+          <AdsFbOverviewComponent
+            logs={adsFbLogs}
+            targets={adsFbTargets}
+            employees={employees}
+            session={session}
+            onNavigateToTab={navigateToTab}
+            onAddTarget={handleAddAdsFbTarget}
+            onUpdateTarget={handleUpdateAdsFbTarget}
+            onDeleteTarget={handleDeleteAdsFbTarget}
+          />
+        );
+      case 'adsfb-daily':
+        return (
+          <AdsFbDailyReportComponent
+            logs={adsFbLogs}
+            targets={adsFbTargets}
+            employees={employees}
+            session={session}
+            onAdd={handleAddAdsFbLog}
+            onUpdate={handleUpdateAdsFbLog}
+            onDelete={handleDeleteAdsFbLog}
           />
         );
       case 'channels':
@@ -1242,7 +1412,7 @@ export default function App() {
 
             {/* Navigation Tab options */}
             <nav className="flex flex-col gap-1">
-              {isMediaUser ? renderMediaNav() : (<>
+              {isMediaUser ? renderMediaNav() : isAdsFbUser ? renderAdsFbNav() : (<>
               <button
                 onClick={() => navigateToTab('overview')}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
@@ -1481,6 +1651,8 @@ export default function App() {
 
               {/* Module Media — chỉ Admin thấy thêm ở đây (nick Media đã render riêng ở trên) */}
               {isAdmin && renderMediaNav()}
+              {/* Module Ads Facebook — chỉ Admin thấy thêm ở đây (nick Ads FB render riêng ở trên) */}
+              {isAdmin && renderAdsFbNav()}
               </>)}
             </nav>
           </div>

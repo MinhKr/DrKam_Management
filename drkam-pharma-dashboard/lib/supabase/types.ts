@@ -244,6 +244,60 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['media_improvements']['Insert']>;
         Relationships: [];
       };
+      ads_fb_task_logs: {
+        Row: {
+          id: string;
+          log_date: string;
+          employee_id: string;
+          employee_name: string;
+          form_type: 'Chuyển đổi' | 'Sỉ' | 'Mess';
+          spend: number;
+          revenue: number;
+          orders: number;
+          data_count: number;
+          messages: number;
+          impressions: number;
+          clicks: number;
+          add_to_cart: number;
+          camps_running: number;
+          camps_test: number;
+          content_test: number;
+          optimize_actions: number;
+          tp_rating: number | null;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['ads_fb_task_logs']['Row'],
+          'id' | 'created_at' | 'updated_at'
+        > & { id?: string; created_at?: string; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['ads_fb_task_logs']['Insert']>;
+        Relationships: [];
+      };
+      ads_fb_targets: {
+        Row: {
+          id: string;
+          period: string;
+          employee_id: string;
+          employee_name: string;
+          spend_target: number;
+          revenue_target: number;
+          orders_target: number;
+          days_in_month: number;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['ads_fb_targets']['Row'],
+          'id' | 'created_at' | 'updated_at'
+        > & { id?: string; created_at?: string; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['ads_fb_targets']['Insert']>;
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: { [_ in never]: never };

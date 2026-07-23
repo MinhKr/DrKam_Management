@@ -168,6 +168,52 @@ export interface MediaImprovement {
   priority: 'Cao' | 'Trung bình' | 'Thấp';
 }
 
+// ════════════════════════════════════════════════════════════════
+//  TEAM ADS FACEBOOK — 2 thực thể (tách biệt hoàn toàn)
+//  Nhân sự: Nguyễn Thị Hà (Nhân viên) …
+//  Báo cáo ngày = metrics nhập tay; KPI (ROAS/CPA/…) + điểm 3 trục
+//  tính runtime trong src/lib/adsFacebook.ts (không lưu DB).
+// ════════════════════════════════════════════════════════════════
+
+// Hình thức chạy — quyết định nhánh chấm điểm phễu (Trục A).
+export type AdsFbFormType = 'Chuyển đổi' | 'Sỉ' | 'Mess';
+
+// A. Báo cáo ngày — metrics nhập tay (1 dòng/người/ngày/hình thức).
+export interface AdsFbTaskLog {
+  id: string;
+  date: string;              // dd/mm/yyyy
+  employeeId: string;
+  employeeName: string;
+  formType: AdsFbFormType;   // Hình thức
+  spend: number;             // Tổng chi tiêu (đ)
+  revenue: number;           // Doanh thu đơn thực (đ)
+  orders: number;            // Số đơn
+  dataCount: number;         // Số data
+  messages: number;          // Số tin nhắn (Mess)
+  impressions: number;       // Impressions
+  clicks: number;            // Clicks
+  addToCart: number;         // Add to cart (CĐ)
+  campsRunning: number;      // Camp đang chạy
+  campsTest: number;         // Camp test mới
+  contentTest: number;       // Content test mới
+  optimizeActions: number;   // Số hành động tối ưu
+  tpRating?: number | null;  // Đánh giá TP (1–5★)
+  note?: string;             // Ghi chú tối ưu
+}
+
+// B. Target tháng theo nhân viên (÷ days_in_month → target/ngày).
+export interface AdsFbTarget {
+  id: string;
+  period: string;            // 'yyyy-mm'
+  employeeId: string;
+  employeeName: string;
+  spendTarget: number;       // Chi tiêu / tháng (đ)
+  revenueTarget: number;     // Doanh thu / tháng (đ)
+  ordersTarget: number;      // Đơn / tháng
+  daysInMonth: number;       // Số ngày dùng để chia (mặc định 30)
+  note?: string;
+}
+
 // Initial Mock Data
 export const INITIAL_SESSION: UserSession = {
   isLoggedIn: true, // Defaulting true to keep preview live, option to logout & login is provided in UI

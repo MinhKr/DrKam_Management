@@ -1,0 +1,78 @@
+# HƯỚNG DẪN NỐI SUPABASE CHO MODULE ADS FACEBOOK
+
+Sau khi làm xong, app chạy `npm run dev` (đã có `.env.local`) sẽ ở **chế độ cloud**:
+nick Ads Facebook (Hà…) đăng nhập bằng Supabase Auth, dữ liệu Báo cáo ngày lưu vào bảng
+`ads_fb_task_logs`, target tháng lưu vào `ads_fb_targets`. Các team khác không bị ảnh hưởng.
+
+> Demo vẫn dùng được bằng `npm run dev:demo` (bỏ qua Supabase, dữ liệu localStorage).
+
+Mọi KPI (ROAS/CPA/CTR/CPM/AOV…) và **điểm 3 trục** (A ads · B tối ưu · C target) được **tính runtime**
+trong `src/lib/adsFacebook.ts` từ metrics + target — không lưu ở DB. Công thức trích trực tiếp từ
+file gốc `DrKam_Dashboard_MetaAds.xlsx` (sheet "Cấu hình"), đã verify khớp dữ liệu tháng 7/2026.
+
+---
+
+## Bước 1 — Chạy migration tạo bảng
+Mở **Supabase Dashboard → SQL Editor**, dán & chạy nội dung file:
+```
+supabase/migrations/0011_ads_facebook_reports.sql
+```
+Tạo 2 bảng: `ads_fb_task_logs` (báo cáo ngày), `ads_fb_targets` (target tháng) + RLS
+(xem chung; thêm = `created_by`; **sửa/xóa báo cáo ngày chỉ người tạo hoặc Admin**).
+
+## Bước 2 — Tạo tài khoản nhân viên Ads
+**Dashboard → Authentication → Users → Add user** (bật **Auto Confirm User**):
+
+| Email | Mật khẩu |
+|-------|----------|
+| hant@drkam.vn | 123456 |
+
+> Trigger `handle_new_user` (migration 0001) tự tạo dòng trong `profiles`.
+> Email/mật khẩu theo chuẩn nội bộ DrKam (mk mặc định 123456). **Kiểm tra lại email đúng
+> quy ước cho Nguyễn Thị Hà trước khi tạo.**
+
+## Bước 3 — Gán phòng Ads Facebook + đặt target
+Mở **SQL Editor**, dán & chạy file:
+```
+supabase/data/adsfb_seed_ha.sql
+```
+File này sẽ:
+1. Đặt `department = 'Ads Facebook'`, `role = 'Nhân viên'`, tên hiển thị cho Hà.
+2. Đặt **target tháng 7/2026**: chi 80tr · DT 200tr · 700 đơn ÷ 30 ngày.
+
+> Nếu báo lỗi *"Chưa có tài khoản Hà"* → quay lại Bước 2.
+> Target còn có thể sửa trực tiếp trong app: Admin vào **Tổng quan Ads → cột thao tác → Đặt/Sửa target**.
+
+## Bước 4 — Chạy app ở chế độ cloud
+```
+cd drkam-pharma-dashboard
+npm run dev
+```
+Đăng nhập **hant@drkam.vn / 123456** → chỉ thấy các màn **Ads Facebook**
+(Tổng quan Ads · Báo cáo ngày). Thử thêm 1 báo cáo ở "Báo cáo ngày" → kiểm tra bảng
+`ads_fb_task_logs` trong Supabase có dòng mới, và cột ROAS/CPA/điểm hiển thị đúng.
+
+---
+
+## Phân quyền (RLS đã cấu hình)
+| Thao tác | Ai làm được |
+|----------|-------------|
+| Xem | Mọi user đã đăng nhập (UI lọc theo phòng ban — team chỉ thấy báo cáo team mình) |
+| Thêm | Mọi user (ghi `created_by = auth.uid()`) |
+| Sửa / Xóa báo cáo ngày | Người tạo dòng hoặc Admin |
+| Sửa / Xóa target | Mọi user đã đăng nhập (khuyến nghị để Admin quản) |
+
+Admin đăng nhập thấy toàn hệ thống + nhóm **Team Ads Facebook** ở sidebar, và cột "Đặt target".
+
+## Công thức chấm điểm (tham chiếu — `src/lib/adsFacebook.ts`)
+- **Benchmark 100đ**: ROAS 2.5 · CPA 120k · CTR 1.5% · CPM 120k · CR 2.5% · ATC 6% · CP-mess 15k · Chốt mess 25%.
+- **Trục A (50%)** = trung bình CÓ TRỌNG SỐ các sub-score có dữ liệu (ROAS 35 · CPA 25 · CTR 12 · CPM 8 · Phễu 20).
+  Phễu: hình thức "Mess" → CP-mess + Chốt mess; còn lại → CR đơn/click + Tỷ lệ ATC.
+- **Trục B (25%)** = MIN(100, tối_ưu×25 + content_test×20 + camp_test×5); có Đánh giá TP → 0.5×base + 0.5×(TP×20).
+- **Trục C (25%)** = MIN(100, %đạt_DT×100).
+- **Điểm tổng** = A×0.5 + B×0.25 + C×0.25. **Xếp loại**: ≥85 Xuất sắc · ≥70 Đạt · ≥55 Cần cải thiện · <55 Kém.
+
+## Ghi chú kỹ thuật
+- Nick Ads FB nhận diện qua `profiles.department = 'Ads Facebook'`.
+- Chưa chạy migration 0011 → app vẫn chạy bình thường, chỉ log cảnh báo và phần Ads FB rỗng.
+- Thêm nhân viên khác (Đức/Tuân…): copy `adsfb_seed_ha.sql`, đổi email + target tương ứng.
