@@ -41,7 +41,9 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
   const totalSpend = rows.reduce((s, l) => s + l.spend, 0);
   const totalRevenue = rows.reduce((s, l) => s + l.revenue, 0);
   const totalOrders = rows.reduce((s, l) => s + l.orders, 0);
+  const totalData = rows.reduce((s, l) => s + l.dataCount, 0);
   const roas = totalSpend > 0 ? totalRevenue / totalSpend : null;
+  const cpData = totalData > 0 ? totalSpend / totalData : null;
   const teamScores = rows.map((l) => adsFbScore(l, targetFor(l.employeeId)).total);
   const avgScore = teamScores.length ? teamScores.reduce((s, x) => s + x, 0) / teamScores.length : null;
 
@@ -94,9 +96,12 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
       </div>
 
       {/* KPI boxes */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiBox label="Tổng chi tiêu" value={fmtVnd(totalSpend) + ' đ'} icon="payments" accent="bg-rose-50 text-[#D32027]">
           <span className="text-[11px] text-slate-400">{rows.length} báo cáo</span>
+        </KpiBox>
+        <KpiBox label="Giá 1 data" value={cpData === null ? '—' : fmtVnd(Math.round(cpData)) + ' đ'} icon="sell" accent="bg-violet-50 text-violet-600">
+          <span className="text-[11px] text-slate-400">{totalData.toLocaleString('vi-VN')} data · Chi tiêu / data</span>
         </KpiBox>
         <KpiBox label="Tổng doanh thu" value={fmtVnd(totalRevenue) + ' đ'} icon="trending_up" accent="bg-emerald-50 text-emerald-600">
           <span className="text-[11px] text-slate-400">{totalOrders.toLocaleString('vi-VN')} đơn</span>

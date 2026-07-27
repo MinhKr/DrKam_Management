@@ -51,6 +51,7 @@ export interface AdsFbKpis {
   roas: number | null;
   roi: number | null;
   cpa: number | null;
+  cpData: number | null;
   ctr: number | null;
   cpm: number | null;
   crOrderClick: number | null;
@@ -68,6 +69,7 @@ export function adsFbKpis(l: AdsFbTaskLog): AdsFbKpis {
     roas,
     roi: roas === null ? null : roas - 1,
     cpa: div(l.spend, l.orders),
+    cpData: div(l.spend, l.dataCount),
     ctr: div(l.clicks, l.impressions),
     cpm: l.impressions > 0 ? (l.spend / l.impressions) * 1000 : null,
     crOrderClick: div(l.orders, l.clicks),

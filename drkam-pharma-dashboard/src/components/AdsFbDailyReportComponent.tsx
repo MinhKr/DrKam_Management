@@ -212,6 +212,7 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
                           <Pair label="ROAS" value={fmtNum(sc.kpis.roas)} />
                           <Pair label="ROI" value={fmtPct(sc.kpis.roi)} />
                           <Pair label="CPA" value={fmtMoney(sc.kpis.cpa) + ' đ'} />
+                          <Pair label="Giá 1 data" value={fmtMoney(sc.kpis.cpData) + ' đ'} />
                           <Pair label="CTR" value={fmtPct(sc.kpis.ctr)} />
                           <Pair label="CPM" value={fmtMoney(sc.kpis.cpm) + ' đ'} />
                           <Pair label="CR đơn/click" value={fmtPct(sc.kpis.crOrderClick)} />

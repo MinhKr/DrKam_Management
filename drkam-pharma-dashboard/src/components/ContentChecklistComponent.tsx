@@ -104,9 +104,9 @@ export default function ContentChecklistComponent({
   const isMine = (emp: Employee) =>
     currentUserId ? emp.id === currentUserId : emp.name === session.name;
 
-  // Nhân sự content đang hoạt động (bỏ Admin và team Media). Xếp người của mình lên đầu.
+  // Nhân sự content đang hoạt động (bỏ Admin, team Media và team Ads Facebook). Xếp người của mình lên đầu.
   const staff = [...employees]
-    .filter((e) => e.status === 'Hoạt động' && e.role !== 'Admin' && e.department !== 'Media')
+    .filter((e) => e.status === 'Hoạt động' && e.role !== 'Admin' && e.department !== 'Media' && e.department !== 'Ads Facebook')
     .sort((a, b) => {
       const mine = Number(isMine(b)) - Number(isMine(a));
       return mine !== 0 ? mine : a.name.localeCompare(b.name, 'vi');
