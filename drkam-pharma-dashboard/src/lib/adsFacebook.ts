@@ -46,6 +46,14 @@ export const ADS_FB_WEIGHTS = {
   axis: { a: 0.5, b: 0.25, c: 0.25 },
 } as const;
 
+// ── NGƯỠNG CẢNH BÁO — khối "TOP CẢNH BÁO" của sheet Dashboard ──
+// Đếm số ngày-NV vượt ngưỡng đỏ trong kỳ.
+export const ADS_FB_ALERT = {
+  roasBelow: 1.5,
+  cpaAbove: 180_000,
+  scoreBelow: 55,
+} as const;
+
 // ── KPI dẫn xuất (null khi thiếu mẫu số) ───────────────────────
 export interface AdsFbKpis {
   roas: number | null;
@@ -205,6 +213,15 @@ export function adsFbScore(l: AdsFbTaskLog, t?: AdsFbTarget | null): AdsFbScore 
   const A = ADS_FB_WEIGHTS.axis;
   const total = (axisA ?? 0) * A.a + axisB * A.b + axisC * A.c;
   return { kpis, sub, pct, axisA, axisB, axisC, total, rank: adsFbRank(total) };
+}
+
+/**
+ * Trung bình kiểu AVERAGEIF của sheet: BỎ QUA ô trống (null) thay vì tính là 0.
+ * Trả null khi không còn giá trị nào — hiển thị "—".
+ */
+export function avgOf(values: Array<number | null | undefined>): number | null {
+  const xs = values.filter((v): v is number => v != null);
+  return xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null;
 }
 
 // ── Định dạng hiển thị ─────────────────────────────────────────

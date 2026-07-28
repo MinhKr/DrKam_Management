@@ -3,8 +3,11 @@ import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
-import { AdsFbTaskLog, AdsFbTarget, Employee, UserSession } from '../types';
-import { inPeriod, adsFbScore, adsFbRank, fmtMoney, fmtNum, fmtScore } from '../lib/adsFacebook';
+import { AdsFbTaskLog, AdsFbTarget, AdsFbFormType, Employee, UserSession } from '../types';
+import {
+  inPeriod, adsFbScore, adsFbRank, avgOf, ADS_FB_ALERT,
+  fmtMoney, fmtNum, fmtPct, fmtScore,
+} from '../lib/adsFacebook';
 import { KpiBox, ChartCard, tooltipStyle, compact } from './dashboardKit';
 
 export const ADS_FB_DEPT = 'Ads Facebook';
@@ -29,6 +32,7 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
     return ms[0] ?? nowMonthKey();
   });
   const [targetModal, setTargetModal] = useState<AdsFbTarget | null>(null);
+  const [openAlert, setOpenAlert] = useState<string | null>(null);
 
   const isAdmin = session.role === 'Admin';
   const staff = useMemo(() => employees
@@ -64,19 +68,93 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
     }));
   }, [rows]);
 
+  // ── SO SÁNH NHÂN VIÊN (trung bình toàn kỳ) — bám đúng sheet Dashboard ──
+  // Lưu ý: "Số ngày hoạt động" và các TB/ngày chỉ tính ngày ĐÃ nhập chi tiêu
+  // (COUNTIFS D<>"" / AVERAGEIF bỏ qua ô trống); ROAS TB & CPA TB là trung bình
+  // của các ngày (AVERAGEIF cột R/T), KHÁC với ROAS chung = tổng DT ÷ tổng chi.
   const perStaff = staff.map((emp) => {
     const empRows = rows.filter((r) => r.employeeId === emp.id);
-    const spend = empRows.reduce((s, l) => s + l.spend, 0);
+    const spentRows = empRows.filter((r) => r.spend > 0);
+    const target = targetFor(emp.id);
+    const scored = empRows.map((l) => adsFbScore(l, target));
     const revenue = empRows.reduce((s, l) => s + l.revenue, 0);
-    const scores = empRows.map((l) => adsFbScore(l, targetFor(emp.id)).total);
-    const avg = scores.length ? scores.reduce((s, x) => s + x, 0) / scores.length : null;
+    const avgScore = avgOf(scored.map((s) => s.total));
     return {
-      emp, days: empRows.length, spend, revenue,
-      roas: spend > 0 ? revenue / spend : null,
-      avgScore: avg, rank: avg == null ? null : adsFbRank(avg),
-      target: targetFor(emp.id),
+      emp, target,
+      days: spentRows.length,
+      avgSpend: avgOf(spentRows.map((l) => l.spend)),
+      avgRevenue: avgOf(spentRows.map((l) => l.revenue)),
+      avgRoas: avgOf(scored.map((s) => s.kpis.roas)),
+      avgCpa: avgOf(scored.map((s) => s.kpis.cpa)),
+      revenue,
+      pctRevenue: target && target.revenueTarget > 0 ? revenue / target.revenueTarget : null,
+      avgScore,
+      rank: avgScore == null ? null : adsFbRank(avgScore),
     };
   });
+
+  // ── SO SÁNH THEO HÌNH THỨC CHẠY ──
+  const byFormType = (['Chuyển đổi', 'Sỉ', 'Mess'] as AdsFbFormType[]).map((ft) => {
+    const ftRows = rows.filter((r) => r.formType === ft);
+    const scored = ftRows.map((l) => adsFbScore(l, targetFor(l.employeeId)));
+    return {
+      formType: ft,
+      days: ftRows.length,
+      avgSpend: avgOf(ftRows.filter((l) => l.spend > 0).map((l) => l.spend)),
+      avgRoas: avgOf(scored.map((s) => s.kpis.roas)),
+      avgCpa: avgOf(scored.map((s) => s.kpis.cpa)),
+      avgScore: avgOf(scored.map((s) => s.total)),
+    };
+  });
+
+  // Giá trị dẫn đầu từng cột — chỉ tô sáng khi có ≥2 người/hình thức để so.
+  const bestOf = (vals: Array<number | null>, dir: 'high' | 'low'): number | null => {
+    const n = vals.filter((v): v is number => v != null);
+    return n.length >= 2 ? (dir === 'high' ? Math.max(...n) : Math.min(...n)) : null;
+  };
+  const best = {
+    avgRevenue: bestOf(perStaff.map((s) => s.avgRevenue), 'high'),
+    avgRoas: bestOf(perStaff.map((s) => s.avgRoas), 'high'),
+    avgCpa: bestOf(perStaff.map((s) => s.avgCpa), 'low'),
+    revenue: bestOf(perStaff.map((s) => s.revenue), 'high'),
+    pctRevenue: bestOf(perStaff.map((s) => s.pctRevenue), 'high'),
+    avgScore: bestOf(perStaff.map((s) => s.avgScore), 'high'),
+  };
+  const bestFt = {
+    avgRoas: bestOf(byFormType.map((f) => f.avgRoas), 'high'),
+    avgCpa: bestOf(byFormType.map((f) => f.avgCpa), 'low'),
+    avgScore: bestOf(byFormType.map((f) => f.avgScore), 'high'),
+  };
+
+  // ── TOP CẢNH BÁO — số ngày-NV vượt ngưỡng đỏ ──
+  const alerts = useMemo(() => {
+    const flagged = rows.map((l) => ({ log: l, sc: adsFbScore(l, targetFor(l.employeeId)) }));
+    const mk = (
+      key: string, label: string, icon: string,
+      pick: (x: { log: AdsFbTaskLog; sc: ReturnType<typeof adsFbScore> }) => boolean,
+      show: (x: { log: AdsFbTaskLog; sc: ReturnType<typeof adsFbScore> }) => string,
+    ) => {
+      const hits = flagged.filter(pick);
+      return {
+        key, label, icon, count: hits.length,
+        items: hits
+          .sort((a, b) => a.log.date.localeCompare(b.log.date))
+          .map((x) => ({ date: x.log.date.slice(0, 5), name: x.log.employeeName, value: show(x) })),
+      };
+    };
+    return [
+      mk('roas', `ROAS đỏ (< ${ADS_FB_ALERT.roasBelow})`, 'trending_down',
+        (x) => x.sc.kpis.roas != null && x.sc.kpis.roas < ADS_FB_ALERT.roasBelow,
+        (x) => fmtNum(x.sc.kpis.roas)),
+      mk('cpa', `CPA đỏ (> ${Math.round(ADS_FB_ALERT.cpaAbove / 1000)}k)`, 'local_atm',
+        (x) => x.sc.kpis.cpa != null && x.sc.kpis.cpa > ADS_FB_ALERT.cpaAbove,
+        (x) => fmtMoney(x.sc.kpis.cpa) + ' đ'),
+      mk('score', `Điểm tổng Kém (< ${ADS_FB_ALERT.scoreBelow})`, 'warning',
+        (x) => x.sc.total < ADS_FB_ALERT.scoreBelow,
+        (x) => fmtScore(x.sc.total) + ' điểm'),
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, targets]);
 
   return (
     <div className="max-w-[1200px] mx-auto flex flex-col gap-6 text-slate-800">
@@ -159,65 +237,157 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
         </ChartCard>
       </div>
 
-      {/* Ranking nhân sự + target */}
+      {/* SO SÁNH NHÂN VIÊN (trung bình toàn kỳ) — mỗi nhân sự 1 dòng, chỉ tiêu là cột */}
       <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">
         <div className="px-4 py-3 flex items-center justify-between border-b border-slate-100">
-          <h3 className="text-sm font-bold text-slate-800 font-display">Hiệu suất theo nhân sự · {`Tháng ${period.slice(5)}/${period.slice(0, 4)}`}</h3>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 font-display">So sánh nhân viên · {`Tháng ${period.slice(5)}/${period.slice(0, 4)}`}</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">Trung bình toàn kỳ — ô <span className="text-emerald-600 font-semibold">nền xanh</span> là người dẫn đầu chỉ tiêu đó.</p>
+          </div>
           <button onClick={() => onNavigateToTab('adsfb-daily')} className="text-[11px] font-bold text-[#D32027] hover:underline flex items-center gap-0.5">
             Xem báo cáo ngày <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs min-w-[720px]">
+          <table className="w-full text-xs border-separate border-spacing-0 min-w-[1080px]">
             <thead>
-              <tr className="bg-slate-50/70 text-slate-500 uppercase tracking-wide">
-                <th className="px-4 py-2.5 text-left font-bold">Nhân sự</th>
-                <th className="px-3 py-2.5 text-right font-bold">Số ngày</th>
-                <th className="px-3 py-2.5 text-right font-bold">Chi tiêu</th>
-                <th className="px-3 py-2.5 text-right font-bold">Doanh thu</th>
-                <th className="px-3 py-2.5 text-right font-bold">ROAS</th>
-                <th className="px-3 py-2.5 text-right font-bold">Target DT/tháng</th>
-                <th className="px-3 py-2.5 text-center font-bold">Điểm TB</th>
-                <th className="px-3 py-2.5 text-left font-bold">Xếp loại</th>
-                {isAdmin && <th className="px-3 py-2.5"></th>}
+              <tr>
+                <th className={TH_NAME}>Nhân sự</th>
+                <th className={TH}>Số ngày<span className="block font-normal normal-case text-[9px] text-slate-300">đã nhập chi tiêu</span></th>
+                <th className={TH}>Chi tiêu<br />TB/ngày</th>
+                <th className={TH}>Doanh thu<br />TB/ngày</th>
+                <th className={TH}>ROAS TB<span className="block font-normal normal-case text-[9px] text-slate-300">TB từng ngày</span></th>
+                <th className={TH}>CPA TB<span className="block font-normal normal-case text-[9px] text-slate-300">thấp là tốt</span></th>
+                <th className={`${TH} border-l-2 border-l-slate-200`}>Tổng DT kỳ</th>
+                <th className={TH}>Target<br />DT/tháng</th>
+                <th className={TH}>% đạt<br />DT tháng</th>
+                <th className={`${TH} border-l-2 border-l-slate-200`}>Điểm TB</th>
+                <th className={`${TH} text-left`}>Xếp loại</th>
+                {isAdmin && <th className={`${TH} text-center`}></th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
-              {perStaff.map(({ emp, days, spend, revenue, roas: r, avgScore: sc, rank, target }) => (
-                <tr key={emp.id} className="hover:bg-rose-50/20">
-                  <td className="px-4 py-2.5">
+            <tbody>
+              {perStaff.map((s) => (
+                <tr key={s.emp.id} className={ROW}>
+                  <td className={NAME_CELL}>
                     <div className="flex items-center gap-2">
-                      <img src={emp.avatar} alt="" className="w-7 h-7 rounded-full object-cover border border-slate-200" />
-                      <span className="font-semibold text-slate-700">{emp.name}</span>
+                      <img src={s.emp.avatar} alt="" className="w-8 h-8 rounded-full object-cover border-2 border-white ring-1 ring-slate-200 shrink-0" />
+                      <span className="font-bold text-slate-700 truncate" title={s.emp.name}>{s.emp.name}</span>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{days}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-700">{fmtMoney(spend)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-700">{fmtMoney(revenue)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-sky-700">{fmtNum(r)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">
-                    {target ? fmtVnd(target.revenueTarget) + ' đ' : <span className="text-amber-500">chưa đặt</span>}
-                  </td>
-                  <td className="px-3 py-2.5 text-center tabular-nums font-extrabold text-[#D32027]">{fmtScore(sc)}</td>
-                  <td className="px-3 py-2.5">
-                    {rank ? <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${rank.color}`}>{rank.label}</span> : <span className="text-slate-300">—</span>}
+                  <NumCell v={s.days} format={(v) => v.toLocaleString('vi-VN')} />
+                  <NumCell v={s.avgSpend} format={fmtMoney} />
+                  <NumCell v={s.avgRevenue} format={fmtMoney} best={best.avgRevenue} />
+                  <NumCell v={s.avgRoas} format={(v) => fmtNum(v)} best={best.avgRoas} strong />
+                  <NumCell v={s.avgCpa} format={fmtMoney} best={best.avgCpa} />
+                  <NumCell v={s.revenue} format={fmtMoney} best={best.revenue} rule />
+                  <NumCell v={s.target && s.target.revenueTarget > 0 ? s.target.revenueTarget : null}
+                    format={(v) => fmtVnd(v) + ' đ'} empty={<span className="text-amber-500">chưa đặt</span>} />
+                  <NumCell v={s.pctRevenue} format={(v) => fmtPct(v)} best={best.pctRevenue} strong
+                    tone={s.pctRevenue == null ? undefined : s.pctRevenue >= 1 ? 'text-emerald-600' : s.pctRevenue >= 0.8 ? 'text-amber-600' : 'text-rose-600'} />
+                  <NumCell v={s.avgScore} format={(v) => fmtScore(v)} best={best.avgScore} strong rule />
+                  <td className={`${CELL} text-left`}>
+                    {s.rank
+                      ? <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${s.rank.color}`}>{s.rank.label}</span>
+                      : <span className="text-slate-300">—</span>}
                   </td>
                   {isAdmin && (
-                    <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                    <td className={`${CELL} text-center whitespace-nowrap`}>
                       <button
-                        onClick={() => setTargetModal(target ?? blankTarget(emp.id, emp.name, period))}
+                        onClick={() => setTargetModal(s.target ?? blankTarget(s.emp.id, s.emp.name, period))}
                         className="text-[11px] font-bold text-slate-500 hover:text-[#D32027] inline-flex items-center gap-0.5">
-                        <span className="material-symbols-outlined text-[15px]">tune</span>{target ? 'Sửa target' : 'Đặt target'}
+                        <span className="material-symbols-outlined text-[15px]">tune</span>{s.target ? 'Sửa target' : 'Đặt target'}
                       </button>
                     </td>
                   )}
                 </tr>
               ))}
               {perStaff.length === 0 && (
-                <tr><td colSpan={isAdmin ? 9 : 8} className="px-4 py-8 text-center text-slate-400">Chưa có nhân sự nào thuộc team Ads Facebook.</td></tr>
+                <tr><td colSpan={isAdmin ? 12 : 11} className="px-4 py-8 text-center text-slate-400">Chưa có nhân sự nào thuộc team Ads Facebook.</td></tr>
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* SO SÁNH THEO HÌNH THỨC CHẠY */}
+        <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100">
+            <h3 className="text-sm font-bold text-slate-800 font-display flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[18px] text-slate-400">splitscreen</span>So sánh theo hình thức chạy
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-separate border-spacing-0 min-w-[480px]">
+              <thead>
+                <tr>
+                  <th className={TH_NAME}>Hình thức</th>
+                  <th className={TH}>Số ngày-NV</th>
+                  <th className={TH}>Chi tiêu TB</th>
+                  <th className={TH}>ROAS TB</th>
+                  <th className={TH}>CPA TB</th>
+                  <th className={TH}>Điểm TB</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byFormType.map((f) => (
+                  <tr key={f.formType} className={ROW}>
+                    <td className={`${NAME_CELL} font-bold text-slate-700`}>{f.formType}</td>
+                    <NumCell v={f.days} format={(v) => v.toLocaleString('vi-VN')} />
+                    <NumCell v={f.avgSpend} format={fmtMoney} />
+                    <NumCell v={f.avgRoas} format={(v) => fmtNum(v)} best={bestFt.avgRoas} strong />
+                    <NumCell v={f.avgCpa} format={fmtMoney} best={bestFt.avgCpa} />
+                    <NumCell v={f.avgScore} format={(v) => fmtScore(v)} best={bestFt.avgScore} strong />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* TOP CẢNH BÁO */}
+        <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100">
+            <h3 className="text-sm font-bold text-slate-800 font-display flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[18px] text-rose-400">crisis_alert</span>Top cảnh báo
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">Số ngày-NV vượt ngưỡng đỏ trong kỳ — bấm để xem chi tiết.</p>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {alerts.map((a) => (
+              <div key={a.key}>
+                <button
+                  onClick={() => setOpenAlert(openAlert === a.key ? null : a.key)}
+                  disabled={a.count === 0}
+                  className={`w-full px-4 py-3 flex items-center justify-between gap-3 text-left transition-colors ${a.count === 0 ? 'cursor-default' : 'hover:bg-rose-50/40'}`}>
+                  <span className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${a.count > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-300'}`}>
+                      <span className="material-symbols-outlined text-[17px]">{a.icon}</span>
+                    </span>
+                    {a.label}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className={`text-lg font-extrabold tabular-nums ${a.count > 0 ? 'text-rose-600' : 'text-slate-300'}`}>{a.count}</span>
+                    {a.count > 0 && (
+                      <span className={`material-symbols-outlined text-[18px] text-slate-300 transition-transform ${openAlert === a.key ? 'rotate-180' : ''}`}>expand_more</span>
+                    )}
+                  </span>
+                </button>
+                {openAlert === a.key && a.count > 0 && (
+                  <ul className="px-4 pb-3 max-h-52 overflow-y-auto flex flex-col gap-1">
+                    {a.items.map((it, i) => (
+                      <li key={i} className="flex items-center justify-between gap-2 text-[11px] bg-slate-50/70 rounded-lg px-2.5 py-1.5">
+                        <span className="text-slate-500 tabular-nums">{it.date}</span>
+                        <span className="font-semibold text-slate-700 flex-1 truncate">{it.name}</span>
+                        <span className="tabular-nums font-bold text-rose-600">{it.value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -239,6 +409,36 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
 
 function blankTarget(employeeId: string, employeeName: string, period: string): AdsFbTarget {
   return { id: '', period, employeeId, employeeName, spendTarget: 0, revenueTarget: 0, ordersTarget: 0, daysInMonth: 30, note: '' };
+}
+
+/* ── Lớp dùng chung cho 2 bảng so sánh (mỗi đối tượng 1 dòng) ──
+   Cột tên dính trái khi cuộn ngang; hover đổi màu cả dòng để mắt bám được hàng. */
+const ROW = 'group transition-colors hover:bg-rose-50';
+const CELL = 'px-3 py-2.5 border-b border-slate-100 transition-colors';
+const NAME_BASE = 'sticky left-0 z-10 px-4 py-2.5 border-r border-b border-slate-100 transition-colors';
+const NAME_CELL = `${NAME_BASE} bg-white group-hover:bg-rose-50`;
+const TH_BASE = 'text-[10px] font-bold uppercase tracking-wide text-slate-400 border-b border-slate-200';
+const TH = `px-3 py-2.5 text-right whitespace-nowrap bg-slate-50 ${TH_BASE}`;
+const TH_NAME = `${NAME_BASE} bg-slate-50 text-left ${TH_BASE}`;
+
+/* ── 1 ô số: canh phải, tô sáng ô dẫn đầu cột (nếu có `best`). ── */
+function NumCell({ v, format, best, strong, tone, empty, rule }: {
+  v: number | null;
+  format: (v: number) => string;
+  best?: number | null;
+  strong?: boolean;
+  tone?: string;
+  empty?: React.ReactNode;
+  rule?: boolean;       // kẻ dọc đậm để tách nhóm cột
+}) {
+  const isBest = best != null && v != null && v === best;
+  return (
+    <td className={`${CELL} text-right tabular-nums ${rule ? 'border-l-2 border-l-slate-200' : ''} ${
+      strong ? 'font-bold text-sm' : ''
+    } ${isBest ? 'bg-emerald-50 group-hover:bg-emerald-100 text-emerald-700 font-bold' : tone || 'text-slate-700'}`}>
+      {v == null ? (empty ?? <span className="text-slate-300">—</span>) : format(v)}
+    </td>
+  );
 }
 
 /* ── Popup đặt/sửa target tháng ── */
