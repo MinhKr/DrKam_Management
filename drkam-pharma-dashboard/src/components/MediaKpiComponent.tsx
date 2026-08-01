@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { MediaKpiEntry, MediaTaskLog, Employee, UserSession, MEDIA_VIDEO_TYPES } from '../types';
-import { kpiAchieved, kpiScore, kpiTotal, kpiRank, formatKpiValue, videoTypeTotalsFromLogs, inPeriod, mediaVideoActual } from '../lib/media';
+import { kpiAchieved, kpiScore, kpiTotal, kpiRank, formatKpiValue, videoTypeTotalsFromLogs, inPeriod, mediaVideoActual, isAutoMetric } from '../lib/media';
 
 interface Props {
   entries: MediaKpiEntry[];
@@ -19,6 +19,33 @@ const isVideoCountMetric = (metric: string) => {
   const m = metric.toLowerCase();
   return m.includes('số lượng video') || m.includes('video sản xuất');
 };
+/**
+ * Tổng trọng số của MỖI người phải đúng 100%.
+ * Trả về thông báo lỗi (chuỗi rỗng = hợp lệ) — dùng chặn nút Lưu ở cả 2 popup.
+ */
+function weightError(rows: MediaKpiEntry[]): string {
+  const bad = groupByEmployee(rows)
+    .map((l) => ({ name: l[0].employeeName, total: l.reduce((s, e) => s + e.weight, 0) }))
+    .filter((x) => x.total !== 100);
+  if (bad.length === 0) return '';
+  return `Tổng trọng số phải đúng 100% — ${bad.map((b) => `${b.name}: ${b.total}%`).join(' · ')}. `
+    + 'Chỉnh lại trọng số các chỉ số cho đủ 100% rồi lưu.';
+}
+
+/**
+ * Ép tổng trọng số mỗi người về đúng 100% cho khung tháng mới.
+ * Các chỉ số nhập tay tháng trước đã bị loại khỏi khung → phần trọng số thiếu được dồn
+ * vào chỉ số có trọng số lớn nhất (chỉ số chính), sửa lại được ngay trong form thiết lập.
+ */
+function normalizeWeights(rows: MediaKpiEntry[]): MediaKpiEntry[] {
+  return groupByEmployee(rows).flatMap((list) => {
+    const sum = list.reduce((s, e) => s + e.weight, 0);
+    if (sum === 100) return list;
+    const iMax = list.reduce((bi, e, i) => (e.weight > list[bi].weight ? i : bi), 0);
+    return list.map((e, i) => (i === iMax ? { ...e, weight: Math.max(0, e.weight + (100 - sum)) } : e));
+  });
+}
+
 /** Sắp xếp nhóm KPI theo nhân sự, Leader trước. */
 function groupByEmployee(list: MediaKpiEntry[]): MediaKpiEntry[][] {
   const map = new Map<string, MediaKpiEntry[]>();
@@ -51,17 +78,28 @@ export default function MediaKpiComponent({ entries, logs, employees, session, o
   const isTemplate = periodEntries.length === 0 && !!templateSource;
   const templateEntries = useMemo<MediaKpiEntry[]>(() => {
     if (!isTemplate || !templateSource) return [];
-    return entries
+    const sttByEmp = new Map<string, number>();
+    return normalizeWeights(entries
       .filter((e) => e.period === templateSource)
-      .map((e) => ({
-        ...e,
-        id: `tpl_${period}_${e.id}`,
-        period,
-        targetValue: 0,
-        actualValue: isVideoCountMetric(e.metric)
-          ? mediaVideoActual({ ...e, period }, logs)
-          : 0,
-        note: '',
+      // CHỈ kế thừa chỉ số TỰ ĐỘNG (video · reach · doanh thu) — đây là đầu việc cố định,
+      // tháng nào cũng có. Chỉ số nhập tay (đào tạo, nhân sự…) KHÔNG chuyển sang tháng mới:
+      // phát sinh tháng nào thì nhân viên tự thêm ở "Sửa KPI", và luôn được tính 100%.
+      .filter(isAutoMetric)
+      .sort((a, b) => a.stt - b.stt)
+      .map((e) => {
+        const stt = (sttByEmp.get(e.employeeId) ?? 0) + 1;
+        sttByEmp.set(e.employeeId, stt);
+        return {
+          ...e,
+          id: `tpl_${period}_${e.id}`,
+          period,
+          stt,
+          targetValue: 0,
+          actualValue: isVideoCountMetric(e.metric)
+            ? mediaVideoActual({ ...e, period }, logs)
+            : 0,
+          note: '',
+        };
       }));
   }, [isTemplate, templateSource, entries, period, periodLogs]);
 
@@ -128,9 +166,10 @@ export default function MediaKpiComponent({ entries, logs, employees, session, o
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-[12px] text-amber-800">
           <span className="material-symbols-outlined text-[18px] text-amber-500 flex-shrink-0">info</span>
           <p>
-            <b>KPI {monthLabel(period)} chưa thiết lập</b> — đang hiển thị khung từ {monthLabel(templateSource!)}:
-            mục tiêu để <b>0</b>, trọng số giữ nguyên, cột <b>Thực tế</b> của chỉ số video <b>tự cập nhật</b> theo báo cáo ngày.
-            {canEdit && <> Bấm <b>“Thiết lập KPI tháng này”</b> để nhập mục tiêu &amp; số liệu.</>}
+            <b>KPI {monthLabel(period)} chưa thiết lập</b> — đang hiển thị khung từ {monthLabel(templateSource!)}, chỉ gồm
+            các <b>chỉ số cố định</b> (video · reach · doanh thu): mục tiêu để <b>0</b>, trọng số giữ nguyên, cột <b>Thực tế</b> <b>tự cập nhật</b> theo dữ liệu.
+            Các đầu việc phát sinh (đào tạo, nhân sự…) không chuyển sang tháng mới — thêm ở <b>“Sửa KPI”</b> khi cần, tự tính <b>100%</b>.
+            {canEdit && <> Bấm <b>“Thiết lập KPI tháng này”</b> để nhập mục tiêu &amp; trọng số.</>}
           </p>
         </div>
       )}
@@ -185,7 +224,7 @@ export default function MediaKpiComponent({ entries, logs, employees, session, o
                   {list.map((e) => {
                     const ach = kpiAchieved(e);
                     const score = kpiScore(e);
-                    const autoActual = isVideoCountMetric(e.metric);
+                    const autoActual = isAutoMetric(e);
                     return (
                       <tr key={e.id} className="hover:bg-rose-50/20">
                         <td className="px-3 py-2 text-slate-400 font-mono">{e.stt}</td>
@@ -196,7 +235,9 @@ export default function MediaKpiComponent({ entries, logs, employees, session, o
                         <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-800">
                           <span className="inline-flex items-center gap-1 justify-end">
                             {formatKpiValue(e.actualValue, e.unit)}
-                            {autoActual && <span className="material-symbols-outlined text-[13px] text-emerald-500" title="Tự đếm từ báo cáo ngày">bolt</span>}
+                            {autoActual
+                              ? <span className="material-symbols-outlined text-[13px] text-emerald-500" title="Tự cập nhật từ dữ liệu hệ thống">bolt</span>
+                              : <span className="material-symbols-outlined text-[13px] text-slate-300" title={`Chỉ số nhập tay — mặc định hoàn thành 100% (đang: ${e.completionPct ?? 100}%). Sửa ở popup "Sửa KPI".`}>edit_note</span>}
                           </span>
                         </td>
                         <td className="px-3 py-2">
@@ -261,6 +302,16 @@ const numCls = inputCls + ' text-right tabular-nums';
 /** Hiển thị số nguyên trong ô nhập với dấu '.' ngăn cách hàng nghìn (vd 300.000.000). */
 const fmtInt = (n: number) => (n || 0).toLocaleString('vi-VN');
 
+/** Băng báo lỗi tổng trọng số ≠ 100% (hiện khi bấm Lưu). */
+function WeightAlert({ message }: { message: string }) {
+  return (
+    <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-2.5 text-[12px] text-rose-700">
+      <span className="material-symbols-outlined text-[17px] text-rose-500 flex-shrink-0">error</span>
+      <p className="font-medium">{message}</p>
+    </div>
+  );
+}
+
 /* ── Popup THIẾT LẬP KPI tháng — 1 form cho CẢ 2 thành viên, chỉ nhập Mục tiêu + Trọng số ──
    Chỉ số / nhóm / đơn vị kế thừa từ tháng trước; Thực tế tự cập nhật từ báo cáo ngày (không nhập ở đây). */
 function SetupKpiModal({ period, templateSource, templateEntries, employees, onClose, onSave }: {
@@ -273,6 +324,7 @@ function SetupKpiModal({ period, templateSource, templateEntries, employees, onC
 }) {
   const [form, setForm] = useState<Record<string, { targetValue: number; weight: number }>>(() =>
     Object.fromEntries(templateEntries.map((e) => [e.id, { targetValue: e.targetValue, weight: e.weight }])));
+  const [tried, setTried] = useState(false);
 
   const groups = useMemo(() => groupByEmployee(templateEntries), [templateEntries]);
 
@@ -281,13 +333,18 @@ function SetupKpiModal({ period, templateSource, templateEntries, employees, onC
     setForm((f) => ({ ...f, [id]: { ...f[id], [key]: val } }));
   };
 
+  const rows = templateEntries.map((e) => ({
+    ...e,
+    targetValue: form[e.id]?.targetValue ?? 0,
+    weight: form[e.id]?.weight ?? 0,
+  }));
+  const wErr = weightError(rows);
+
   const submit = (ev: React.FormEvent) => {
     ev.preventDefault();
-    onSave(templateEntries.map((e) => ({
-      ...e,
-      targetValue: form[e.id]?.targetValue ?? 0,
-      weight: form[e.id]?.weight ?? 0,
-    })));
+    setTried(true);
+    if (wErr) return; // tổng trọng số chưa đúng 100% → không cho lưu
+    onSave(rows);
   };
 
   const monthTxt = monthLabel(period);
@@ -300,7 +357,7 @@ function SetupKpiModal({ period, templateSource, templateEntries, employees, onC
             <h3 className="text-lg font-bold text-slate-900 font-display flex items-center gap-2">
               <span className="material-symbols-outlined text-[#D32027]">tune</span>Thiết lập KPI {monthTxt}
             </h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">Chỉ số kế thừa từ {monthLabel(templateSource)} · nhập <b className="text-slate-600">Mục tiêu</b> &amp; <b className="text-slate-600">Trọng số</b> cho cả 2 thành viên. Thực tế tự cập nhật từ báo cáo ngày.</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Chỉ số <b className="text-slate-600">cố định</b> kế thừa từ {monthLabel(templateSource)} · nhập <b className="text-slate-600">Mục tiêu</b> &amp; <b className="text-slate-600">Trọng số</b> cho cả 2 thành viên. Thực tế tự cập nhật từ dữ liệu. Đầu việc phát sinh (đào tạo, nhân sự…) thêm sau ở <b className="text-slate-600">“Sửa KPI”</b>.</p>
           </div>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100">
             <span className="material-symbols-outlined">close</span>
@@ -322,7 +379,7 @@ function SetupKpiModal({ period, templateSource, templateEntries, employees, onC
                       <span className="text-[10px] font-bold text-[#D32027]">{first.roleScope === 'Leader' ? 'Leader' : 'Nhân viên'}</span>
                     </div>
                   </div>
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${totalWeight === 100 ? 'text-green-700 bg-green-50 border-green-200' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${totalWeight === 100 ? 'text-green-700 bg-green-50 border-green-200' : 'text-rose-700 bg-rose-50 border-rose-200'}`}>
                     Tổng trọng số {totalWeight}%
                   </span>
                 </div>
@@ -362,9 +419,12 @@ function SetupKpiModal({ period, templateSource, templateEntries, employees, onC
           })}
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Hủy</button>
-          <button type="submit" className="px-6 py-2 bg-[#D32027] hover:bg-[#B70F1B] text-white text-sm font-bold rounded-lg transition-colors">Lưu KPI {monthTxt}</button>
+        <div className="px-6 py-4 border-t border-slate-100 space-y-3">
+          {tried && wErr && <WeightAlert message={wErr} />}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Hủy</button>
+            <button type="submit" className="px-6 py-2 bg-[#D32027] hover:bg-[#B70F1B] text-white text-sm font-bold rounded-lg transition-colors">Lưu KPI {monthTxt}</button>
+          </div>
         </div>
       </form>
     </div>
@@ -390,8 +450,10 @@ function KpiEditModal({ period, entries, employees, onAdd, onUpdate, onDelete, o
   const [draft, setDraft] = useState<DraftRow[]>(() => entries.map((e) => ({ ...e })));
   const [newIds, setNewIds] = useState<Set<string>>(() => new Set());
   const [deleted, setDeleted] = useState<string[]>([]);
+  const [tried, setTried] = useState(false);
 
   const groups = useMemo(() => groupByEmployee(draft), [draft]);
+  const wErr = weightError(draft);
 
   const upd = (id: string, patch: Partial<MediaKpiEntry>) =>
     setDraft((d) => d.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -409,13 +471,15 @@ function KpiEditModal({ period, entries, employees, onAdd, onUpdate, onDelete, o
     setDraft((d) => [...d, {
       id, period, employeeId: sample.employeeId, employeeName: sample.employeeName,
       roleScope: sample.roleScope, stt, groupName: '', metric: '', targetValue: 0,
-      unit: 'number', weight: 0, actualValue: 0, note: '',
+      unit: 'number', weight: 0, actualValue: 0, completionPct: 100, note: '',
     }]);
     setNewIds((s) => new Set(s).add(id));
   };
 
   const submit = (ev: React.FormEvent) => {
     ev.preventDefault();
+    setTried(true);
+    if (wErr) return; // tổng trọng số chưa đúng 100% → không cho lưu
     deleted.forEach((id) => onDelete(id));
     draft.forEach((row, i) => {
       if (newIds.has(row.id)) {
@@ -423,10 +487,11 @@ function KpiEditModal({ period, entries, employees, onAdd, onUpdate, onDelete, o
       } else {
         const o = origById.get(row.id);
         if (o && (o.groupName !== row.groupName || o.metric !== row.metric || o.targetValue !== row.targetValue
-          || o.weight !== row.weight || o.unit !== row.unit)) {
+          || o.weight !== row.weight || o.unit !== row.unit
+          || (o.completionPct ?? 100) !== (row.completionPct ?? 100))) {
           onUpdate(row.id, {
             groupName: row.groupName, metric: row.metric, targetValue: row.targetValue,
-            weight: row.weight, unit: row.unit,
+            weight: row.weight, unit: row.unit, completionPct: row.completionPct ?? 100,
           });
         }
       }
@@ -444,7 +509,11 @@ function KpiEditModal({ period, entries, employees, onAdd, onUpdate, onDelete, o
             <h3 className="text-lg font-bold text-slate-900 font-display flex items-center gap-2">
               <span className="material-symbols-outlined text-[#D32027]">edit</span>Sửa KPI {monthTxt}
             </h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">Sửa Nhóm · Chỉ số · Mục tiêu · Trọng số cho cả 2 thành viên. <b className="text-slate-500">Thực tế tự cập nhật từ báo cáo ngày</b> (không nhập ở đây). Có thể thêm / xóa chỉ số.</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Sửa Nhóm · Chỉ số · Mục tiêu · Trọng số cho cả 2 thành viên. Chỉ số video / reach / doanh thu có
+              <b className="text-emerald-600"> Thực tế tự cập nhật</b> từ dữ liệu. Chỉ số tự thêm (đào tạo, nhân sự…)
+              <b className="text-slate-500"> mặc định hoàn thành 100%</b> — hạ ở cột <b className="text-slate-500">% Hoàn thành</b> nếu chưa đạt.
+            </p>
           </div>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100">
             <span className="material-symbols-outlined">close</span>
@@ -466,7 +535,7 @@ function KpiEditModal({ period, entries, employees, onAdd, onUpdate, onDelete, o
                       <span className="text-[10px] font-bold text-[#D32027]">{first.roleScope === 'Leader' ? 'Leader' : 'Nhân viên'}</span>
                     </div>
                   </div>
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${totalWeight === 100 ? 'text-green-700 bg-green-50 border-green-200' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${totalWeight === 100 ? 'text-green-700 bg-green-50 border-green-200' : 'text-rose-700 bg-rose-50 border-rose-200'}`}>
                     Tổng trọng số {totalWeight}%
                   </span>
                 </div>
@@ -479,6 +548,7 @@ function KpiEditModal({ period, entries, employees, onAdd, onUpdate, onDelete, o
                         <th className="px-2 py-2 text-left font-bold w-28">Đơn vị</th>
                         <th className="px-2 py-2 text-right font-bold w-40">Mục tiêu</th>
                         <th className="px-2 py-2 text-right font-bold w-24">Trọng số</th>
+                        <th className="px-2 py-2 text-right font-bold w-32">% Hoàn thành</th>
                         <th className="px-2 py-2 w-8"></th>
                       </tr>
                     </thead>
@@ -494,6 +564,17 @@ function KpiEditModal({ period, entries, employees, onAdd, onUpdate, onDelete, o
                           </td>
                           <td className="px-2 py-2"><input type="text" inputMode="numeric" value={fmtInt(e.targetValue)} onChange={(ev) => upd(e.id, { targetValue: num(ev.target.value) })} className={numCls} /></td>
                           <td className="px-2 py-2"><input type="text" inputMode="numeric" value={e.weight} onChange={(ev) => upd(e.id, { weight: num(ev.target.value) })} className={numCls} /></td>
+                          <td className="px-2 py-2">
+                            {isAutoMetric(e) ? (
+                              <div className="flex items-center justify-end gap-1 py-1.5 text-[11px] font-bold text-emerald-600" title="Thực tế tự cập nhật từ dữ liệu — không chấm tay">
+                                <span className="material-symbols-outlined text-[14px]">bolt</span>Tự động
+                              </div>
+                            ) : (
+                              <input type="text" inputMode="numeric" value={e.completionPct ?? 100}
+                                onChange={(ev) => upd(e.id, { completionPct: Math.min(num(ev.target.value), 100) })}
+                                className={numCls} title="Mặc định 100% — hạ xuống nếu chưa hoàn thành" />
+                            )}
+                          </td>
                           <td className="px-2 py-2 text-center">
                             <button type="button" onClick={() => del(e.id)} className="text-slate-300 hover:text-rose-600" title="Xóa chỉ số">
                               <span className="material-symbols-outlined text-[16px]">delete</span>
@@ -514,9 +595,12 @@ function KpiEditModal({ period, entries, employees, onAdd, onUpdate, onDelete, o
           })}
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Hủy</button>
-          <button type="submit" className="px-6 py-2 bg-[#D32027] hover:bg-[#B70F1B] text-white text-sm font-bold rounded-lg transition-colors">Lưu thay đổi</button>
+        <div className="px-6 py-4 border-t border-slate-100 space-y-3">
+          {tried && wErr && <WeightAlert message={wErr} />}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Hủy</button>
+            <button type="submit" className="px-6 py-2 bg-[#D32027] hover:bg-[#B70F1B] text-white text-sm font-bold rounded-lg transition-colors">Lưu thay đổi</button>
+          </div>
         </div>
       </form>
     </div>

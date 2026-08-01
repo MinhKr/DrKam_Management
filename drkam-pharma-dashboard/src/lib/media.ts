@@ -34,8 +34,30 @@ export function videoTypeTotalsFromLogs(logs: MediaTaskLog[]) {
 }
 
 // ── KPI ───────────────────────────────────────────────────────
+/**
+ * Chỉ số có "Thực tế" TỰ NỐI từ dữ liệu hệ thống:
+ *   • Số lượng video   → đếm từ báo cáo ngày
+ *   • Reach            → cộng Views 5 kênh thương hiệu
+ *   • Doanh thu        → TikTok / Facebook Ads từ báo cáo team Content
+ * Mọi chỉ số khác (thêm tay qua "Sửa KPI") = chỉ số NHẬP TAY → chấm bằng % hoàn thành.
+ */
+export function isAutoMetric(e: MediaKpiEntry): boolean {
+  return isVideoCountMetric(e.metric)
+    || e.metric.toLowerCase().includes('reach')
+    || deriveRevenueActual(e, 0, 0) !== null;
+}
+
+/**
+ * Đạt (%) của 1 chỉ số:
+ *   • Chỉ số TỰ ĐỘNG  → Thực tế ÷ Mục tiêu.
+ *   • Chỉ số NHẬP TAY → % hoàn thành do Leader chấm, MẶC ĐỊNH 100% (coi như đã hoàn thành).
+ *     Vì các đầu việc này (đào tạo, nhân sự…) không có nguồn số liệu tự cập nhật,
+ *     để mặc định 0% sẽ trừ oan điểm; muốn hạ thì sửa ở popup "Sửa KPI".
+ */
 export const kpiAchieved = (e: MediaKpiEntry): number =>
-  e.targetValue > 0 ? (e.actualValue / e.targetValue) * 100 : 0;
+  isAutoMetric(e)
+    ? (e.targetValue > 0 ? (e.actualValue / e.targetValue) * 100 : 0)
+    : (e.completionPct ?? 100);
 
 export const kpiScore = (e: MediaKpiEntry): number =>
   (e.weight * Math.min(kpiAchieved(e), KPI_CAP)) / 100;
@@ -166,6 +188,9 @@ export function withMediaActuals(
     }
     const { tiktok, fbAds } = revFor(e.period);
     const rev = deriveRevenueActual(e, tiktok, fbAds);
-    return rev != null ? { ...e, actualValue: rev } : e;
+    if (rev != null) return { ...e, actualValue: rev };
+    // Chỉ số nhập tay → Thực tế suy ra từ % hoàn thành (mặc định 100% = đạt đúng mục tiêu).
+    const pct = e.completionPct ?? 100;
+    return { ...e, completionPct: pct, actualValue: Math.round((e.targetValue * pct) / 100) };
   });
 }

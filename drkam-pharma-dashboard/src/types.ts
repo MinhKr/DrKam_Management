@@ -153,8 +153,14 @@ export interface MediaKpiEntry {
   unit: 'number' | 'currency' | 'percent';
   weight: number;        // Trọng số %
   actualValue: number;   // Thực tế
+  /**
+   * % hoàn thành — CHỈ dùng cho chỉ số nhập tay (không tự nối dữ liệu).
+   * Mặc định 100 (coi như hoàn thành); Leader sửa xuống ở popup "Sửa KPI".
+   */
+  completionPct?: number;
   note?: string;
-  // đạt% = actual/target*100; điểm = weight × min(đạt,120)/100 (tính client)
+  // đạt% = actual/target*100 (chỉ số tự động) hoặc = completionPct (nhập tay);
+  // điểm = weight × min(đạt,120)/100 (tính client)
 }
 
 // D. Đề xuất cải tiến.

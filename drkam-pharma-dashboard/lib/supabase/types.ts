@@ -212,6 +212,7 @@ export interface Database {
           unit: 'number' | 'currency' | 'percent';
           weight: number;
           actual_value: number;
+          completion_pct: number; // % hoàn thành — chỉ dùng cho chỉ số nhập tay (mặc định 100)
           note: string | null;
           created_by: string | null;
           created_at: string;
