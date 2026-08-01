@@ -380,6 +380,7 @@ export function mediaKpiFromRow(r: MediaKpiRow): MediaKpiEntry {
     unit: r.unit,
     weight: r.weight,
     actualValue: r.actual_value,
+    completionPct: r.completion_pct ?? 100,
     note: r.note ?? undefined,
   };
 }
@@ -400,6 +401,7 @@ export function mediaKpiToInsert(
     unit: e.unit,
     weight: e.weight,
     actual_value: e.actualValue,
+    completion_pct: e.completionPct ?? 100,
     note: e.note ?? null,
     created_by: createdBy,
   };
@@ -419,6 +421,7 @@ export function mediaKpiToUpdate(
   if (patch.unit !== undefined) u.unit = patch.unit;
   if (patch.weight !== undefined) u.weight = patch.weight;
   if (patch.actualValue !== undefined) u.actual_value = patch.actualValue;
+  if (patch.completionPct !== undefined) u.completion_pct = patch.completionPct;
   if (patch.note !== undefined) u.note = patch.note ?? null;
   return u;
 }
