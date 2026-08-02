@@ -19,6 +19,11 @@ File idempotent, chạy lại nhiều lần an toàn. Migration tạo:
 - Hàm `public.auth_department()` — trả phòng ban của user đang đăng nhập, dùng cho RLS.
 - Policy RLS theo mô hình **đúng vai**.
 
+Chạy tiếp `supabase/migrations/0014_orders_rls_fix.sql` — nới policy UPDATE/DELETE
+cho người được ghi tên trên order (người đặt / người làm / Ads đặt / Content phụ trách)
+và cho dòng chưa có `created_by`. Không chạy file này thì có thể gặp lỗi
+**sửa order xong, reload lại về số cũ** (RLS chặn nhưng Postgres không báo lỗi).
+
 ## 2. Mô hình quyền (RLS + UI)
 
 | Thao tác | Ai làm được |
@@ -27,7 +32,12 @@ File idempotent, chạy lại nhiều lần an toàn. Migration tạo:
 | Tạo order | Mọi user; dòng ghi `created_by = auth.uid()` |
 | Sửa phần **yêu cầu** (brief, hạn, ưu tiên, link mẫu…) | Người đặt (người tạo) hoặc Admin |
 | Sửa phần **tiến độ** (trạng thái, người làm, link trả) | Bên nhận (Media / Content) hoặc Admin hoặc người đặt |
-| Xóa | Người tạo hoặc Admin |
+| Xóa | Người tạo, người đặt ghi trên order, hoặc Admin |
+
+Sau 0014, RLS còn cho sửa khi mình là **người được ghi tên** trên order
+(`requester_id` / `assignee_id` / `ads_owner_id` / `content_owner_id`) hoặc dòng
+chưa có `created_by`. Nếu bị chặn, app **báo lỗi rõ** thay vì im lặng —
+repo dùng `.update(...).select()` và ném lỗi khi 0 dòng bị ghi.
 
 Quy ước phòng ban: **team Content = nhân sự KHÔNG thuộc `Media` và `Ads Facebook`**
 (giống cách lọc ở Checklist Content). Vì vậy hồ sơ nhân sự trong `profiles`

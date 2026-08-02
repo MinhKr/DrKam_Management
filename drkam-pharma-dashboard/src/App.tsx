@@ -992,8 +992,13 @@ export default function App() {
   };
   const handleUpdateContentMediaOrder = async (id: string, patch: Partial<ContentMediaOrder>) => {
     if (cloud) {
-      try { await repo.updateContentMediaOrder(id, patch); }
-      catch (e) { alert('Cập nhật order thất bại: ' + errMsg(e)); return; }
+      // Lấy dòng DB trả về làm nguồn sự thật — nếu RLS chặn thì repo ném lỗi,
+      // không cập nhật state để UI không hiển thị sai so với DB.
+      try {
+        const saved = await repo.updateContentMediaOrder(id, patch);
+        setContentMediaOrders(prev => prev.map(o => (o.id === id ? saved : o)));
+      } catch (e) { alert('Cập nhật order thất bại: ' + errMsg(e)); }
+      return;
     }
     setContentMediaOrders(prev => prev.map(o => (o.id === id ? { ...o, ...patch } : o)));
   };
@@ -1021,8 +1026,11 @@ export default function App() {
   };
   const handleUpdateAdsContentOrder = async (id: string, patch: Partial<AdsContentOrder>) => {
     if (cloud) {
-      try { await repo.updateAdsContentOrder(id, patch); }
-      catch (e) { alert('Cập nhật order thất bại: ' + errMsg(e)); return; }
+      try {
+        const saved = await repo.updateAdsContentOrder(id, patch);
+        setAdsContentOrders(prev => prev.map(o => (o.id === id ? saved : o)));
+      } catch (e) { alert('Cập nhật order thất bại: ' + errMsg(e)); }
+      return;
     }
     setAdsContentOrders(prev => prev.map(o => (o.id === id ? { ...o, ...patch } : o)));
   };

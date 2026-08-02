@@ -46,13 +46,15 @@ export default function OrderAdsContentComponent({ orders, employees, session, c
   const [alertFilter, setAlertFilter] = useState<'overdue' | 'urgent' | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | AdsContentStatus>('all');
   const [ownerFilter, setOwnerFilter] = useState<'all' | string>('all');
-  const [showClosed, setShowClosed] = useState(true);
+  const [showClosed, setShowClosed] = useState(false);   // khối order đã xong/hủy: mặc định thu gọn
   const [editing, setEditing] = useState<AdsContentOrder | null>(null);
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
   const isAdmin = session.role === 'Admin';
   // Team Content = không thuộc Media / Ads Facebook (đúng quy ước Checklist Content).
   const isContentUser = session.department !== 'Media' && session.department !== 'Ads Facebook';
+  // Chỉ BÊN ĐẶT (team Ads Facebook) và Admin được tạo order; bên nhận (Content) chỉ nhận việc.
+  const canCreate = isAdmin || session.department === 'Ads Facebook';
   const contentStaff = useMemo(() => employees.filter(isContentStaff), [employees]);
   const adsStaff = useMemo(() => employees.filter(isAdsStaff), [employees]);
   const now = todayStart();
@@ -64,14 +66,19 @@ export default function OrderAdsContentComponent({ orders, employees, session, c
   const monthOrders = useMemo(() => orders.filter((o) => orderInPeriod(o.orderDate, period)), [orders, period]);
   const counts = useMemo(() => countAlerts(monthOrders, now), [monthOrders, now]);
 
-  const rows = useMemo(() => {
+  // Lọc chung, sau đó TÁCH order đang chạy và order đã đóng (xong/hủy):
+  // đã đóng dồn xuống một khối gập riêng để không làm loãng danh sách đang làm.
+  const filtered = useMemo(() => {
     let list = monthOrders;
     if (alertFilter) list = list.filter((o) => orderDeadline(o.deadline, o.status, now).alert === alertFilter);
     if (statusFilter !== 'all') list = list.filter((o) => o.status === statusFilter);
     if (ownerFilter !== 'all') list = list.filter((o) => o.contentOwnerId === ownerFilter);
-    if (!showClosed) list = list.filter((o) => !isOrderClosed(o.status));
     return sortByUrgency(list, now);
-  }, [monthOrders, alertFilter, statusFilter, ownerFilter, showClosed, now]);
+  }, [monthOrders, alertFilter, statusFilter, ownerFilter, now]);
+
+  const activeRows = filtered.filter((o) => !isOrderClosed(o.status));
+  const closedRows = filtered.filter((o) => isOrderClosed(o.status));
+  const closedOpen = showClosed || (statusFilter !== 'all' && isOrderClosed(statusFilter));
 
   const blank = (): AdsContentOrder => ({
     id: '', orderDate: todayUi(), postCode: '', topic: '',
@@ -82,6 +89,82 @@ export default function OrderAdsContentComponent({ orders, employees, session, c
     commentContent: '', commentAds: '',
     isRunning: false, runOwnerName: '', airDate: '', spend: 0, dataCount: 0, explanation: '',
   });
+
+  /**
+   * 1 dòng order. Ba tín hiệu giúp mắt tách dòng khi danh sách dài:
+   *  • nền so le (dòng chẵn/lẻ) — ô "Hạn" dính trái phải cùng nền nên tô riêng;
+   *  • vạch màu bên trái theo mức khẩn (đỏ quá hạn · cam sắp hết hạn · xanh còn hạn);
+   *  • dòng đã đóng thì xám và chữ mảnh hơn.
+   */
+  const renderRow = (o: AdsContentOrder, i: number, muted: boolean) => {
+    const info = orderDeadline(o.deadline, o.status, now);
+    const bg = muted
+      ? (i % 2 ? 'bg-slate-100/60' : 'bg-slate-50/80')
+      : info.alert === 'overdue' ? 'bg-rose-50/60'
+      : i % 2 ? 'bg-slate-50/80' : 'bg-white';
+    const bar = muted ? 'border-l-slate-200'
+      : info.alert === 'overdue' ? 'border-l-rose-500'
+      : info.alert === 'urgent' ? 'border-l-amber-400'
+      : info.alert === 'ontime' ? 'border-l-emerald-400'
+      : 'border-l-slate-200';
+    return (
+      <tr key={o.id} className={`group transition-colors ${bg} hover:bg-sky-50/70 ${muted ? 'text-slate-400' : ''}`}>
+        <td className={`${NAME_CELL} ${bg} border-l-4 ${bar} group-hover:bg-sky-50/70`}>
+          <DeadlineBadge info={info} deadline={o.deadline} />
+          {o.deadline && <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{o.deadline}</div>}
+        </td>
+        <td className={`${CELL} text-center tabular-nums ${muted ? '' : 'text-slate-500'}`}>{o.orderDate}</td>
+        <td className={`${CELL} ${muted ? 'font-medium' : 'font-semibold text-slate-700'}`}>
+          {o.postCode || <span className="text-slate-300 font-normal">—</span>}
+        </td>
+        <td className={`${CELL} max-w-[220px]`}>
+          <div className={`truncate ${muted ? 'line-through decoration-slate-300' : 'text-slate-700'}`} title={o.topic}>
+            {o.topic || <span className="text-slate-300">—</span>}
+          </div>
+          {o.brief && <div className="text-[10px] text-slate-400 truncate" title={o.brief}>{o.brief}</div>}
+        </td>
+        <td className={`${CELL} text-center ${muted ? '' : 'text-slate-500'}`}>{o.size || '—'}</td>
+        <td className={`${CELL} text-center`}><PriorityBadge priority={o.priority} /></td>
+        <td className={`${CELL} ${muted ? '' : 'text-slate-600'}`}>{o.adsOwnerName || <span className="text-slate-300">—</span>}</td>
+        <td className={`${CELL} ${muted ? '' : 'text-slate-600'}`}>{o.contentOwnerName || <span className="text-amber-500">chưa giao</span>}</td>
+        <td className={CELL}>
+          {canEditProgress(o) ? (
+            <select
+              value={o.status}
+              onChange={(e) => onUpdate(o.id, { status: e.target.value as AdsContentStatus })}
+              className="text-[11px] font-bold border border-slate-200 rounded-lg px-1.5 py-1 outline-none bg-white text-slate-700 cursor-pointer">
+              {ADS_CONTENT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          ) : <StatusBadge status={o.status} />}
+        </td>
+        <td className={CELL}><LinkCell value={o.videoFinal} max={22} /></td>
+        <td className={`${CELL} text-center`}>
+          {o.isRunning
+            ? <span className="inline-flex flex-col items-center">
+                <span className="material-symbols-outlined text-[18px] text-emerald-600">play_circle</span>
+                {o.spend > 0 && <span className="text-[10px] text-slate-400 tabular-nums">{fmtVnd(o.spend)}đ · {o.dataCount} số</span>}
+              </span>
+            : <span className="material-symbols-outlined text-[18px] text-slate-300">pause_circle</span>}
+        </td>
+        <td className={`${CELL} text-center whitespace-nowrap`}>
+          <button onClick={() => setEditing(o)} title="Sửa"
+            className="text-slate-400 hover:text-[#D32027] p-1 rounded-lg hover:bg-slate-100">
+            <span className="material-symbols-outlined text-[17px]">edit</span>
+          </button>
+          {canDelete(o) && (
+            <button title="Xóa"
+              onClick={() => setConfirm({
+                message: `Xóa order "${o.postCode || o.topic}"?`,
+                onConfirm: () => { onDelete(o.id); setConfirm(null); },
+              })}
+              className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50">
+              <span className="material-symbols-outlined text-[17px]">delete</span>
+            </button>
+          )}
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <div className="max-w-[1280px] mx-auto flex flex-col gap-5 text-slate-800">
@@ -95,10 +178,12 @@ export default function OrderAdsContentComponent({ orders, employees, session, c
         </div>
         <div className="flex items-center gap-2">
           <MonthPicker value={period} onChange={setPeriod} allowFuture />
-          <button onClick={() => setEditing(blank())}
-            className="px-4 py-2 bg-[#D32027] hover:bg-[#B70F1B] text-white text-sm font-bold rounded-xl transition-colors flex items-center gap-1">
-            <span className="material-symbols-outlined text-[18px]">add</span>Thêm order
-          </button>
+          {canCreate && (
+            <button onClick={() => setEditing(blank())}
+              className="px-4 py-2 bg-[#D32027] hover:bg-[#B70F1B] text-white text-sm font-bold rounded-xl transition-colors flex items-center gap-1">
+              <span className="material-symbols-outlined text-[18px]">add</span>Thêm order
+            </button>
+          )}
         </div>
       </div>
 
@@ -121,11 +206,9 @@ export default function OrderAdsContentComponent({ orders, employees, session, c
             {contentStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
-        <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 cursor-pointer">
-          <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} className="accent-[#D32027]" />
-          Hiện cả order đã xong/hủy
-        </label>
-        <span className="ml-auto text-[11px] text-slate-400">{rows.length} order</span>
+        <span className="ml-auto text-[11px] text-slate-400">
+          {activeRows.length} đang chạy{closedRows.length > 0 && ` · ${closedRows.length} đã xong/hủy`}
+        </span>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">
@@ -148,67 +231,29 @@ export default function OrderAdsContentComponent({ orders, employees, session, c
               </tr>
             </thead>
             <tbody>
-              {rows.map((o) => {
-                const info = orderDeadline(o.deadline, o.status, now);
-                return (
-                  <tr key={o.id} className={`group transition-colors ${info.alert === 'overdue' ? 'bg-rose-50/40' : ''} hover:bg-slate-50`}>
-                    <td className={NAME_CELL}>
-                      <DeadlineBadge info={info} deadline={o.deadline} />
-                      {o.deadline && <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{o.deadline}</div>}
-                    </td>
-                    <td className={`${CELL} text-center tabular-nums text-slate-500`}>{o.orderDate}</td>
-                    <td className={`${CELL} font-semibold text-slate-700`}>{o.postCode || <span className="text-slate-300 font-normal">—</span>}</td>
-                    <td className={`${CELL} max-w-[220px]`}>
-                      <div className="text-slate-700 truncate" title={o.topic}>{o.topic || <span className="text-slate-300">—</span>}</div>
-                      {o.brief && <div className="text-[10px] text-slate-400 truncate" title={o.brief}>{o.brief}</div>}
-                    </td>
-                    <td className={`${CELL} text-center text-slate-500`}>{o.size || '—'}</td>
-                    <td className={`${CELL} text-center`}><PriorityBadge priority={o.priority} /></td>
-                    <td className={`${CELL} text-slate-600`}>{o.adsOwnerName || <span className="text-slate-300">—</span>}</td>
-                    <td className={`${CELL} text-slate-600`}>{o.contentOwnerName || <span className="text-amber-500">chưa giao</span>}</td>
-                    <td className={CELL}>
-                      {canEditProgress(o) ? (
-                        <select
-                          value={o.status}
-                          onChange={(e) => onUpdate(o.id, { status: e.target.value as AdsContentStatus })}
-                          className="text-[11px] font-bold border border-slate-200 rounded-lg px-1.5 py-1 outline-none bg-white cursor-pointer">
-                          {ADS_CONTENT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      ) : <StatusBadge status={o.status} />}
-                    </td>
-                    <td className={CELL}><LinkCell value={o.videoFinal} max={22} /></td>
-                    <td className={`${CELL} text-center`}>
-                      {o.isRunning
-                        ? <span className="inline-flex flex-col items-center">
-                            <span className="material-symbols-outlined text-[18px] text-emerald-600">play_circle</span>
-                            {o.spend > 0 && <span className="text-[10px] text-slate-400 tabular-nums">{fmtVnd(o.spend)}đ · {o.dataCount} số</span>}
-                          </span>
-                        : <span className="material-symbols-outlined text-[18px] text-slate-300">pause_circle</span>}
-                    </td>
-                    <td className={`${CELL} text-center whitespace-nowrap`}>
-                      <button onClick={() => setEditing(o)} title="Sửa"
-                        className="text-slate-400 hover:text-[#D32027] p-1 rounded-lg hover:bg-slate-100">
-                        <span className="material-symbols-outlined text-[17px]">edit</span>
-                      </button>
-                      {canDelete(o) && (
-                        <button title="Xóa"
-                          onClick={() => setConfirm({
-                            message: `Xóa order "${o.postCode || o.topic}"?`,
-                            onConfirm: () => { onDelete(o.id); setConfirm(null); },
-                          })}
-                          className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50">
-                          <span className="material-symbols-outlined text-[17px]">delete</span>
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {rows.length === 0 && (
+              {activeRows.map((o, i) => renderRow(o, i, false))}
+              {activeRows.length === 0 && (
                 <tr><td colSpan={12} className="px-4 py-10 text-center text-slate-400">
-                  Chưa có order nào khớp bộ lọc trong tháng {period.slice(5)}/{period.slice(0, 4)}.
+                  {closedRows.length > 0
+                    ? 'Không còn order nào đang chạy — mọi order trong bộ lọc đã xong/hủy.'
+                    : `Chưa có order nào khớp bộ lọc trong tháng ${period.slice(5)}/${period.slice(0, 4)}.`}
                 </td></tr>
               )}
+
+              {/* Khối order ĐÃ ĐÓNG — gập lại, xám đi để không tranh chỗ với việc đang chạy */}
+              {closedRows.length > 0 && (
+                <tr>
+                  <td colSpan={12} className="p-0">
+                    <button type="button" onClick={() => setShowClosed(!closedOpen)}
+                      className="w-full px-4 py-2.5 bg-slate-100/80 border-y border-slate-200 flex items-center gap-2 text-[11px] font-bold text-slate-500 hover:bg-slate-200/70 transition-colors">
+                      <span className={`material-symbols-outlined text-[16px] transition-transform ${closedOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                      Đã hoàn thành / hủy ({closedRows.length})
+                      <span className="font-normal text-slate-400">— {closedOpen ? 'bấm để thu gọn' : 'bấm để xem'}</span>
+                    </button>
+                  </td>
+                </tr>
+              )}
+              {closedOpen && closedRows.map((o, i) => renderRow(o, i, true))}
             </tbody>
           </table>
         </div>
@@ -237,9 +282,10 @@ export default function OrderAdsContentComponent({ orders, employees, session, c
   );
 }
 
-const CELL = 'px-3 py-2.5 border-b border-slate-100 align-top';
-const NAME_BASE = 'sticky left-0 z-10 px-3 py-2.5 border-r border-b border-slate-100 align-top';
-const NAME_CELL = `${NAME_BASE} bg-white group-hover:bg-slate-50`;
+// Viền dưới đậm hơn + dòng cao hơn để các dòng tách bạch khi danh sách dài.
+const CELL = 'px-3 py-3 border-b border-slate-200 align-top';
+const NAME_BASE = 'sticky left-0 z-10 px-3 py-3 border-r border-b border-slate-200 align-top';
+const NAME_CELL = NAME_BASE;
 const TH_BASE = 'text-[10px] font-bold uppercase tracking-wide text-slate-400 border-b border-slate-200';
 const TH = `px-3 py-2.5 text-center whitespace-nowrap bg-slate-50 ${TH_BASE}`;
 const TH_NAME = `${NAME_BASE} bg-slate-50 text-left ${TH_BASE}`;

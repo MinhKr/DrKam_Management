@@ -44,12 +44,14 @@ export default function OrderMediaComponent({ orders, employees, session, curren
   const [alertFilter, setAlertFilter] = useState<'overdue' | 'urgent' | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | ContentMediaStatus>('all');
   const [assigneeFilter, setAssigneeFilter] = useState<'all' | string>('all');
-  const [showClosed, setShowClosed] = useState(true);
+  const [showClosed, setShowClosed] = useState(false);   // khối order đã xong/hủy: mặc định thu gọn
   const [editing, setEditing] = useState<ContentMediaOrder | null>(null);
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
   const isAdmin = session.role === 'Admin';
   const isMediaUser = session.department === 'Media';
+  // Chỉ BÊN ĐẶT (team Content) và Admin được tạo order; bên nhận (Media) chỉ nhận việc.
+  const canCreate = isAdmin || (session.department !== 'Media' && session.department !== 'Ads Facebook');
   const contentStaff = useMemo(() => employees.filter(isContentStaff), [employees]);
   const mediaStaff = useMemo(() => employees.filter(isMediaStaff), [employees]);
   const now = todayStart();
@@ -63,14 +65,20 @@ export default function OrderMediaComponent({ orders, employees, session, curren
   const monthOrders = useMemo(() => orders.filter((o) => orderInPeriod(o.orderDate, period)), [orders, period]);
   const counts = useMemo(() => countAlerts(monthOrders, now), [monthOrders, now]);
 
-  const rows = useMemo(() => {
+  // Lọc chung, sau đó TÁCH order đang chạy và order đã đóng (xong/hủy):
+  // đã đóng dồn xuống một khối gập riêng để không làm loãng danh sách đang làm.
+  const filtered = useMemo(() => {
     let list = monthOrders;
     if (alertFilter) list = list.filter((o) => orderDeadline(o.deadline, o.status, now).alert === alertFilter);
     if (statusFilter !== 'all') list = list.filter((o) => o.status === statusFilter);
     if (assigneeFilter !== 'all') list = list.filter((o) => o.assigneeId === assigneeFilter);
-    if (!showClosed) list = list.filter((o) => !isOrderClosed(o.status));
     return sortByUrgency(list, now);
-  }, [monthOrders, alertFilter, statusFilter, assigneeFilter, showClosed, now]);
+  }, [monthOrders, alertFilter, statusFilter, assigneeFilter, now]);
+
+  const activeRows = filtered.filter((o) => !isOrderClosed(o.status));
+  const closedRows = filtered.filter((o) => isOrderClosed(o.status));
+  // Lọc thẳng vào một trạng thái đã đóng thì mở sẵn khối đó, nếu không danh sách trông như rỗng.
+  const closedOpen = showClosed || (statusFilter !== 'all' && isOrderClosed(statusFilter));
 
   const blank = (): ContentMediaOrder => ({
     id: '', orderDate: todayUi(), category: '', title: '', orderLink: '', note: '',
@@ -79,6 +87,72 @@ export default function OrderMediaComponent({ orders, employees, session, curren
     assigneeId: null, assigneeName: '',
     deadline: '', status: 'Chờ nhận', resultLink: '',
   });
+
+  /**
+   * 1 dòng order. Ba tín hiệu giúp mắt tách dòng khi danh sách dài:
+   *  • nền so le (dòng chẵn/lẻ) — ô "Hạn" dính trái phải cùng nền nên tô riêng;
+   *  • vạch màu bên trái theo mức khẩn (đỏ quá hạn · cam sắp hết hạn · xanh còn hạn);
+   *  • dòng đã đóng thì xám và chữ mảnh hơn.
+   */
+  const renderRow = (o: ContentMediaOrder, i: number, muted: boolean) => {
+    const info = orderDeadline(o.deadline, o.status, now);
+    const bg = muted
+      ? (i % 2 ? 'bg-slate-100/60' : 'bg-slate-50/80')
+      : info.alert === 'overdue' ? 'bg-rose-50/60'
+      : i % 2 ? 'bg-slate-50/80' : 'bg-white';
+    const bar = muted ? 'border-l-slate-200'
+      : info.alert === 'overdue' ? 'border-l-rose-500'
+      : info.alert === 'urgent' ? 'border-l-amber-400'
+      : info.alert === 'ontime' ? 'border-l-emerald-400'
+      : 'border-l-slate-200';
+    return (
+      <tr key={o.id} className={`group transition-colors ${bg} hover:bg-sky-50/70 ${muted ? 'text-slate-400' : ''}`}>
+        <td className={`${NAME_CELL} ${bg} border-l-4 ${bar} group-hover:bg-sky-50/70`}>
+          <DeadlineBadge info={info} deadline={o.deadline} />
+          {o.deadline && <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{o.deadline}</div>}
+        </td>
+        <td className={`${CELL} text-center tabular-nums ${muted ? '' : 'text-slate-500'}`}>{o.orderDate}</td>
+        <td className={CELL}><span className={muted ? '' : 'text-slate-600'}>{o.category || <span className="text-slate-300">—</span>}</span></td>
+        <td className={`${CELL} max-w-[260px]`}>
+          <div className={`truncate ${muted ? 'font-medium line-through decoration-slate-300' : 'font-semibold text-slate-800'}`} title={o.title}>
+            {o.title || <span className="text-slate-300 font-normal">(chưa đặt tên)</span>}
+          </div>
+          {o.note && <div className="text-[10px] text-slate-400 truncate" title={o.note}>{o.note}</div>}
+        </td>
+        <td className={`${CELL} text-center`}><PriorityBadge priority={o.priority} /></td>
+        <td className={`${CELL} ${muted ? '' : 'text-slate-600'}`}>{o.requesterName || <span className="text-slate-300">—</span>}</td>
+        <td className={`${CELL} ${muted ? '' : 'text-slate-600'}`}>{o.assigneeName || <span className="text-amber-500">chưa giao</span>}</td>
+        <td className={CELL}>
+          {canEditProgress(o) ? (
+            <select
+              value={o.status}
+              onChange={(e) => onUpdate(o.id, { status: e.target.value as ContentMediaStatus })}
+              className="text-[11px] font-bold border border-slate-200 rounded-lg px-1.5 py-1 outline-none bg-white text-slate-700 cursor-pointer">
+              {CONTENT_MEDIA_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          ) : <StatusBadge status={o.status} />}
+        </td>
+        <td className={CELL}><LinkCell value={o.orderLink} /></td>
+        <td className={CELL}><LinkCell value={o.resultLink} /></td>
+        <td className={`${CELL} text-center whitespace-nowrap`}>
+          <button onClick={() => setEditing(o)} title="Sửa"
+            className="text-slate-400 hover:text-[#D32027] p-1 rounded-lg hover:bg-slate-100">
+            <span className="material-symbols-outlined text-[17px]">edit</span>
+          </button>
+          {canDelete(o) && (
+            <button title="Xóa"
+              onClick={() => setConfirm({
+                message: `Xóa order "${o.title || o.category}"?`,
+                onConfirm: () => { onDelete(o.id); setConfirm(null); },
+              })}
+              className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50">
+              <span className="material-symbols-outlined text-[17px]">delete</span>
+            </button>
+          )}
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <div className="max-w-[1280px] mx-auto flex flex-col gap-5 text-slate-800">
@@ -92,10 +166,12 @@ export default function OrderMediaComponent({ orders, employees, session, curren
         </div>
         <div className="flex items-center gap-2">
           <MonthPicker value={period} onChange={setPeriod} allowFuture />
-          <button onClick={() => setEditing(blank())}
-            className="px-4 py-2 bg-[#D32027] hover:bg-[#B70F1B] text-white text-sm font-bold rounded-xl transition-colors flex items-center gap-1">
-            <span className="material-symbols-outlined text-[18px]">add</span>Thêm order
-          </button>
+          {canCreate && (
+            <button onClick={() => setEditing(blank())}
+              className="px-4 py-2 bg-[#D32027] hover:bg-[#B70F1B] text-white text-sm font-bold rounded-xl transition-colors flex items-center gap-1">
+              <span className="material-symbols-outlined text-[18px]">add</span>Thêm order
+            </button>
+          )}
         </div>
       </div>
 
@@ -119,11 +195,9 @@ export default function OrderMediaComponent({ orders, employees, session, curren
             {mediaStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
-        <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 cursor-pointer">
-          <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} className="accent-[#D32027]" />
-          Hiện cả order đã xong/hủy
-        </label>
-        <span className="ml-auto text-[11px] text-slate-400">{rows.length} order</span>
+        <span className="ml-auto text-[11px] text-slate-400">
+          {activeRows.length} đang chạy{closedRows.length > 0 && ` · ${closedRows.length} đã xong/hủy`}
+        </span>
       </div>
 
       {/* Bảng order */}
@@ -140,65 +214,35 @@ export default function OrderMediaComponent({ orders, employees, session, curren
                 <th className={`${TH} text-left`}>Người đặt</th>
                 <th className={`${TH} text-left`}>Người làm</th>
                 <th className={`${TH} text-left`}>Trạng thái</th>
-                <th className={`${TH} text-left`}>Link order</th>
+                <th className={`${TH} text-left`}>Kịch bản</th>
                 <th className={`${TH} text-left`}>Link trả</th>
                 <th className={`${TH} text-center`}></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((o) => {
-                const info = orderDeadline(o.deadline, o.status, now);
-                return (
-                  <tr key={o.id} className={`group transition-colors ${info.alert === 'overdue' ? 'bg-rose-50/40' : ''} hover:bg-slate-50`}>
-                    <td className={NAME_CELL}>
-                      <DeadlineBadge info={info} deadline={o.deadline} />
-                      {o.deadline && <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{o.deadline}</div>}
-                    </td>
-                    <td className={`${CELL} text-center tabular-nums text-slate-500`}>{o.orderDate}</td>
-                    <td className={CELL}><span className="text-slate-600">{o.category || <span className="text-slate-300">—</span>}</span></td>
-                    <td className={`${CELL} max-w-[260px]`}>
-                      <div className="font-semibold text-slate-800 truncate" title={o.title}>{o.title || <span className="text-slate-300 font-normal">(chưa đặt tên)</span>}</div>
-                      {o.note && <div className="text-[10px] text-slate-400 truncate" title={o.note}>{o.note}</div>}
-                    </td>
-                    <td className={`${CELL} text-center`}><PriorityBadge priority={o.priority} /></td>
-                    <td className={`${CELL} text-slate-600`}>{o.requesterName || <span className="text-slate-300">—</span>}</td>
-                    <td className={`${CELL} text-slate-600`}>{o.assigneeName || <span className="text-amber-500">chưa giao</span>}</td>
-                    <td className={CELL}>
-                      {canEditProgress(o) ? (
-                        <select
-                          value={o.status}
-                          onChange={(e) => onUpdate(o.id, { status: e.target.value as ContentMediaStatus })}
-                          className="text-[11px] font-bold border border-slate-200 rounded-lg px-1.5 py-1 outline-none bg-white cursor-pointer">
-                          {CONTENT_MEDIA_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      ) : <StatusBadge status={o.status} />}
-                    </td>
-                    <td className={CELL}><LinkCell value={o.orderLink} /></td>
-                    <td className={CELL}><LinkCell value={o.resultLink} /></td>
-                    <td className={`${CELL} text-center whitespace-nowrap`}>
-                      <button onClick={() => setEditing(o)} title="Sửa"
-                        className="text-slate-400 hover:text-[#D32027] p-1 rounded-lg hover:bg-slate-100">
-                        <span className="material-symbols-outlined text-[17px]">edit</span>
-                      </button>
-                      {canDelete(o) && (
-                        <button title="Xóa"
-                          onClick={() => setConfirm({
-                            message: `Xóa order "${o.title || o.category}"?`,
-                            onConfirm: () => { onDelete(o.id); setConfirm(null); },
-                          })}
-                          className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50">
-                          <span className="material-symbols-outlined text-[17px]">delete</span>
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {rows.length === 0 && (
+              {activeRows.map((o, i) => renderRow(o, i, false))}
+              {activeRows.length === 0 && (
                 <tr><td colSpan={11} className="px-4 py-10 text-center text-slate-400">
-                  Chưa có order nào khớp bộ lọc trong tháng {period.slice(5)}/{period.slice(0, 4)}.
+                  {closedRows.length > 0
+                    ? 'Không còn order nào đang chạy — mọi order trong bộ lọc đã xong/hủy.'
+                    : `Chưa có order nào khớp bộ lọc trong tháng ${period.slice(5)}/${period.slice(0, 4)}.`}
                 </td></tr>
               )}
+
+              {/* Khối order ĐÃ ĐÓNG — gập lại, xám đi để không tranh chỗ với việc đang chạy */}
+              {closedRows.length > 0 && (
+                <tr>
+                  <td colSpan={11} className="p-0">
+                    <button type="button" onClick={() => setShowClosed(!closedOpen)}
+                      className="w-full px-4 py-2.5 bg-slate-100/80 border-y border-slate-200 flex items-center gap-2 text-[11px] font-bold text-slate-500 hover:bg-slate-200/70 transition-colors">
+                      <span className={`material-symbols-outlined text-[16px] transition-transform ${closedOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                      Đã hoàn thành / hủy ({closedRows.length})
+                      <span className="font-normal text-slate-400">— {closedOpen ? 'bấm để thu gọn' : 'bấm để xem'}</span>
+                    </button>
+                  </td>
+                </tr>
+              )}
+              {closedOpen && closedRows.map((o, i) => renderRow(o, i, true))}
             </tbody>
           </table>
         </div>
@@ -227,9 +271,10 @@ export default function OrderMediaComponent({ orders, employees, session, curren
   );
 }
 
-const CELL = 'px-3 py-2.5 border-b border-slate-100 align-top';
-const NAME_BASE = 'sticky left-0 z-10 px-3 py-2.5 border-r border-b border-slate-100 align-top';
-const NAME_CELL = `${NAME_BASE} bg-white group-hover:bg-slate-50`;
+// Viền dưới đậm hơn + dòng cao hơn để các dòng tách bạch khi danh sách dài.
+const CELL = 'px-3 py-3 border-b border-slate-200 align-top';
+const NAME_BASE = 'sticky left-0 z-10 px-3 py-3 border-r border-b border-slate-200 align-top';
+const NAME_CELL = NAME_BASE;
 const TH_BASE = 'text-[10px] font-bold uppercase tracking-wide text-slate-400 border-b border-slate-200';
 const TH = `px-3 py-2.5 text-center whitespace-nowrap bg-slate-50 ${TH_BASE}`;
 const TH_NAME = `${NAME_BASE} bg-slate-50 text-left ${TH_BASE}`;
@@ -292,9 +337,9 @@ function OrderModal({ order, contentStaff, mediaStaff, canEditBrief, canEditProg
                 <input className={INPUT} disabled={!canEditBrief} value={f.title}
                   onChange={(e) => set({ title: e.target.value })} placeholder="Tên video / đầu việc" required />
               </Field>
-              <Field label="Link order (kịch bản)" className="sm:col-span-2">
+              <Field label="Kịch bản" hint="Dán link kịch bản hoặc gõ tên kịch bản." className="sm:col-span-2">
                 <input className={INPUT} disabled={!canEditBrief} value={f.orderLink ?? ''}
-                  onChange={(e) => set({ orderLink: e.target.value })} placeholder="https://…" />
+                  onChange={(e) => set({ orderLink: e.target.value })} placeholder="Link hoặc tên kịch bản" />
               </Field>
               <Field label="Note" className="sm:col-span-2">
                 <textarea className={`${INPUT} min-h-[70px]`} disabled={!canEditBrief} value={f.note ?? ''}

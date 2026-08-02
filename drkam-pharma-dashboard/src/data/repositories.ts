@@ -445,6 +445,11 @@ export async function deleteAdsFbTarget(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// Thông báo khi câu lệnh chạy xong nhưng KHÔNG chạm dòng nào (RLS chặn hoặc dòng đã bị xóa).
+const NO_ROW_MSG =
+  'không có dòng nào được ghi — bạn không có quyền sửa order này (RLS), hoặc order đã bị xóa. '
+  + 'Nếu bạn là người đặt / người được giao mà vẫn báo lỗi này, hãy chạy migration 0014_orders_rls_fix.sql.';
+
 // ════════════════════════════════════════════════════════════════
 //  ORDER — 2 luồng đặt việc giữa các team (migration 0013)
 //  Đọc mới nhất trước; ghi kèm created_by để RLS "bên đặt tạo" chạy đúng.
@@ -471,14 +476,24 @@ export async function createContentMediaOrder(item: ContentMediaOrder, createdBy
   return contentMediaOrderFromRow(data);
 }
 
-export async function updateContentMediaOrder(id: string, patch: Partial<ContentMediaOrder>): Promise<void> {
-  const { error } = await db().from('content_media_orders').update(contentMediaOrderToUpdate(patch)).eq('id', id);
+export async function updateContentMediaOrder(id: string, patch: Partial<ContentMediaOrder>): Promise<ContentMediaOrder> {
+  // LƯU Ý: phải .select() để biết CÓ dòng nào thật sự được sửa không.
+  // Khi RLS chặn, PostgREST trả 204 KHÔNG kèm lỗi và 0 dòng — nếu bỏ qua thì UI
+  // tưởng lưu thành công, reload lại thấy số cũ.
+  const { data, error } = await db()
+    .from('content_media_orders')
+    .update(contentMediaOrderToUpdate(patch))
+    .eq('id', id)
+    .select('*');
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error(NO_ROW_MSG);
+  return contentMediaOrderFromRow(data[0]);
 }
 
 export async function deleteContentMediaOrder(id: string): Promise<void> {
-  const { error } = await db().from('content_media_orders').delete().eq('id', id);
+  const { data, error } = await db().from('content_media_orders').delete().eq('id', id).select('id');
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error(NO_ROW_MSG);
 }
 
 // ── ORDER: Team Ads Facebook đặt team Content (ads_content_orders) ──
@@ -502,12 +517,19 @@ export async function createAdsContentOrder(item: AdsContentOrder, createdBy: st
   return adsContentOrderFromRow(data);
 }
 
-export async function updateAdsContentOrder(id: string, patch: Partial<AdsContentOrder>): Promise<void> {
-  const { error } = await db().from('ads_content_orders').update(adsContentOrderToUpdate(patch)).eq('id', id);
+export async function updateAdsContentOrder(id: string, patch: Partial<AdsContentOrder>): Promise<AdsContentOrder> {
+  const { data, error } = await db()
+    .from('ads_content_orders')
+    .update(adsContentOrderToUpdate(patch))
+    .eq('id', id)
+    .select('*');
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error(NO_ROW_MSG);
+  return adsContentOrderFromRow(data[0]);
 }
 
 export async function deleteAdsContentOrder(id: string): Promise<void> {
-  const { error } = await db().from('ads_content_orders').delete().eq('id', id);
+  const { data, error } = await db().from('ads_content_orders').delete().eq('id', id).select('id');
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error(NO_ROW_MSG);
 }
