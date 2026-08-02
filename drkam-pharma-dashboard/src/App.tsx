@@ -26,7 +26,9 @@ import {
   MediaKpiEntry,
   MediaImprovement,
   AdsFbTaskLog,
-  AdsFbTarget
+  AdsFbTarget,
+  ContentMediaOrder,
+  AdsContentOrder
 } from './types';
 
 import LoginComponent from './components/LoginComponent';
@@ -45,6 +47,10 @@ import MediaDailyReportComponent from './components/MediaDailyReportComponent';
 import MediaImprovementComponent from './components/MediaImprovementComponent';
 import AdsFbOverviewComponent from './components/AdsFbOverviewComponent';
 import AdsFbDailyReportComponent from './components/AdsFbDailyReportComponent';
+import AdsFbKpiComponent from './components/AdsFbKpiComponent';
+import OrderMediaComponent from './components/OrderMediaComponent';
+import OrderAdsContentComponent from './components/OrderAdsContentComponent';
+import { countAlerts } from './lib/orders';
 import { FacebookIcon, TikTokIcon } from './components/BrandIcons';
 
 import { isSupabaseConfigured } from '@/lib/supabase/client';
@@ -61,7 +67,8 @@ function migrateDemoData() {
     if (localStorage.getItem('drkam_seed_version') !== SEED_VERSION) {
       ['drkam_session', 'drkam_channels', 'drkam_reports', 'drkam_employees', 'drkam_targets', 'drkam_logs', 'drkam_fb_pages',
        'drkam_checklists', 'drkam_media_daily', 'drkam_media_logs', 'drkam_media_kpi', 'drkam_media_improvements',
-       'drkam_adsfb_logs', 'drkam_adsfb_targets']
+       'drkam_adsfb_logs', 'drkam_adsfb_targets',
+       'drkam_orders_media', 'drkam_orders_adscontent']
         .forEach((k) => localStorage.removeItem(k));
       localStorage.setItem('drkam_seed_version', SEED_VERSION);
     }
@@ -196,6 +203,17 @@ export default function App() {
     catch { return []; }
   });
 
+  // ── MODULE ORDER (migration 0013) ──
+  // 2 luồng đặt việc: Content→Media (contentMediaOrders) và Ads→Content (adsContentOrders).
+  const [contentMediaOrders, setContentMediaOrders] = useState<ContentMediaOrder[]>(() => {
+    try { const stored = localStorage.getItem('drkam_orders_media'); return stored ? JSON.parse(stored) : []; }
+    catch { return []; }
+  });
+  const [adsContentOrders, setAdsContentOrders] = useState<AdsContentOrder[]>(() => {
+    try { const stored = localStorage.getItem('drkam_orders_adscontent'); return stored ? JSON.parse(stored) : []; }
+    catch { return []; }
+  });
+
   // Active view tab state ("overview", "tiktok-brand"/"tiktok-real-koc"/"tiktok-ai-koc", "fb-koc"/"fb-brand", "channels", "employees", "chi-tieu", "stats", "logs")
   // Mặc định luôn mở mục Tổng quan mỗi khi vào app.
   const [activeTab, setActiveTab] = useState('overview');
@@ -275,6 +293,16 @@ export default function App() {
     localStorage.setItem('drkam_adsfb_targets', JSON.stringify(adsFbTargets));
   }, [adsFbTargets, cloud]);
 
+  // Module Order (demo: localStorage).
+  useEffect(() => {
+    if (cloud) return;
+    localStorage.setItem('drkam_orders_media', JSON.stringify(contentMediaOrders));
+  }, [contentMediaOrders, cloud]);
+  useEffect(() => {
+    if (cloud) return;
+    localStorage.setItem('drkam_orders_adscontent', JSON.stringify(adsContentOrders));
+  }, [adsContentOrders, cloud]);
+
   // Chế độ DB thật: khôi phục phiên đăng nhập + nạp toàn bộ dữ liệu khi mở app.
   useEffect(() => {
     if (!cloud) return;
@@ -350,6 +378,16 @@ export default function App() {
           if (active) { setAdsFbLogs(al); setAdsFbTargets(at); }
         } catch (e) {
           console.warn('Tải dữ liệu Ads Facebook thất bại (có thể chưa chạy migration 0011):', errMsg(e));
+        }
+        // Module Order — tách riêng để nếu chưa chạy migration 0013 thì phần khác vẫn nạp.
+        try {
+          const [cmo, aco] = await Promise.all([
+            repo.loadContentMediaOrders(),
+            repo.loadAdsContentOrders(),
+          ]);
+          if (active) { setContentMediaOrders(cmo); setAdsContentOrders(aco); }
+        } catch (e) {
+          console.warn('Tải dữ liệu Order thất bại (có thể chưa chạy migration 0013):', errMsg(e));
         }
         // Nhật ký chỉ Admin xem được (RLS) — bỏ qua lỗi với vai trò khác.
         try {
@@ -937,6 +975,65 @@ export default function App() {
     setAdsFbTargets(prev => prev.filter(t => t.id !== id));
   };
 
+  // ── MODULE ORDER — Content đặt Media ──
+  // RLS: bên đặt tạo (created_by), bên nhận (team Media) và Admin cập nhật được.
+  const handleAddContentMediaOrder = async (o: ContentMediaOrder) => {
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        const saved = await repo.createContentMediaOrder(o, currentUserId);
+        setContentMediaOrders(prev => [saved, ...prev]);
+        addAuditLog('Order Media', `Thêm order "${o.title}" giao ${o.assigneeName || 'chưa giao'} — hạn ${o.deadline || 'chưa đặt'}.`);
+      } catch (e) { alert('Lưu order thất bại: ' + errMsg(e)); }
+      return;
+    }
+    setContentMediaOrders(prev => [o, ...prev]);
+    addAuditLog('Order Media', `Thêm order "${o.title}".`);
+  };
+  const handleUpdateContentMediaOrder = async (id: string, patch: Partial<ContentMediaOrder>) => {
+    if (cloud) {
+      try { await repo.updateContentMediaOrder(id, patch); }
+      catch (e) { alert('Cập nhật order thất bại: ' + errMsg(e)); return; }
+    }
+    setContentMediaOrders(prev => prev.map(o => (o.id === id ? { ...o, ...patch } : o)));
+  };
+  const handleDeleteContentMediaOrder = async (id: string) => {
+    if (cloud) {
+      try { await repo.deleteContentMediaOrder(id); }
+      catch (e) { alert('Xóa order thất bại: ' + errMsg(e)); return; }
+    }
+    setContentMediaOrders(prev => prev.filter(o => o.id !== id));
+  };
+
+  // ── MODULE ORDER — Ads Facebook đặt Content ──
+  const handleAddAdsContentOrder = async (o: AdsContentOrder) => {
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        const saved = await repo.createAdsContentOrder(o, currentUserId);
+        setAdsContentOrders(prev => [saved, ...prev]);
+        addAuditLog('Order Content', `Thêm order "${o.postCode || o.topic}" — hạn ${o.deadline || 'chưa đặt'}.`);
+      } catch (e) { alert('Lưu order thất bại: ' + errMsg(e)); }
+      return;
+    }
+    setAdsContentOrders(prev => [o, ...prev]);
+    addAuditLog('Order Content', `Thêm order "${o.postCode || o.topic}".`);
+  };
+  const handleUpdateAdsContentOrder = async (id: string, patch: Partial<AdsContentOrder>) => {
+    if (cloud) {
+      try { await repo.updateAdsContentOrder(id, patch); }
+      catch (e) { alert('Cập nhật order thất bại: ' + errMsg(e)); return; }
+    }
+    setAdsContentOrders(prev => prev.map(o => (o.id === id ? { ...o, ...patch } : o)));
+  };
+  const handleDeleteAdsContentOrder = async (id: string) => {
+    if (cloud) {
+      try { await repo.deleteAdsContentOrder(id); }
+      catch (e) { alert('Xóa order thất bại: ' + errMsg(e)); return; }
+    }
+    setAdsContentOrders(prev => prev.filter(o => o.id !== id));
+  };
+
   // Cờ phân quyền hiển thị Media.
   const isMediaUser = session.department === 'Media' && session.role !== 'Admin';
   const isAdsFbUser = session.department === 'Ads Facebook' && session.role !== 'Admin';
@@ -944,21 +1041,27 @@ export default function App() {
 
   // Danh sách tab của module Media.
   const MEDIA_TABS = ['media-overview', 'media-daily', 'media-improve'];
-  // Danh sách tab của module Ads Facebook.
+  // Danh sách tab của module Ads Facebook (nick Ads FB thấy được).
   const ADS_FB_TABS = ['adsfb-overview', 'adsfb-daily'];
+  // Tab Ads Facebook CHỈ Admin: đặt KPI doanh thu tháng cho từng nhân sự.
+  const ADS_FB_ADMIN_TABS = ['adsfb-kpi'];
+  // Module Order — 2 luồng đặt việc giữa các team.
+  const ORDER_MEDIA_TAB = 'order-media';        // Content đặt Media (Media là bên nhận)
+  const ORDER_CONTENT_TAB = 'order-content';    // Ads đặt Content (Ads là bên đặt)
+  const ORDER_TABS = [ORDER_MEDIA_TAB, ORDER_CONTENT_TAB];
 
   // Role permissions checking helper
   const canAccessTab = (tab: string) => {
     // Nick Media (Khải/Sơn): CHỈ truy cập được các màn Media.
-    if (isMediaUser) return MEDIA_TABS.includes(tab);
+    if (isMediaUser) return MEDIA_TABS.includes(tab) || tab === ORDER_MEDIA_TAB;
     // Nick Ads Facebook: CHỈ truy cập được các màn Ads Facebook.
-    if (isAdsFbUser) return ADS_FB_TABS.includes(tab);
+    if (isAdsFbUser) return ADS_FB_TABS.includes(tab) || tab === ORDER_CONTENT_TAB;
 
     // TẠM KHOÁ mọi mục ngoài TikTok & Facebook cho MỌI vai trò (giữ nguyên code, chỉ chặn truy cập).
     // Mở lại sau: thêm tab vào ALLOWED_TABS hoặc bỏ chặn này.
-    const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'fb-ads', 'checklist'];
+    const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'fb-ads', 'checklist', ...ORDER_TABS];
     // Admin xem thêm cả module Media + Ads Facebook.
-    const allowed = isAdmin ? [...ALLOWED_TABS, ...MEDIA_TABS, ...ADS_FB_TABS] : ALLOWED_TABS;
+    const allowed = isAdmin ? [...ALLOWED_TABS, ...MEDIA_TABS, ...ADS_FB_TABS, ...ADS_FB_ADMIN_TABS] : ALLOWED_TABS;
     if (!allowed.includes(tab)) return false;
 
     // (Phân quyền theo vai trò trước đây — giữ lại để khôi phục khi mở khoá:)
@@ -977,6 +1080,44 @@ export default function App() {
       alert(`Vai trò "${session.role}" hạn chế quyền hạn truy cập phân hệ này.`);
     }
   };
+
+  // ── Sidebar module ORDER ──
+  // Mỗi mục kèm số cảnh báo (quá hạn + sắp hết hạn) để thấy ngay từ menu.
+  const orderAlertCount = (items: Array<{ deadline?: string; status: string }>) => {
+    const c = countAlerts(items);
+    return c.overdue + c.urgent;
+  };
+  const ORDER_NAV = [
+    { tab: ORDER_MEDIA_TAB,   label: 'Order team Media',   icon: 'assignment', accent: 'text-indigo-600 bg-indigo-50', count: orderAlertCount(contentMediaOrders) },
+    { tab: ORDER_CONTENT_TAB, label: 'Order team Content', icon: 'campaign',   accent: 'text-[#D32027] bg-rose-50',    count: orderAlertCount(adsContentOrders) },
+  ];
+  const renderOrderNav = (only?: string[]) => (
+    <div className="pt-4 border-t border-slate-100 my-2">
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2">Order</p>
+      {ORDER_NAV.filter((item) => !only || only.includes(item.tab)).map((item) => (
+        <button
+          key={item.tab}
+          onClick={() => navigateToTab(item.tab)}
+          className={`w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+            activeTab === item.tab ? 'bg-rose-50 text-[#D32027]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <span className="flex items-center gap-3 min-w-0">
+            <span className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${item.accent}`}>
+              <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
+            </span>
+            <span className="truncate">{item.label}</span>
+          </span>
+          {item.count > 0 && (
+            <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-[#D32027] text-white text-[10px] font-bold flex items-center justify-center"
+              title="Order quá hạn / sắp hết hạn">
+              {item.count}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
 
   // Sidebar module Media (flat). Dùng làm sidebar duy nhất cho nick Media,
   // và là 1 mục nhóm phụ cho Admin.
@@ -1004,6 +1145,8 @@ export default function App() {
           <span>{item.label}</span>
         </button>
       ))}
+      {/* Nick Media thấy thêm màn Order mà team Content giao cho mình. */}
+      {isMediaUser && renderOrderNav([ORDER_MEDIA_TAB])}
     </div>
   );
 
@@ -1011,13 +1154,14 @@ export default function App() {
   const ADS_FB_NAV = [
     { tab: 'adsfb-overview', label: 'Tổng quan Ads', icon: 'space_dashboard', accent: 'text-[#D32027] bg-rose-50' },
     { tab: 'adsfb-daily',    label: 'Báo cáo ngày',  icon: 'ads_click',       accent: 'text-emerald-600 bg-emerald-50' },
+    { tab: 'adsfb-kpi',      label: 'KPI tháng',     icon: 'flag',            accent: 'text-amber-600 bg-amber-50', adminOnly: true },
   ];
   const renderAdsFbNav = () => (
     <div className={isAdsFbUser ? '' : 'pt-4 border-t border-slate-100 my-2'}>
       {!isAdsFbUser && (
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2">Team Ads Facebook</p>
       )}
-      {ADS_FB_NAV.map((item) => (
+      {ADS_FB_NAV.filter((item) => isAdmin || !item.adminOnly).map((item) => (
         <button
           key={item.tab}
           onClick={() => navigateToTab(item.tab)}
@@ -1031,6 +1175,8 @@ export default function App() {
           <span>{item.label}</span>
         </button>
       ))}
+      {/* Nick Ads Facebook thấy thêm màn Order mình đặt cho team Content. */}
+      {isAdsFbUser && renderOrderNav([ORDER_CONTENT_TAB])}
     </div>
   );
 
@@ -1042,7 +1188,7 @@ export default function App() {
   // Render main tab view based on selection
   const renderTabContent = () => {
     // Nick Media mở nhầm tab ngoài Media (vd sau khi reload demo) → về Tổng quan Media.
-    if (isMediaUser && !MEDIA_TABS.includes(activeTab)) {
+    if (isMediaUser && !MEDIA_TABS.includes(activeTab) && activeTab !== ORDER_MEDIA_TAB) {
       return (
         <MediaOverviewComponent
           logs={mediaLogs}
@@ -1057,7 +1203,7 @@ export default function App() {
       );
     }
     // Nick Ads Facebook mở nhầm tab ngoài Ads FB → về Tổng quan Ads.
-    if (isAdsFbUser && !ADS_FB_TABS.includes(activeTab)) {
+    if (isAdsFbUser && !ADS_FB_TABS.includes(activeTab) && activeTab !== ORDER_CONTENT_TAB) {
       return (
         <AdsFbOverviewComponent
           logs={adsFbLogs}
@@ -1200,6 +1346,48 @@ export default function App() {
             onAdd={handleAddAdsFbLog}
             onUpdate={handleUpdateAdsFbLog}
             onDelete={handleDeleteAdsFbLog}
+          />
+        );
+      case 'adsfb-kpi':
+        // Chốt chặn thứ hai: nav đã ẩn, ở đây chặn cả trường hợp vào thẳng bằng tab lưu sẵn.
+        if (!isAdmin) return (
+          <div className="max-w-md mx-auto mt-16 bg-white rounded-2xl border border-slate-200/70 soft-shadow p-8 text-center">
+            <span className="material-symbols-outlined text-4xl text-slate-300">lock</span>
+            <p className="text-sm font-bold text-slate-700 mt-2">Chỉ Admin mới đặt được KPI tháng.</p>
+          </div>
+        );
+        return (
+          <AdsFbKpiComponent
+            logs={adsFbLogs}
+            targets={adsFbTargets}
+            employees={employees}
+            session={session}
+            onAddTarget={handleAddAdsFbTarget}
+            onUpdateTarget={handleUpdateAdsFbTarget}
+          />
+        );
+      case ORDER_MEDIA_TAB:
+        return (
+          <OrderMediaComponent
+            orders={contentMediaOrders}
+            employees={employees}
+            session={session}
+            currentUserId={currentUserId}
+            onAdd={handleAddContentMediaOrder}
+            onUpdate={handleUpdateContentMediaOrder}
+            onDelete={handleDeleteContentMediaOrder}
+          />
+        );
+      case ORDER_CONTENT_TAB:
+        return (
+          <OrderAdsContentComponent
+            orders={adsContentOrders}
+            employees={employees}
+            session={session}
+            currentUserId={currentUserId}
+            onAdd={handleAddAdsContentOrder}
+            onUpdate={handleUpdateAdsContentOrder}
+            onDelete={handleDeleteAdsContentOrder}
           />
         );
       case 'channels':
@@ -1562,6 +1750,8 @@ export default function App() {
                 </div>
                 {!canAccessTab('checklist') && <span className="material-symbols-outlined text-[14px]">lock</span>}
               </button>
+
+              {renderOrderNav()}
 
               <button
                 onClick={() => navigateToTab('stats')}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { DailyReport, UserSession } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { FacebookIcon } from './BrandIcons';
+import { MonthPicker } from './dashboardKit';
 
 /**
  * Mục Facebook → Facebook Ads.
@@ -25,11 +26,6 @@ const nowMonthKey = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
-const shiftMonth = (key: string, delta: number) => {
-  const [yy, mm] = key.split('-').map(Number);
-  const d = new Date(Date.UTC(yy, mm - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-};
 
 type ConfirmState = { message: string; onConfirm: () => void } | null;
 
@@ -52,7 +48,6 @@ export default function FacebookAdsComponent({ reports, session, onAddReport, on
   };
 
   const [my, mm] = monthKey.split('-').map(Number);
-  const isCurrentMonth = monthKey === nowMonthKey();
 
   // Báo cáo Facebook Ads của tháng đang xem (mới nhất lên đầu).
   const adsReports = reports
@@ -150,16 +145,7 @@ export default function FacebookAdsComponent({ reports, session, onAddReport, on
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">KPI tháng</p>
               <div className="text-sm font-bold text-slate-700 tabular-nums">{vnd(MONTHLY_TARGET)}</div>
             </div>
-            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-1.5 py-1">
-              <button onClick={() => setMonthKey(shiftMonth(monthKey, -1))} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
-                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
-              </button>
-              <span className="text-xs font-bold text-slate-700 px-1 tabular-nums whitespace-nowrap">Tháng {mm}/{my}</span>
-              <button onClick={() => setMonthKey(shiftMonth(monthKey, 1))} disabled={isCurrentMonth}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
-                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-              </button>
-            </div>
+            <MonthPicker value={monthKey} onChange={setMonthKey} />
           </div>
         </div>
         <div className="flex items-center gap-3 mt-4">

@@ -6,6 +6,7 @@ import {
 import { dailySeries } from '../lib/analytics';
 import ContentChecklistComponent from './ContentChecklistComponent';
 import { FacebookIcon, TikTokIcon } from './BrandIcons';
+import { MonthPicker } from './dashboardKit';
 
 interface DashboardComponentProps {
   reports: DailyReport[];
@@ -99,11 +100,6 @@ const nowMonthKey = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
-const shiftMonth = (key: string, delta: number) => {
-  const [y, m] = key.split('-').map(Number);
-  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-};
 const lastDayOfMonth = (key: string) => {
   const [y, m] = key.split('-').map(Number);
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -190,7 +186,6 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
 }) {
   const [monthKey, setMonthKey] = useState(nowMonthKey);
   const [y, m] = monthKey.split('-').map(Number);
-  const isCurrentMonth = monthKey === nowMonthKey();
   const monthFromIso = `${monthKey}-01`;
   const monthToIso = `${monthKey}-${String(lastDayOfMonth(monthKey)).padStart(2, '0')}`;
 
@@ -254,16 +249,7 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
       {/* Chọn tháng */}
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold text-slate-600">Doanh số tháng {m}/{y}</span>
-        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-1.5 py-1 soft-shadow">
-          <button onClick={() => setMonthKey(shiftMonth(monthKey, -1))} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
-            <span className="material-symbols-outlined text-[18px]">chevron_left</span>
-          </button>
-          <span className="text-sm font-bold text-slate-700 px-2 tabular-nums">Tháng {m}/{y}</span>
-          <button onClick={() => setMonthKey(shiftMonth(monthKey, 1))} disabled={isCurrentMonth}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
-            <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-          </button>
-        </div>
+        <MonthPicker value={monthKey} onChange={setMonthKey} />
       </div>
 
       {/* Tổng doanh thu hiện tại vs KPI — realtime theo báo cáo ngày */}

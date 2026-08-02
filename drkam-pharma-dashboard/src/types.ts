@@ -220,6 +220,73 @@ export interface AdsFbTarget {
   note?: string;
 }
 
+// ════════════════════════════════════════════════════════════════
+//  MODULE ORDER — 2 luồng đặt việc giữa các team (migration 0013)
+//   • ContentMediaOrder — Team Content đặt team Media
+//   • AdsContentOrder   — Team Ads Facebook đặt team Content
+//  Cảnh báo hạn (gấp / quá hạn) tính runtime trong src/lib/orders.ts.
+// ════════════════════════════════════════════════════════════════
+
+export type OrderPriority = 'CAO' | 'TRUNG BÌNH' | 'THẤP';
+export const ORDER_PRIORITIES: OrderPriority[] = ['CAO', 'TRUNG BÌNH', 'THẤP'];
+
+// Trạng thái order Content → Media (theo sheet "Tháng MM.YYYY - Media").
+export type ContentMediaStatus = 'Chờ nhận' | 'Đang làm' | 'Hoàn thành' | 'Delay' | 'Hủy';
+export const CONTENT_MEDIA_STATUSES: ContentMediaStatus[] = ['Chờ nhận', 'Đang làm', 'Hoàn thành', 'Delay', 'Hủy'];
+
+// Trạng thái order Ads → Content (theo sheet order kịch bản của team Ads).
+export type AdsContentStatus = 'Chờ nhận' | 'Đang viết KB' | 'Xong KB' | 'Đang dựng' | 'Hoàn thành' | 'Hủy';
+export const ADS_CONTENT_STATUSES: AdsContentStatus[] = ['Chờ nhận', 'Đang viết KB', 'Xong KB', 'Đang dựng', 'Hoàn thành', 'Hủy'];
+
+// A. Team Content ĐẶT team Media — 1 dòng = 1 video/ảnh giao cho 1 nhân sự Media.
+export interface ContentMediaOrder {
+  id: string;
+  orderDate: string;          // dd/mm/yyyy — NGÀY ORDER
+  category: string;           // LOẠI (Bán hàng, Bs Nguyên daily, Facebook…)
+  title: string;              // TITLE
+  orderLink?: string;         // LINK ORDER (kịch bản / brief)
+  note?: string;              // NOTE
+  priority: OrderPriority;    // ƯU TIÊN
+  requesterId?: string | null;  // ORDER — người đặt (team Content)
+  requesterName: string;
+  assigneeId?: string | null;   // PICK — người làm (team Media)
+  assigneeName: string;
+  deadline?: string;          // dd/mm/yyyy — trống = chưa đặt hạn
+  status: ContentMediaStatus;
+  resultLink?: string;        // LINK VIDEO trả về
+}
+
+// B. Team Ads Facebook ĐẶT team Content — Ads brief → Content viết KB →
+//    Editor dựng video → Ads chạy và ghi kết quả.
+export interface AdsContentOrder {
+  id: string;
+  orderDate: string;          // dd/mm/yyyy
+  postCode?: string;          // ID - BÀI VIẾT
+  topic: string;              // LOẠI KỊCH BẢN
+  adsOwnerId?: string | null; // ADS đặt
+  adsOwnerName: string;
+  size?: string;              // KÍCH THƯỚC (9:16, 3:4, 1:1…)
+  sampleLink?: string;        // Link bài mẫu
+  brief?: string;             // KHUNG KỊCH BẢN VIDEO
+  priority: OrderPriority;
+  deadline?: string;          // dd/mm/yyyy
+  status: AdsContentStatus;
+  // Team Content điền
+  scriptLink?: string;        // KỊCH BẢN EDIT VIDEO
+  contentOwnerId?: string | null;
+  contentOwnerName: string;   // CONTENT phụ trách
+  videoFinal?: string;        // VIDEO FINAL
+  commentContent?: string;    // COMMENT SỬA NỘI DUNG (Content ghi)
+  commentAds?: string;        // COMMENT NỘI DUNG SỬA (Ads ghi)
+  // Team Ads điền sau khi chạy
+  isRunning: boolean;         // TÌNH TRẠNG CHẠY
+  runOwnerName: string;       // TEAM ADS (người chạy)
+  airDate?: string;           // NGÀY LÊN — dd/mm/yyyy
+  spend: number;              // SỐ TIỀN TIÊU (đ)
+  dataCount: number;          // SỐ LƯỢNG SỐ
+  explanation?: string;       // GIẢI TRÌNH
+}
+
 // Initial Mock Data
 export const INITIAL_SESSION: UserSession = {
   isLoggedIn: true, // Defaulting true to keep preview live, option to logout & login is provided in UI

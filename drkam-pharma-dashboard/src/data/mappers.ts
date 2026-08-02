@@ -19,6 +19,8 @@ import {
   MediaImprovement,
   AdsFbTaskLog,
   AdsFbTarget,
+  ContentMediaOrder,
+  AdsContentOrder,
 } from '../types';
 
 type ChannelRow = Database['public']['Tables']['channels']['Row'];
@@ -33,6 +35,8 @@ type MediaKpiRow = Database['public']['Tables']['media_kpi_entries']['Row'];
 type MediaImprovementRow = Database['public']['Tables']['media_improvements']['Row'];
 type AdsFbLogRow = Database['public']['Tables']['ads_fb_task_logs']['Row'];
 type AdsFbTargetRow = Database['public']['Tables']['ads_fb_targets']['Row'];
+type ContentMediaOrderRow = Database['public']['Tables']['content_media_orders']['Row'];
+type AdsContentOrderRow = Database['public']['Tables']['ads_content_orders']['Row'];
 
 /**
  * Quy ước nguồn doanh thu (source_platform) suy từ loại kênh của báo cáo.
@@ -586,5 +590,165 @@ export function adsFbTargetToUpdate(
   if (patch.ordersTarget !== undefined) u.orders_target = patch.ordersTarget || 0;
   if (patch.daysInMonth !== undefined) u.days_in_month = patch.daysInMonth || 30;
   if (patch.note !== undefined) u.note = patch.note ?? null;
+  return u;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ORDER — 2 luồng đặt việc giữa các team (migration 0013)
+//  Ngày ở UI là dd/mm/yyyy, DB là DATE → quy đổi qua toDbDate/toUiDate.
+//  Ô hạn/ngày lên có thể trống → '' ở UI, null ở DB.
+// ════════════════════════════════════════════════════════════════
+
+// ── ORDER: Team Content đặt team Media (content_media_orders) ──
+export function contentMediaOrderFromRow(r: ContentMediaOrderRow): ContentMediaOrder {
+  return {
+    id: r.id,
+    orderDate: toUiDate(r.order_date),
+    category: r.category ?? '',
+    title: r.title ?? '',
+    orderLink: r.order_link ?? undefined,
+    note: r.note ?? undefined,
+    priority: r.priority as ContentMediaOrder['priority'],
+    requesterId: r.requester_id,
+    requesterName: r.requester_name ?? '',
+    assigneeId: r.assignee_id,
+    assigneeName: r.assignee_name ?? '',
+    deadline: r.deadline ? toUiDate(r.deadline) : undefined,
+    status: r.status as ContentMediaOrder['status'],
+    resultLink: r.result_link ?? undefined,
+  };
+}
+
+export function contentMediaOrderToInsert(
+  item: ContentMediaOrder,
+  createdBy: string,
+): Database['public']['Tables']['content_media_orders']['Insert'] {
+  return {
+    order_date: toDbDate(item.orderDate),
+    category: item.category || '',
+    title: item.title || '',
+    order_link: item.orderLink ?? null,
+    note: item.note ?? null,
+    priority: item.priority,
+    requester_id: item.requesterId ?? null,
+    requester_name: item.requesterName || '',
+    assignee_id: item.assigneeId ?? null,
+    assignee_name: item.assigneeName || '',
+    deadline: item.deadline ? toDbDate(item.deadline) : null,
+    status: item.status,
+    result_link: item.resultLink ?? null,
+    created_by: createdBy,
+  };
+}
+
+export function contentMediaOrderToUpdate(
+  patch: Partial<ContentMediaOrder>,
+): Database['public']['Tables']['content_media_orders']['Update'] {
+  const u: Database['public']['Tables']['content_media_orders']['Update'] = {};
+  if (patch.orderDate !== undefined) u.order_date = toDbDate(patch.orderDate);
+  if (patch.category !== undefined) u.category = patch.category || '';
+  if (patch.title !== undefined) u.title = patch.title || '';
+  if (patch.orderLink !== undefined) u.order_link = patch.orderLink ?? null;
+  if (patch.note !== undefined) u.note = patch.note ?? null;
+  if (patch.priority !== undefined) u.priority = patch.priority;
+  if (patch.requesterId !== undefined) u.requester_id = patch.requesterId ?? null;
+  if (patch.requesterName !== undefined) u.requester_name = patch.requesterName || '';
+  if (patch.assigneeId !== undefined) u.assignee_id = patch.assigneeId ?? null;
+  if (patch.assigneeName !== undefined) u.assignee_name = patch.assigneeName || '';
+  if (patch.deadline !== undefined) u.deadline = patch.deadline ? toDbDate(patch.deadline) : null;
+  if (patch.status !== undefined) u.status = patch.status;
+  if (patch.resultLink !== undefined) u.result_link = patch.resultLink ?? null;
+  return u;
+}
+
+// ── ORDER: Team Ads Facebook đặt team Content (ads_content_orders) ──
+export function adsContentOrderFromRow(r: AdsContentOrderRow): AdsContentOrder {
+  return {
+    id: r.id,
+    orderDate: toUiDate(r.order_date),
+    postCode: r.post_code ?? undefined,
+    topic: r.topic ?? '',
+    adsOwnerId: r.ads_owner_id,
+    adsOwnerName: r.ads_owner_name ?? '',
+    size: r.size ?? undefined,
+    sampleLink: r.sample_link ?? undefined,
+    brief: r.brief ?? undefined,
+    priority: r.priority as AdsContentOrder['priority'],
+    deadline: r.deadline ? toUiDate(r.deadline) : undefined,
+    status: r.status as AdsContentOrder['status'],
+    scriptLink: r.script_link ?? undefined,
+    contentOwnerId: r.content_owner_id,
+    contentOwnerName: r.content_owner_name ?? '',
+    videoFinal: r.video_final ?? undefined,
+    commentContent: r.comment_content ?? undefined,
+    commentAds: r.comment_ads ?? undefined,
+    isRunning: r.is_running ?? false,
+    runOwnerName: r.run_owner_name ?? '',
+    airDate: r.air_date ? toUiDate(r.air_date) : undefined,
+    spend: r.spend ?? 0,
+    dataCount: r.data_count ?? 0,
+    explanation: r.explanation ?? undefined,
+  };
+}
+
+export function adsContentOrderToInsert(
+  item: AdsContentOrder,
+  createdBy: string,
+): Database['public']['Tables']['ads_content_orders']['Insert'] {
+  return {
+    order_date: toDbDate(item.orderDate),
+    post_code: item.postCode ?? null,
+    topic: item.topic || '',
+    ads_owner_id: item.adsOwnerId ?? null,
+    ads_owner_name: item.adsOwnerName || '',
+    size: item.size ?? null,
+    sample_link: item.sampleLink ?? null,
+    brief: item.brief ?? null,
+    priority: item.priority,
+    deadline: item.deadline ? toDbDate(item.deadline) : null,
+    status: item.status,
+    script_link: item.scriptLink ?? null,
+    content_owner_id: item.contentOwnerId ?? null,
+    content_owner_name: item.contentOwnerName || '',
+    video_final: item.videoFinal ?? null,
+    comment_content: item.commentContent ?? null,
+    comment_ads: item.commentAds ?? null,
+    is_running: item.isRunning ?? false,
+    run_owner_name: item.runOwnerName || '',
+    air_date: item.airDate ? toDbDate(item.airDate) : null,
+    spend: item.spend || 0,
+    data_count: item.dataCount || 0,
+    explanation: item.explanation ?? null,
+    created_by: createdBy,
+  };
+}
+
+export function adsContentOrderToUpdate(
+  patch: Partial<AdsContentOrder>,
+): Database['public']['Tables']['ads_content_orders']['Update'] {
+  const u: Database['public']['Tables']['ads_content_orders']['Update'] = {};
+  if (patch.orderDate !== undefined) u.order_date = toDbDate(patch.orderDate);
+  if (patch.postCode !== undefined) u.post_code = patch.postCode ?? null;
+  if (patch.topic !== undefined) u.topic = patch.topic || '';
+  if (patch.adsOwnerId !== undefined) u.ads_owner_id = patch.adsOwnerId ?? null;
+  if (patch.adsOwnerName !== undefined) u.ads_owner_name = patch.adsOwnerName || '';
+  if (patch.size !== undefined) u.size = patch.size ?? null;
+  if (patch.sampleLink !== undefined) u.sample_link = patch.sampleLink ?? null;
+  if (patch.brief !== undefined) u.brief = patch.brief ?? null;
+  if (patch.priority !== undefined) u.priority = patch.priority;
+  if (patch.deadline !== undefined) u.deadline = patch.deadline ? toDbDate(patch.deadline) : null;
+  if (patch.status !== undefined) u.status = patch.status;
+  if (patch.scriptLink !== undefined) u.script_link = patch.scriptLink ?? null;
+  if (patch.contentOwnerId !== undefined) u.content_owner_id = patch.contentOwnerId ?? null;
+  if (patch.contentOwnerName !== undefined) u.content_owner_name = patch.contentOwnerName || '';
+  if (patch.videoFinal !== undefined) u.video_final = patch.videoFinal ?? null;
+  if (patch.commentContent !== undefined) u.comment_content = patch.commentContent ?? null;
+  if (patch.commentAds !== undefined) u.comment_ads = patch.commentAds ?? null;
+  if (patch.isRunning !== undefined) u.is_running = patch.isRunning;
+  if (patch.runOwnerName !== undefined) u.run_owner_name = patch.runOwnerName || '';
+  if (patch.airDate !== undefined) u.air_date = patch.airDate ? toDbDate(patch.airDate) : null;
+  if (patch.spend !== undefined) u.spend = patch.spend || 0;
+  if (patch.dataCount !== undefined) u.data_count = patch.dataCount || 0;
+  if (patch.explanation !== undefined) u.explanation = patch.explanation ?? null;
   return u;
 }

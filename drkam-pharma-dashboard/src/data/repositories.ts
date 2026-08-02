@@ -17,6 +17,8 @@ import {
   MediaImprovement,
   AdsFbTaskLog,
   AdsFbTarget,
+  ContentMediaOrder,
+  AdsContentOrder,
 } from '../types';
 import {
   channelFromRow,
@@ -46,6 +48,12 @@ import {
   adsFbTargetFromRow,
   adsFbTargetToInsert,
   adsFbTargetToUpdate,
+  contentMediaOrderFromRow,
+  contentMediaOrderToInsert,
+  contentMediaOrderToUpdate,
+  adsContentOrderFromRow,
+  adsContentOrderToInsert,
+  adsContentOrderToUpdate,
 } from './mappers';
 
 function db() {
@@ -434,5 +442,72 @@ export async function updateAdsFbTarget(id: string, patch: Partial<AdsFbTarget>)
 
 export async function deleteAdsFbTarget(id: string): Promise<void> {
   const { error } = await db().from('ads_fb_targets').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ORDER — 2 luồng đặt việc giữa các team (migration 0013)
+//  Đọc mới nhất trước; ghi kèm created_by để RLS "bên đặt tạo" chạy đúng.
+// ════════════════════════════════════════════════════════════════
+
+// ── ORDER: Team Content đặt team Media (content_media_orders) ──
+export async function loadContentMediaOrders(): Promise<ContentMediaOrder[]> {
+  const { data, error } = await db()
+    .from('content_media_orders')
+    .select('*')
+    .order('order_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(contentMediaOrderFromRow);
+}
+
+export async function createContentMediaOrder(item: ContentMediaOrder, createdBy: string): Promise<ContentMediaOrder> {
+  const { data, error } = await db()
+    .from('content_media_orders')
+    .insert(contentMediaOrderToInsert(item, createdBy))
+    .select('*')
+    .single();
+  if (error) throw error;
+  return contentMediaOrderFromRow(data);
+}
+
+export async function updateContentMediaOrder(id: string, patch: Partial<ContentMediaOrder>): Promise<void> {
+  const { error } = await db().from('content_media_orders').update(contentMediaOrderToUpdate(patch)).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteContentMediaOrder(id: string): Promise<void> {
+  const { error } = await db().from('content_media_orders').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── ORDER: Team Ads Facebook đặt team Content (ads_content_orders) ──
+export async function loadAdsContentOrders(): Promise<AdsContentOrder[]> {
+  const { data, error } = await db()
+    .from('ads_content_orders')
+    .select('*')
+    .order('order_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(adsContentOrderFromRow);
+}
+
+export async function createAdsContentOrder(item: AdsContentOrder, createdBy: string): Promise<AdsContentOrder> {
+  const { data, error } = await db()
+    .from('ads_content_orders')
+    .insert(adsContentOrderToInsert(item, createdBy))
+    .select('*')
+    .single();
+  if (error) throw error;
+  return adsContentOrderFromRow(data);
+}
+
+export async function updateAdsContentOrder(id: string, patch: Partial<AdsContentOrder>): Promise<void> {
+  const { error } = await db().from('ads_content_orders').update(adsContentOrderToUpdate(patch)).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteAdsContentOrder(id: string): Promise<void> {
+  const { error } = await db().from('ads_content_orders').delete().eq('id', id);
   if (error) throw error;
 }

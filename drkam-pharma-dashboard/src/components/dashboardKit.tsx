@@ -62,6 +62,42 @@ export function ChartCard({ title, icon, children, className }: { title: string;
   );
 }
 
+/* ── Chọn tháng: 2 mũi tên + nhãn "Tháng m/yyyy" ──
+   Kiểu thống nhất cho MỌI màn lọc theo tháng (thay cho <input type="month">).
+   `value`/`onChange` dùng khóa 'YYYY-MM'. Mặc định chặn đi tới tương lai;
+   màn có đặt KPI/target trước cho tháng sau thì bật `allowFuture`. */
+export const currentMonthKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+export const shiftMonthKey = (key: string, delta: number) => {
+  const [y, m] = key.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
+export function MonthPicker({ value, onChange, allowFuture = false, className }: {
+  value: string;                 // 'YYYY-MM'
+  onChange: (next: string) => void;
+  allowFuture?: boolean;
+  className?: string;
+}) {
+  const [y, m] = value.split('-');
+  const atMax = !allowFuture && value >= currentMonthKey();
+  const btn = 'w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed';
+  return (
+    <div className={`flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-1.5 py-1 soft-shadow ${className || ''}`}>
+      <button type="button" aria-label="Tháng trước" onClick={() => onChange(shiftMonthKey(value, -1))} className={btn}>
+        <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+      </button>
+      <span className="text-sm font-bold text-slate-700 px-2 tabular-nums whitespace-nowrap">Tháng {Number(m)}/{y}</span>
+      <button type="button" aria-label="Tháng sau" disabled={atMax} onClick={() => onChange(shiftMonthKey(value, 1))} className={btn}>
+        <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+      </button>
+    </div>
+  );
+}
+
 export function Empty() {
   return <div className="h-[160px] flex items-center justify-center text-slate-300 text-sm">Chưa có dữ liệu trong kỳ.</div>;
 }

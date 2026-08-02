@@ -4,6 +4,7 @@ import {
   inPeriod, weekdayVi, adsFbScore, fmtMoney, fmtNum, fmtPct, fmtScore,
 } from '../lib/adsFacebook';
 import ConfirmDialog from './ConfirmDialog';
+import { MonthPicker } from './dashboardKit';
 
 export const ADS_FB_DEPT = 'Ads Facebook';
 
@@ -96,11 +97,7 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
           </h1>
           <p className="text-[11px] text-slate-400 mt-0.5">Nhập chỉ số quảng cáo mỗi ngày — ROAS/CPA và điểm 3 trục tự tính theo cấu hình.</p>
         </div>
-        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 soft-shadow">
-          <span className="material-symbols-outlined text-[16px] text-[#D32027]">calendar_month</span>
-          <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
-            className="text-sm font-semibold border-none outline-none bg-transparent text-slate-700" />
-        </div>
+        <MonthPicker value={period} onChange={setPeriod} />
       </div>
 
       {/* Tab người + nút thêm */}

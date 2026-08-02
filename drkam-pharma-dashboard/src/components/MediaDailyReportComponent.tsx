@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { MediaTaskLog, Employee, UserSession, MEDIA_VIDEO_TYPES } from '../types';
 import { inPeriod, weekdayVi, isVideoContent } from '../lib/media';
 import ConfirmDialog from './ConfirmDialog';
+import { MonthPicker } from './dashboardKit';
 
 interface Props {
   logs: MediaTaskLog[];
@@ -102,16 +103,15 @@ export default function MediaDailyReportComponent({ logs, employees, session, on
               className={`px-2.5 py-1.5 text-[11px] font-bold rounded-md transition-colors ${filterMode === 'day' ? 'bg-white text-[#D32027] soft-shadow' : 'text-slate-500 hover:text-slate-700'}`}>Ngày</button>
           </div>
           {/* Ô chọn thời gian tương ứng */}
-          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 soft-shadow">
-            <span className="material-symbols-outlined text-[16px] text-[#D32027]">{filterMode === 'day' ? 'event' : 'calendar_month'}</span>
-            {filterMode === 'month' ? (
-              <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
-                className="text-sm font-semibold border-none outline-none bg-transparent text-slate-700" />
-            ) : (
+          {filterMode === 'month' ? (
+            <MonthPicker value={period} onChange={setPeriod} />
+          ) : (
+            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 soft-shadow">
+              <span className="material-symbols-outlined text-[16px] text-[#D32027]">event</span>
               <input type="date" value={dayIso} max={isoToday()} onChange={(e) => setDayIso(e.target.value)}
                 className="text-sm font-semibold border-none outline-none bg-transparent text-slate-700" />
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 

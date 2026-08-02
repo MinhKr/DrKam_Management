@@ -299,6 +299,72 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['ads_fb_targets']['Insert']>;
         Relationships: [];
       };
+      // ── ORDER: Team Content đặt team Media (migration 0013) ──
+      content_media_orders: {
+        Row: {
+          id: string;
+          order_date: string;
+          category: string;
+          title: string;
+          order_link: string | null;
+          note: string | null;
+          priority: string;
+          requester_id: string | null;
+          requester_name: string;
+          assignee_id: string | null;
+          assignee_name: string;
+          deadline: string | null;
+          status: string;
+          result_link: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['content_media_orders']['Row'],
+          'id' | 'created_at' | 'updated_at'
+        > & { id?: string; created_at?: string; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['content_media_orders']['Insert']>;
+        Relationships: [];
+      };
+      // ── ORDER: Team Ads Facebook đặt team Content (migration 0013) ──
+      ads_content_orders: {
+        Row: {
+          id: string;
+          order_date: string;
+          post_code: string | null;
+          topic: string;
+          ads_owner_id: string | null;
+          ads_owner_name: string;
+          size: string | null;
+          sample_link: string | null;
+          brief: string | null;
+          priority: string;
+          deadline: string | null;
+          status: string;
+          script_link: string | null;
+          content_owner_id: string | null;
+          content_owner_name: string;
+          video_final: string | null;
+          comment_content: string | null;
+          comment_ads: string | null;
+          is_running: boolean;
+          run_owner_name: string;
+          air_date: string | null;
+          spend: number;
+          data_count: number;
+          explanation: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['ads_content_orders']['Row'],
+          'id' | 'created_at' | 'updated_at'
+        > & { id?: string; created_at?: string; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['ads_content_orders']['Insert']>;
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: { [_ in never]: never };
