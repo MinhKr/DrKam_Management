@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { MediaTaskLog, MediaKpiEntry, Employee, UserSession, MEDIA_VIDEO_TYPES } from '../types';
 import { countVideos, videoTypeTotalsFromLogs, inPeriod, isVideoContent, kpiTotal, kpiRank, weekdayVi } from '../lib/media';
-import { KpiBox, ChartCard, Delta, tooltipStyle, compact } from './dashboardKit';
+import { KpiBox, ChartCard, Delta, MonthPicker, tooltipStyle, compact } from './dashboardKit';
 import MediaKpiComponent from './MediaKpiComponent';
 
 interface Props {
@@ -106,11 +106,7 @@ function OverviewDashboard({ logs, kpiEntries, employees, onNavigateToTab }: Pro
     <div className="space-y-5 text-slate-800">
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-bold text-slate-600">Sản xuất video · số video tự đếm từ báo cáo ngày</span>
-        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1.5 soft-shadow">
-          <span className="material-symbols-outlined text-[18px] text-[#D32027]">calendar_month</span>
-          <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
-            className="text-sm font-semibold border-none outline-none bg-transparent text-slate-700" />
-        </div>
+        <MonthPicker value={period} onChange={setPeriod} />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

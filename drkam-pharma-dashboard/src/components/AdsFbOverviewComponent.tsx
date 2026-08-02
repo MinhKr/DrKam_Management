@@ -5,10 +5,10 @@ import {
 } from 'recharts';
 import { AdsFbTaskLog, AdsFbTarget, AdsFbFormType, Employee, UserSession } from '../types';
 import {
-  inPeriod, adsFbScore, adsFbRank, avgOf, ADS_FB_ALERT,
+  inPeriod, adsFbScore, adsFbRank, avgOf, ADS_FB_ALERT, ADS_FB_BENCHMARK,
   fmtMoney, fmtNum, fmtPct, fmtScore,
 } from '../lib/adsFacebook';
-import { KpiBox, ChartCard, tooltipStyle, compact } from './dashboardKit';
+import { KpiBox, ChartCard, MonthPicker, tooltipStyle, compact } from './dashboardKit';
 
 export const ADS_FB_DEPT = 'Ads Facebook';
 
@@ -25,6 +25,12 @@ interface Props {
 
 const nowMonthKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 const fmtVnd = (v: number) => v >= 1_000_000 ? (v / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 }).replace(',0', '') + 'tr' : v.toLocaleString('vi-VN');
+// Badge % đạt KPI — cùng thang màu với Tổng quan team Content.
+const pctColor = (p: number | null) =>
+  p == null ? 'text-slate-400 bg-slate-50'
+    : p >= 100 ? 'text-green-700 bg-green-50'
+    : p >= 70 ? 'text-amber-700 bg-amber-50'
+    : 'text-rose-700 bg-rose-50';
 
 export default function AdsFbOverviewComponent({ logs, targets, employees, session, onNavigateToTab, onAddTarget, onUpdateTarget, onDeleteTarget }: Props) {
   const [period, setPeriod] = useState(() => {
@@ -48,6 +54,11 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
   const totalData = rows.reduce((s, l) => s + l.dataCount, 0);
   const roas = totalSpend > 0 ? totalRevenue / totalSpend : null;
   const cpData = totalData > 0 ? totalSpend / totalData : null;
+  // CPA chung = tổng chi tiêu ÷ tổng đơn (khác CPA TB/ngày ở bảng so sánh nhân viên).
+  const cpa = totalOrders > 0 ? totalSpend / totalOrders : null;
+  // KPI doanh thu tháng của cả team = tổng target DT của mọi nhân sự có đặt target trong kỳ.
+  const revenueTarget = targets.filter((t) => t.period === period).reduce((s, t) => s + (t.revenueTarget || 0), 0);
+  const revenuePct = revenueTarget > 0 ? Math.round((totalRevenue / revenueTarget) * 1000) / 10 : null;
   const teamScores = rows.map((l) => adsFbScore(l, targetFor(l.employeeId)).total);
   const avgScore = teamScores.length ? teamScores.reduce((s, x) => s + x, 0) / teamScores.length : null;
 
@@ -166,20 +177,55 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
           </h1>
           <p className="text-[11px] text-slate-400 mt-0.5">Chi tiêu · doanh thu · ROAS · điểm hiệu suất — tổng hợp từ báo cáo ngày.</p>
         </div>
-        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1.5 soft-shadow">
-          <span className="material-symbols-outlined text-[18px] text-[#D32027]">calendar_month</span>
-          <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
-            className="text-sm font-semibold border-none outline-none bg-transparent text-slate-700" />
+        {/* allowFuture: màn này còn dùng để đặt target tháng tới cho nhân sự. */}
+        <MonthPicker value={period} onChange={setPeriod} allowFuture />
+      </div>
+
+      {/* Tổng doanh thu hiện tại vs KPI tháng — cùng kiểu thanh tiến trình với Tổng quan team Content */}
+      <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Tổng doanh thu hiện tại · tháng {period.slice(5)}/{period.slice(0, 4)}
+            </p>
+            <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums mt-1">{fmtMoney(totalRevenue)} đ</div>
+            <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1 flex-wrap">
+              <span className="material-symbols-outlined text-[13px] text-green-600">sync</span>
+              Tự cập nhật theo báo cáo mỗi ngày
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">KPI tháng</p>
+            <div className="text-lg font-bold text-slate-700 tabular-nums">{revenueTarget > 0 ? fmtMoney(revenueTarget) + ' đ' : '—'}</div>
+            <span className={`inline-block mt-1 px-2.5 py-0.5 rounded-full text-sm font-extrabold ${pctColor(revenuePct)}`}>
+              {revenuePct == null ? '—' : revenuePct + '%'}
+            </span>
+          </div>
         </div>
+        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mt-4">
+          <div className="h-full rounded-full bg-[#D32027] transition-all duration-500" style={{ width: `${Math.min(revenuePct ?? 0, 100)}%` }} />
+        </div>
+        {revenueTarget === 0 && (
+          <p className="text-[11px] text-amber-600 mt-2">
+            Chưa đặt target doanh thu cho tháng này — đặt ở cột <b>Đặt target</b> trong bảng So sánh nhân viên bên dưới.
+          </p>
+        )}
       </div>
 
       {/* KPI boxes */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiBox label="Tổng chi tiêu" value={fmtVnd(totalSpend) + ' đ'} icon="payments" accent="bg-rose-50 text-[#D32027]">
           <span className="text-[11px] text-slate-400">{rows.length} báo cáo</span>
         </KpiBox>
         <KpiBox label="Giá 1 data" value={cpData === null ? '—' : fmtVnd(Math.round(cpData)) + ' đ'} icon="sell" accent="bg-violet-50 text-violet-600">
           <span className="text-[11px] text-slate-400">{totalData.toLocaleString('vi-VN')} data · Chi tiêu / data</span>
+        </KpiBox>
+        <KpiBox label="CPA (giá 1 đơn)" value={cpa === null ? '—' : fmtVnd(Math.round(cpa)) + ' đ'} icon="local_atm" accent="bg-orange-50 text-orange-600">
+          {cpa === null
+            ? <span className="text-[11px] text-slate-400">Chi tiêu / đơn</span>
+            : <span className={`text-[11px] font-semibold ${cpa <= ADS_FB_BENCHMARK.cpa ? 'text-emerald-600' : cpa <= ADS_FB_ALERT.cpaAbove ? 'text-amber-600' : 'text-rose-600'}`}>
+                Ngưỡng {Math.round(ADS_FB_BENCHMARK.cpa / 1000)}k · {cpa <= ADS_FB_BENCHMARK.cpa ? 'đạt' : cpa <= ADS_FB_ALERT.cpaAbove ? 'cần cải thiện' : 'vượt ngưỡng đỏ'}
+              </span>}
         </KpiBox>
         <KpiBox label="Tổng doanh thu" value={fmtVnd(totalRevenue) + ' đ'} icon="trending_up" accent="bg-emerald-50 text-emerald-600">
           <span className="text-[11px] text-slate-400">{totalOrders.toLocaleString('vi-VN')} đơn</span>
