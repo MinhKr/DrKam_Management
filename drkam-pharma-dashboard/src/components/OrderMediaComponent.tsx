@@ -176,7 +176,7 @@ export default function OrderMediaComponent({ orders, employees, session, curren
         <div>
           <h1 className="text-xl font-bold text-slate-900 font-display flex items-center gap-2">
             <span className="material-symbols-outlined text-[#D32027] text-2xl">assignment</span>
-            <span>Order — Team Content đặt team Media</span>
+            <span>Order — Đặt kịch bản cho team Media</span>
           </h1>
           <p className="text-[11px] text-slate-400 mt-0.5">Đặt video/ảnh cho team Media · theo dõi hạn, tiến độ và link trả về.</p>
         </div>
