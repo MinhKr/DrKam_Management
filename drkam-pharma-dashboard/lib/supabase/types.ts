@@ -365,6 +365,27 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['ads_content_orders']['Insert']>;
         Relationships: [];
       };
+      // ── KPI tháng team Content (migration 0015) ──
+      content_kpi_targets: {
+        Row: {
+          id: string;
+          period: string;
+          item_id: string;
+          item_label: string;
+          kind: string;
+          target_value: number;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['content_kpi_targets']['Row'],
+          'id' | 'created_at' | 'updated_at'
+        > & { id?: string; created_at?: string; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['content_kpi_targets']['Insert']>;
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: { [_ in never]: never };

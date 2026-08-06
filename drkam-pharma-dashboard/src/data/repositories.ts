@@ -19,6 +19,7 @@ import {
   AdsFbTarget,
   ContentMediaOrder,
   AdsContentOrder,
+  ContentKpiTarget,
 } from '../types';
 import {
   channelFromRow,
@@ -54,6 +55,8 @@ import {
   adsContentOrderFromRow,
   adsContentOrderToInsert,
   adsContentOrderToUpdate,
+  contentKpiTargetFromRow,
+  contentKpiTargetToInsert,
 } from './mappers';
 
 function db() {
@@ -532,4 +535,45 @@ export async function deleteAdsContentOrder(id: string): Promise<void> {
   const { data, error } = await db().from('ads_content_orders').delete().eq('id', id).select('id');
   if (error) throw error;
   if (!data || data.length === 0) throw new Error(NO_ROW_MSG);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  KPI THÁNG — TEAM CONTENT (content_kpi_targets, migration 0015)
+// ════════════════════════════════════════════════════════════════
+export async function loadContentKpiTargets(): Promise<ContentKpiTarget[]> {
+  const { data, error } = await db()
+    .from('content_kpi_targets')
+    .select('*')
+    .order('period', { ascending: false })
+    .order('item_id', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(contentKpiTargetFromRow);
+}
+
+/**
+ * Ghi KPI của MỘT THÁNG (nhiều hạng mục một lần).
+ * Dùng upsert theo khóa duy nhất (period, item_id) nên bấm Lưu nhiều lần
+ * chỉ cập nhật đúng dòng cũ, không sinh dòng trùng — kể cả khi 2 người
+ * cùng thiết lập một tháng.
+ */
+export async function saveContentKpiTargets(
+  items: ContentKpiTarget[],
+  createdBy: string,
+): Promise<ContentKpiTarget[]> {
+  if (items.length === 0) return [];
+  const { data, error } = await db()
+    .from('content_kpi_targets')
+    .upsert(
+      items.map((i) => contentKpiTargetToInsert(i, createdBy)),
+      { onConflict: 'period,item_id' },
+    )
+    .select('*');
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(
+      'không có dòng nào được ghi — tài khoản của bạn không có quyền đặt KPI team Content (RLS). '
+      + 'Nếu bạn thuộc team Content mà vẫn báo lỗi này, hãy chạy migration 0015_content_kpi_targets.sql.',
+    );
+  }
+  return data.map(contentKpiTargetFromRow);
 }

@@ -227,6 +227,21 @@ export interface AdsFbTarget {
 //  Cảnh báo hạn (gấp / quá hạn) tính runtime trong src/lib/orders.ts.
 // ════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════
+//  KPI THÁNG — TEAM CONTENT (migration 0015)
+//  1 dòng = 1 hạng mục (kênh doanh thu hoặc view/reach) của 1 tháng.
+//  Danh mục hạng mục cố định ở src/lib/contentKpi.ts; bảng này chỉ lưu SỐ.
+// ════════════════════════════════════════════════════════════════
+export interface ContentKpiTarget {
+  id: string;
+  period: string;        // 'yyyy-mm'
+  itemId: string;        // khớp id hạng mục trong CONTENT_KPI_ITEMS
+  itemLabel: string;     // nhãn tại thời điểm lưu (denormalize, để đối chiếu)
+  kind: 'revenue' | 'viewreach';
+  targetValue: number;   // chỉ tiêu tháng — đ với doanh thu, lượt với view/reach
+  note?: string;
+}
+
 export type OrderPriority = 'CAO' | 'TRUNG BÌNH' | 'THẤP';
 export const ORDER_PRIORITIES: OrderPriority[] = ['CAO', 'TRUNG BÌNH', 'THẤP'];
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DailyReport, AffiliateChannel, Employee, ChecklistItem, UserSession } from '../types';
+import { DailyReport, AffiliateChannel, Employee, ChecklistItem, UserSession, ContentKpiTarget } from '../types';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
@@ -7,6 +7,13 @@ import { dailySeries } from '../lib/analytics';
 import ContentChecklistComponent from './ContentChecklistComponent';
 import { FacebookIcon, TikTokIcon } from './BrandIcons';
 import { MonthPicker } from './dashboardKit';
+// Danh mục hạng mục KPI dùng chung với màn "KPI tháng — Team Content".
+// Chỉ tiêu KHÔNG còn hardcode ở đây: lấy theo tháng từ content_kpi_targets
+// (migration 0015), tháng chưa thiết lập thì rơi về số mặc định trong lib.
+import {
+  norm, BadgeKind, CONTENT_LINE_ITEMS as LINE_ITEMS, CONTENT_VIEW_REACH as VIEW_REACH,
+  targetResolver,
+} from '../lib/contentKpi';
 
 interface DashboardComponentProps {
   reports: DailyReport[];
@@ -15,52 +22,14 @@ interface DashboardComponentProps {
   checklists: ChecklistItem[];
   session: UserSession;
   currentUserId: string | null;
+  kpiTargets: ContentKpiTarget[];
   onNavigateToTab: (tabId: string) => void;
   onAddChecklistItem: (item: ChecklistItem) => void;
   onUpdateChecklistItem: (id: string, patch: { label?: string; quantity?: number }) => void;
   onDeleteChecklistItem: (id: string) => void;
 }
 
-// Chuẩn hoá tên kênh (bỏ dấu, viết thường, bỏ ký tự đặc biệt) — dùng để khớp kênh theo tên.
-const norm = (s: string) => s.normalize('NFD').toLowerCase().replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
-
 type CatKey = 'tt-brand' | 'tt-real' | 'tt-ai' | 'fb-ai' | 'fb-brand' | 'other';
-
-// ── Hạng mục BÁO CÁO CHUNG (khớp file Excel tháng — sửa tự do ở đây) ──
-// Mỗi hạng mục: nhãn hiển thị, chỉ tiêu THÁNG, và cách khớp kênh (match).
-// Mục tiêu tuần = monthlyTarget / 4. Báo cáo không khớp hạng mục nào → gom vào "Khác".
-type BadgeKind = 'fb' | 'tiktok' | 'koc' | 'other';
-type LineItem = {
-  id: string; label: string; monthlyTarget: number; badge: BadgeKind;
-  match: (ch: AffiliateChannel | undefined, r: DailyReport) => boolean;
-};
-const nameIs = (...keys: string[]) =>
-  (ch: AffiliateChannel | undefined, r: DailyReport) => keys.includes(norm(ch?.name ?? r.channelName));
-// ── KPI tháng 7 (tổng doanh số video inhouse = 650.000.000, tự cộng từ các dòng) ──
-const LINE_ITEMS: LineItem[] = [
-  { id: 'drkampharma', label: 'DrKam Pharma Official', monthlyTarget: 40_000_000, badge: 'tiktok', match: nameIs('drkampharmaofficial') },
-  { id: 'drkamvn', label: 'DrKam VN', monthlyTarget: 40_000_000, badge: 'tiktok', match: nameIs('drkamvn') },
-  { id: 'drkamvnofficial', label: 'DrKam VN Official', monthlyTarget: 15_000_000, badge: 'tiktok', match: nameIs('drkamvnofficial') },
-  { id: 'happy', label: 'KOC – Happy Daily', monthlyTarget: 100_000_000, badge: 'koc', match: nameIs('happyydaily', 'happydaily') },
-  { id: 'camcam', label: 'KOC – Nhà của CamCam', monthlyTarget: 20_000_000, badge: 'koc', match: nameIs('nhacuacamcam') },
-  { id: 'minhhee', label: 'KOC – Gia đình MinhHee', monthlyTarget: 15_000_000, badge: 'koc', match: nameIs('giadinhminhhee') },
-  { id: 'baochau', label: 'KOC – Bảo Châu', monthlyTarget: 15_000_000, badge: 'koc', match: nameIs('baochauday', 'baochau') },
-  { id: 'ttai', label: 'TikTok AI (tất cả kênh TikTok AI)', monthlyTarget: 100_000_000, badge: 'tiktok',
-    match: (ch) => ch?.platform === 'TikTok' && ch?.channelType === 'AI KOC' },
-  { id: 'fbkhanh', label: 'FB AI – Khánh/duocsikhanh', monthlyTarget: 50_000_000, badge: 'fb', match: nameIs('duocsikhanh') },
-  { id: 'fbhai', label: 'FB AI – Hải/conghaing', monthlyTarget: 60_000_000, badge: 'fb', match: nameIs('conghaing') },
-  { id: 'fbnhi', label: 'FB AI – Nhi/ynni1809', monthlyTarget: 10_000_000, badge: 'fb', match: nameIs('ynni1809') },
-  { id: 'fbminh', label: 'FB AI – Minh/leminh139148', monthlyTarget: 10_000_000, badge: 'fb', match: nameIs('leminh139148') },
-  // Facebook Ads: doanh thu nhập ở mục Facebook > Facebook Ads (kênh tên "Facebook Ads").
-  { id: 'fbads', label: 'Facebook Ads', monthlyTarget: 175_000_000, badge: 'fb', match: nameIs('facebookads') },
-];
-
-// VIEW / REACH — chỉ tiêu THÁNG (tuần = tháng ÷ 4); Thực hiện = tổng reach (viewsReach) các tuần.
-// reach nhập theo tuần ở form TikTok/Facebook thương hiệu.
-const VIEW_REACH: { id: string; label: string; badge: BadgeKind; monthlyTarget: number; plat: 'tt' | 'fb' }[] = [
-  { id: 'tt-view',  label: 'Lượt view TikTok',        badge: 'tiktok', monthlyTarget: 4_000_000, plat: 'tt' },
-  { id: 'fb-reach', label: 'Lượt tiếp cận Facebook',  badge: 'fb',     monthlyTarget: 5_000_000, plat: 'fb' },
-];
 
 // Dải màu theo % hoàn thành (khớp chú thích dưới biểu đồ) + icon trạng thái.
 function completionStyle(p: number | null): { bar: string; text: string; icon: string | null } {
@@ -158,7 +127,7 @@ export default function DashboardComponent(props: DashboardComponentProps) {
         ))}
       </div>
 
-      {view === 'chung' && <BaoCaoChung reports={props.reports} channels={props.channels} onGotoView={setView} />}
+      {view === 'chung' && <BaoCaoChung reports={props.reports} channels={props.channels} kpiTargets={props.kpiTargets} onGotoView={setView} />}
       {view === 'doanhso' && <DoanhSoNgay reports={props.reports} channels={props.channels} />}
       {view === 'checklist' && (
         <ContentChecklistComponent
@@ -179,12 +148,15 @@ export default function DashboardComponent(props: DashboardComponentProps) {
 /* ════════════════════════════════════════════════════════════════
    TAB 1 — BÁO CÁO CHUNG (tháng: KPI + biểu đồ + bảng kênh × tuần)
    ════════════════════════════════════════════════════════════════ */
-function BaoCaoChung({ reports, channels, onGotoView }: {
+function BaoCaoChung({ reports, channels, kpiTargets, onGotoView }: {
   reports: DailyReport[];
   channels: AffiliateChannel[];
+  kpiTargets: ContentKpiTarget[];
   onGotoView: (v: 'doanhso') => void;
 }) {
   const [monthKey, setMonthKey] = useState(nowMonthKey);
+  // Chỉ tiêu của ĐÚNG tháng đang xem (chưa thiết lập → số mặc định trong lib).
+  const targetOf = targetResolver(kpiTargets, monthKey);
   const [y, m] = monthKey.split('-').map(Number);
   const monthFromIso = `${monthKey}-01`;
   const monthToIso = `${monthKey}-${String(lastDayOfMonth(monthKey)).padStart(2, '0')}`;
@@ -197,7 +169,7 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
 
   type Row = { id: string; label: string; badge: BadgeKind; target: number; weeks: number[]; total: number };
   const rowById = new Map<string, Row>();
-  LINE_ITEMS.forEach((li) => rowById.set(li.id, { id: li.id, label: li.label, badge: li.badge, target: li.monthlyTarget, weeks: [0, 0, 0, 0], total: 0 }));
+  LINE_ITEMS.forEach((li) => rowById.set(li.id, { id: li.id, label: li.label, badge: li.badge, target: targetOf(li.id), weeks: [0, 0, 0, 0], total: 0 }));
   rowById.set('other', { id: 'other', label: 'Khác', badge: 'other', target: 0, weeks: [0, 0, 0, 0], total: 0 });
   monthReports.forEach((r) => {
     const wi = weekIndex(Number(r.date.split('/')[0]));
@@ -214,14 +186,14 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
   ];
 
   const grandTotal = rows.reduce((s, r) => s + r.total, 0);
-  const grandTarget = LINE_ITEMS.reduce((s, li) => s + li.monthlyTarget, 0);
+  const grandTarget = LINE_ITEMS.reduce((s, li) => s + targetOf(li.id), 0);
   const grandWeeks = [0, 1, 2, 3].map((i) => rows.reduce((s, r) => s + r.weeks[i], 0));
   const grandPct = pct(grandTotal, grandTarget);
-  const withTarget = LINE_ITEMS.filter((li) => li.monthlyTarget > 0);
-  const reached = withTarget.filter((li) => rowById.get(li.id)!.total >= li.monthlyTarget).length;
+  const withTarget = LINE_ITEMS.filter((li) => targetOf(li.id) > 0);
+  const reached = withTarget.filter((li) => rowById.get(li.id)!.total >= targetOf(li.id)).length;
 
   // VIEW / REACH — cộng reach (viewsReach) theo nền tảng & tuần (reach nhập theo tuần → cộng dồn ra tháng).
-  const vrRows = VIEW_REACH.map((v) => ({ ...v, weeks: [0, 0, 0, 0] as number[], total: 0 }));
+  const vrRows = VIEW_REACH.map((v) => ({ ...v, monthlyTarget: targetOf(v.id), weeks: [0, 0, 0, 0] as number[], total: 0 }));
   monthReports.forEach((r) => {
     const reach = r.traffic?.viewsReach ?? 0;
     if (!reach) return;
@@ -235,8 +207,8 @@ function BaoCaoChung({ reports, channels, onGotoView }: {
   const revTikTok = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('tt')).reduce((s, r) => s + r.revenue, 0);
   const revFacebook = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('fb')).reduce((s, r) => s + r.revenue, 0);
   // KPI theo nền tảng: TikTok gồm badge 'tiktok' + 'koc' (KOC là kênh TikTok), Facebook gồm badge 'fb'.
-  const tkTarget = LINE_ITEMS.filter((li) => li.badge === 'tiktok' || li.badge === 'koc').reduce((s, li) => s + li.monthlyTarget, 0);
-  const fbTarget = LINE_ITEMS.filter((li) => li.badge === 'fb').reduce((s, li) => s + li.monthlyTarget, 0);
+  const tkTarget = LINE_ITEMS.filter((li) => li.badge === 'tiktok' || li.badge === 'koc').reduce((s, li) => s + targetOf(li.id), 0);
+  const fbTarget = LINE_ITEMS.filter((li) => li.badge === 'fb').reduce((s, li) => s + targetOf(li.id), 0);
 
   const series = dailySeries(monthReports, monthFromIso, monthToIso);
   const weekLabel = (i: number) => {
