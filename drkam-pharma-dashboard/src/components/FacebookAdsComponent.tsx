@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
-import { DailyReport, UserSession } from '../types';
+import { DailyReport, UserSession, ContentKpiTarget } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import { FacebookIcon } from './BrandIcons';
 import { MonthPicker } from './dashboardKit';
+import { targetResolver } from '../lib/contentKpi';
 
 /**
  * Mục Facebook → Facebook Ads.
  * Đơn giản: chỉ NHẬP DOANH THU theo ngày (không traffic). Mỗi ngày 1 dòng —
  * nhập lại cùng ngày sẽ ghi đè (cloud upsert theo channel_id + ngày).
  * Doanh thu ở đây cộng vào dòng "Facebook Ads" tại Tổng quan.
+ *
+ * KPI tháng KHÔNG hardcode: lấy đúng hạng mục 'fbads' của tháng đang xem từ
+ * màn "KPI team Content" (content_kpi_targets), tháng chưa thiết lập thì rơi
+ * về số mặc định trong src/lib/contentKpi.ts.
  */
 
 const CHANNEL_NAME = 'Facebook Ads';
 const CHANNEL_TYPE = 'Facebook - Ads';
-const MONTHLY_TARGET = 175_000_000; // KPI tháng (khớp Tổng quan)
+/** Id hạng mục KPI tương ứng màn này — khớp CONTENT_LINE_ITEMS. */
+const KPI_ITEM_ID = 'fbads';
 
 const vnd = (v: number) => new Intl.NumberFormat('vi-VN').format(Math.round(v)) + ' đ';
 
@@ -32,11 +38,12 @@ type ConfirmState = { message: string; onConfirm: () => void } | null;
 interface Props {
   reports: DailyReport[];
   session: UserSession;
+  kpiTargets: ContentKpiTarget[];
   onAddReport: (r: DailyReport) => void;
   onDeleteReport: (id: string) => void;
 }
 
-export default function FacebookAdsComponent({ reports, session, onAddReport, onDeleteReport }: Props) {
+export default function FacebookAdsComponent({ reports, session, kpiTargets, onAddReport, onDeleteReport }: Props) {
   const [monthKey, setMonthKey] = useState(nowMonthKey);
   const [date, setDate] = useState(isoTodayLocal);
   const [revenueStr, setRevenueStr] = useState('');
@@ -59,7 +66,9 @@ export default function FacebookAdsComponent({ reports, session, onAddReport, on
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const monthTotal = adsReports.reduce((s, r) => s + r.revenue, 0);
-  const pct = MONTHLY_TARGET > 0 ? Math.round((monthTotal / MONTHLY_TARGET) * 1000) / 10 : 0;
+  // KPI của ĐÚNG tháng đang xem — đổi ở màn "KPI team Content" là đây đổi theo.
+  const monthlyTarget = targetResolver(kpiTargets, monthKey)(KPI_ITEM_ID);
+  const pct = monthlyTarget > 0 ? Math.round((monthTotal / monthlyTarget) * 1000) / 10 : 0;
 
   const handleSave = () => {
     const rev = Number(revenueStr.replace(/[^\d]/g, ''));
@@ -143,7 +152,7 @@ export default function FacebookAdsComponent({ reports, session, onAddReport, on
           <div className="flex items-center gap-3">
             <div className="text-right">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">KPI tháng</p>
-              <div className="text-sm font-bold text-slate-700 tabular-nums">{vnd(MONTHLY_TARGET)}</div>
+              <div className="text-sm font-bold text-slate-700 tabular-nums">{vnd(monthlyTarget)}</div>
             </div>
             <MonthPicker value={monthKey} onChange={setMonthKey} />
           </div>

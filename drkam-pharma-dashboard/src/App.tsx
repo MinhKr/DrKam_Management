@@ -1327,6 +1327,7 @@ export default function App() {
           <FacebookAdsComponent
             reports={reports}
             session={session}
+            kpiTargets={contentKpiTargets}
             onAddReport={handleAddReport}
             onDeleteReport={handleDeleteReport}
           />
