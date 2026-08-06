@@ -227,6 +227,21 @@ export interface AdsFbTarget {
 //  Cảnh báo hạn (gấp / quá hạn) tính runtime trong src/lib/orders.ts.
 // ════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════
+//  KPI THÁNG — TEAM CONTENT (migration 0015)
+//  1 dòng = 1 hạng mục (kênh doanh thu hoặc view/reach) của 1 tháng.
+//  Danh mục hạng mục cố định ở src/lib/contentKpi.ts; bảng này chỉ lưu SỐ.
+// ════════════════════════════════════════════════════════════════
+export interface ContentKpiTarget {
+  id: string;
+  period: string;        // 'yyyy-mm'
+  itemId: string;        // khớp id hạng mục trong CONTENT_KPI_ITEMS
+  itemLabel: string;     // nhãn tại thời điểm lưu (denormalize, để đối chiếu)
+  kind: 'revenue' | 'viewreach';
+  targetValue: number;   // chỉ tiêu tháng — đ với doanh thu, lượt với view/reach
+  note?: string;
+}
+
 export type OrderPriority = 'CAO' | 'TRUNG BÌNH' | 'THẤP';
 export const ORDER_PRIORITIES: OrderPriority[] = ['CAO', 'TRUNG BÌNH', 'THẤP'];
 
@@ -254,6 +269,9 @@ export interface ContentMediaOrder {
   deadline?: string;          // dd/mm/yyyy — trống = chưa đặt hạn
   status: ContentMediaStatus;
   resultLink?: string;        // LINK VIDEO trả về
+  // Người TẠO dòng — có thể khác người đặt (nhân sự Media nhập hộ cho Content).
+  // Quyết định quyền sửa phần yêu cầu và quyền xóa (khớp created_by ở RLS).
+  createdById?: string | null;
 }
 
 // B. Team Ads Facebook ĐẶT team Content — Ads brief → Content viết KB →
@@ -263,7 +281,7 @@ export interface AdsContentOrder {
   orderDate: string;          // dd/mm/yyyy
   postCode?: string;          // ID - BÀI VIẾT
   topic: string;              // LOẠI KỊCH BẢN
-  adsOwnerId?: string | null; // ADS đặt
+  adsOwnerId?: string | null; // NGƯỜI ĐẶT — nhân sự Ads Facebook hoặc Media
   adsOwnerName: string;
   size?: string;              // KÍCH THƯỚC (9:16, 3:4, 1:1…)
   sampleLink?: string;        // Link bài mẫu
@@ -285,6 +303,8 @@ export interface AdsContentOrder {
   spend: number;              // SỐ TIỀN TIÊU (đ)
   dataCount: number;          // SỐ LƯỢNG SỐ
   explanation?: string;       // GIẢI TRÌNH
+  // Người TẠO dòng — khớp created_by ở RLS, dùng cho quyền sửa yêu cầu / xóa.
+  createdById?: string | null;
 }
 
 // Initial Mock Data

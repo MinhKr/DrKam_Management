@@ -28,7 +28,8 @@ import {
   AdsFbTaskLog,
   AdsFbTarget,
   ContentMediaOrder,
-  AdsContentOrder
+  AdsContentOrder,
+  ContentKpiTarget
 } from './types';
 
 import LoginComponent from './components/LoginComponent';
@@ -50,6 +51,7 @@ import AdsFbDailyReportComponent from './components/AdsFbDailyReportComponent';
 import AdsFbKpiComponent from './components/AdsFbKpiComponent';
 import OrderMediaComponent from './components/OrderMediaComponent';
 import OrderAdsContentComponent from './components/OrderAdsContentComponent';
+import ContentKpiComponent from './components/ContentKpiComponent';
 import { countAlerts } from './lib/orders';
 import { FacebookIcon, TikTokIcon } from './components/BrandIcons';
 
@@ -68,7 +70,7 @@ function migrateDemoData() {
       ['drkam_session', 'drkam_channels', 'drkam_reports', 'drkam_employees', 'drkam_targets', 'drkam_logs', 'drkam_fb_pages',
        'drkam_checklists', 'drkam_media_daily', 'drkam_media_logs', 'drkam_media_kpi', 'drkam_media_improvements',
        'drkam_adsfb_logs', 'drkam_adsfb_targets',
-       'drkam_orders_media', 'drkam_orders_adscontent']
+       'drkam_orders_media', 'drkam_orders_adscontent', 'drkam_content_kpi']
         .forEach((k) => localStorage.removeItem(k));
       localStorage.setItem('drkam_seed_version', SEED_VERSION);
     }
@@ -214,6 +216,13 @@ export default function App() {
     catch { return []; }
   });
 
+  // ── KPI THÁNG TEAM CONTENT (migration 0015) ──
+  // Chỉ tiêu từng hạng mục theo tháng; Tổng quan đọc lại để chấm % đạt.
+  const [contentKpiTargets, setContentKpiTargets] = useState<ContentKpiTarget[]>(() => {
+    try { const stored = localStorage.getItem('drkam_content_kpi'); return stored ? JSON.parse(stored) : []; }
+    catch { return []; }
+  });
+
   // Active view tab state ("overview", "tiktok-brand"/"tiktok-real-koc"/"tiktok-ai-koc", "fb-koc"/"fb-brand", "channels", "employees", "chi-tieu", "stats", "logs")
   // Mặc định luôn mở mục Tổng quan mỗi khi vào app.
   const [activeTab, setActiveTab] = useState('overview');
@@ -303,6 +312,12 @@ export default function App() {
     localStorage.setItem('drkam_orders_adscontent', JSON.stringify(adsContentOrders));
   }, [adsContentOrders, cloud]);
 
+  // KPI tháng team Content (demo: localStorage).
+  useEffect(() => {
+    if (cloud) return;
+    localStorage.setItem('drkam_content_kpi', JSON.stringify(contentKpiTargets));
+  }, [contentKpiTargets, cloud]);
+
   // Chế độ DB thật: khôi phục phiên đăng nhập + nạp toàn bộ dữ liệu khi mở app.
   useEffect(() => {
     if (!cloud) return;
@@ -388,6 +403,14 @@ export default function App() {
           if (active) { setContentMediaOrders(cmo); setAdsContentOrders(aco); }
         } catch (e) {
           console.warn('Tải dữ liệu Order thất bại (có thể chưa chạy migration 0013):', errMsg(e));
+        }
+        // KPI tháng team Content — tách riêng để nếu chưa chạy migration 0015 thì
+        // Tổng quan vẫn chạy bằng chỉ tiêu mặc định trong src/lib/contentKpi.ts.
+        try {
+          const ckt = await repo.loadContentKpiTargets();
+          if (active) setContentKpiTargets(ckt);
+        } catch (e) {
+          console.warn('Tải KPI team Content thất bại (có thể chưa chạy migration 0015):', errMsg(e));
         }
         // Nhật ký chỉ Admin xem được (RLS) — bỏ qua lỗi với vai trò khác.
         try {
@@ -1042,6 +1065,24 @@ export default function App() {
     setAdsContentOrders(prev => prev.filter(o => o.id !== id));
   };
 
+  /**
+   * Lưu KPI tháng team Content — ghi cả tháng một lần (upsert theo period+item_id),
+   * rồi thay TOÀN BỘ dòng của tháng đó trong state bằng dòng DB trả về, để Tổng quan
+   * đọc đúng số vừa lưu mà không phải tải lại trang.
+   */
+  const handleSaveContentKpi = async (period: string, rows: ContentKpiTarget[]) => {
+    let saved = rows;
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        saved = await repo.saveContentKpiTargets(rows, currentUserId);
+      } catch (e) { alert('Lưu KPI team Content thất bại: ' + errMsg(e)); return; }
+    }
+    setContentKpiTargets(prev => [...prev.filter(t => t.period !== period), ...saved]);
+    const total = rows.filter(r => r.kind === 'revenue').reduce((s, r) => s + r.targetValue, 0);
+    addAuditLog('KPI Content', `Đặt KPI tháng ${period.slice(5)}/${period.slice(0, 4)} — tổng doanh thu ${total.toLocaleString('vi-VN')} đ.`);
+  };
+
   // Cờ phân quyền hiển thị Media.
   const isMediaUser = session.department === 'Media' && session.role !== 'Admin';
   const isAdsFbUser = session.department === 'Ads Facebook' && session.role !== 'Admin';
@@ -1057,17 +1098,20 @@ export default function App() {
   const ORDER_MEDIA_TAB = 'order-media';        // Content đặt Media (Media là bên nhận)
   const ORDER_CONTENT_TAB = 'order-content';    // Ads đặt Content (Ads là bên đặt)
   const ORDER_TABS = [ORDER_MEDIA_TAB, ORDER_CONTENT_TAB];
+  // KPI tháng team Content — team Content đặt chỉ tiêu cho các kênh ở Tổng quan.
+  const CONTENT_KPI_TAB = 'content-kpi';
 
   // Role permissions checking helper
   const canAccessTab = (tab: string) => {
-    // Nick Media (Khải/Sơn): CHỈ truy cập được các màn Media.
-    if (isMediaUser) return MEDIA_TABS.includes(tab) || tab === ORDER_MEDIA_TAB;
+    // Nick Media (Khải/Sơn): các màn Media + CẢ 2 màn Order —
+    // vừa nhận việc từ Content, vừa đặt kịch bản cho Content (chốt 06/08/2026).
+    if (isMediaUser) return MEDIA_TABS.includes(tab) || ORDER_TABS.includes(tab);
     // Nick Ads Facebook: CHỈ truy cập được các màn Ads Facebook.
     if (isAdsFbUser) return ADS_FB_TABS.includes(tab) || tab === ORDER_CONTENT_TAB;
 
     // TẠM KHOÁ mọi mục ngoài TikTok & Facebook cho MỌI vai trò (giữ nguyên code, chỉ chặn truy cập).
     // Mở lại sau: thêm tab vào ALLOWED_TABS hoặc bỏ chặn này.
-    const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'fb-ads', 'checklist', ...ORDER_TABS];
+    const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'fb-ads', 'checklist', CONTENT_KPI_TAB, ...ORDER_TABS];
     // Admin xem thêm cả module Media + Ads Facebook.
     const allowed = isAdmin ? [...ALLOWED_TABS, ...MEDIA_TABS, ...ADS_FB_TABS, ...ADS_FB_ADMIN_TABS] : ALLOWED_TABS;
     if (!allowed.includes(tab)) return false;
@@ -1153,8 +1197,8 @@ export default function App() {
           <span>{item.label}</span>
         </button>
       ))}
-      {/* Nick Media thấy thêm màn Order mà team Content giao cho mình. */}
-      {isMediaUser && renderOrderNav([ORDER_MEDIA_TAB])}
+      {/* Nick Media thấy cả 2 màn Order: việc Content giao cho mình, và việc mình đặt team Content. */}
+      {isMediaUser && renderOrderNav()}
     </div>
   );
 
@@ -1196,7 +1240,8 @@ export default function App() {
   // Render main tab view based on selection
   const renderTabContent = () => {
     // Nick Media mở nhầm tab ngoài Media (vd sau khi reload demo) → về Tổng quan Media.
-    if (isMediaUser && !MEDIA_TABS.includes(activeTab) && activeTab !== ORDER_MEDIA_TAB) {
+    // Cả 2 màn Order đều hợp lệ với nick Media — phải khớp đúng canAccessTab ở trên.
+    if (isMediaUser && !MEDIA_TABS.includes(activeTab) && !ORDER_TABS.includes(activeTab)) {
       return (
         <MediaOverviewComponent
           logs={mediaLogs}
@@ -1235,6 +1280,7 @@ export default function App() {
             checklists={checklists}
             session={session}
             currentUserId={currentUserId}
+            kpiTargets={contentKpiTargets}
             onNavigateToTab={navigateToTab}
             onAddChecklistItem={handleAddChecklistItem}
             onUpdateChecklistItem={handleUpdateChecklistItem}
@@ -1281,6 +1327,7 @@ export default function App() {
           <FacebookAdsComponent
             reports={reports}
             session={session}
+            kpiTargets={contentKpiTargets}
             onAddReport={handleAddReport}
             onDeleteReport={handleDeleteReport}
           />
@@ -1374,6 +1421,14 @@ export default function App() {
             onUpdateTarget={handleUpdateAdsFbTarget}
           />
         );
+      case CONTENT_KPI_TAB:
+        return (
+          <ContentKpiComponent
+            targets={contentKpiTargets}
+            session={session}
+            onSave={handleSaveContentKpi}
+          />
+        );
       case ORDER_MEDIA_TAB:
         return (
           <OrderMediaComponent
@@ -1447,6 +1502,7 @@ export default function App() {
             checklists={checklists}
             session={session}
             currentUserId={currentUserId}
+            kpiTargets={contentKpiTargets}
             onNavigateToTab={navigateToTab}
             onAddChecklistItem={handleAddChecklistItem}
             onUpdateChecklistItem={handleUpdateChecklistItem}
@@ -1759,93 +1815,29 @@ export default function App() {
                 {!canAccessTab('checklist') && <span className="material-symbols-outlined text-[14px]">lock</span>}
               </button>
 
-              {renderOrderNav()}
-
+              {/* KPI tháng team Content — đặt chỉ tiêu cho các kênh ở Tổng quan. */}
               <button
-                onClick={() => navigateToTab('stats')}
+                onClick={() => navigateToTab(CONTENT_KPI_TAB)}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                  !canAccessTab('stats') ? 'opacity-50 cursor-not-allowed' : ''
-                } ${
-                  activeTab === 'stats'
+                  activeTab === CONTENT_KPI_TAB
                     ? 'bg-rose-50 text-[#D32027]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`}
-                disabled={!canAccessTab('stats')}
               >
                 <div className="flex items-center gap-3">
-                  <span className="w-8 h-8 rounded-lg flex items-center justify-center text-amber-600 bg-amber-50 flex-shrink-0">
-                    <span className="material-symbols-outlined text-[18px]">insights</span>
+                  <span className="w-8 h-8 rounded-lg flex items-center justify-center text-[#D32027] bg-rose-50 flex-shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">flag</span>
                   </span>
-                  <span>Thống kê chi tiết</span>
+                  <span>KPI team Content</span>
                 </div>
-                {!canAccessTab('stats') && <span className="material-symbols-outlined text-[14px]">lock</span>}
               </button>
 
-              {/* Protected HR Tabs for Admin / Leader roles */}
-              <div className="pt-4 border-t border-slate-100 my-2">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2">Nhóm & Quản trị</p>
-                
-                <button 
-                  onClick={() => navigateToTab('employees')}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                    !canAccessTab('employees') ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${
-                    activeTab === 'employees' 
-                      ? 'bg-rose-50 text-[#D32027]' 
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                  disabled={!canAccessTab('employees')}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-violet-600 bg-violet-50 flex-shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">badge</span>
-                    </span>
-                    <span>Quản lý nhân sự</span>
-                  </div>
-                  {!canAccessTab('employees') && <span className="material-symbols-outlined text-[14px]">lock</span>}
-                </button>
+              {renderOrderNav()}
 
-                <button 
-                  onClick={() => navigateToTab('chi-tieu')}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                    !canAccessTab('chi-tieu') ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${
-                    activeTab === 'chi-tieu' 
-                      ? 'bg-rose-50 text-[#D32027]' 
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                  disabled={!canAccessTab('chi-tieu')}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-600 bg-emerald-50 flex-shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">target</span>
-                    </span>
-                    <span>Thiết lập KPI</span>
-                  </div>
-                  {!canAccessTab('chi-tieu') && <span className="material-symbols-outlined text-[14px]">lock</span>}
-                </button>
-
-                <button 
-                  onClick={() => navigateToTab('logs')}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                    !canAccessTab('logs') ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${
-                    activeTab === 'logs' 
-                      ? 'bg-rose-50 text-[#D32027]' 
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                  disabled={!canAccessTab('logs')}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-600 bg-cyan-50 flex-shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">security</span>
-                    </span>
-                    <span>Nhật ký hệ thống</span>
-                  </div>
-                  {!canAccessTab('logs') && <span className="material-symbols-outlined text-[14px]">lock</span>}
-                </button>
-
-              </div>
+              {/* Đã bỏ khỏi sidebar theo yêu cầu: Thống kê chi tiết, và nhóm
+                  "Nhóm & Quản trị" (Quản lý nhân sự · Thiết lập KPI · Nhật ký hệ thống).
+                  Các màn này vẫn còn trong renderTabContent — muốn bật lại thì thêm nút
+                  ở đây và thêm tab vào ALLOWED_TABS. */}
 
               {/* Module Media — chỉ Admin thấy thêm ở đây (nick Media đã render riêng ở trên) */}
               {isAdmin && renderMediaNav()}

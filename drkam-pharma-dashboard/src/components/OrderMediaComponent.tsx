@@ -9,6 +9,11 @@
  *     note, ưu tiên, deadline, người làm.
  *   • Bên NHẬN (team Media, hoặc Admin) cập nhật tiến độ: trạng thái + link video trả.
  *   • Xóa: chỉ người tạo hoặc Admin.
+ *
+ * NHÂN SỰ MEDIA CŨNG TẠO ĐƯỢC ORDER (chốt 06/08/2026) — nhập hộ là chính,
+ * nên ô "Người đặt" VẪN bắt buộc là một người team Content: bảng này luôn đọc
+ * được là "Content đặt Media". Người tạo dòng (createdById) mới là căn cứ
+ * phân quyền sửa yêu cầu/xóa, vì có thể khác người đứng tên đặt.
  */
 import React, { useMemo, useState } from 'react';
 import {
@@ -50,17 +55,22 @@ export default function OrderMediaComponent({ orders, employees, session, curren
 
   const isAdmin = session.role === 'Admin';
   const isMediaUser = session.department === 'Media';
-  // Chỉ BÊN ĐẶT (team Content) và Admin được tạo order; bên nhận (Media) chỉ nhận việc.
-  const canCreate = isAdmin || (session.department !== 'Media' && session.department !== 'Ads Facebook');
+  // Team Content và team Media đều tạo được order ở đây; team Ads có màn riêng.
+  const canCreate = isAdmin || session.department !== 'Ads Facebook';
   const contentStaff = useMemo(() => employees.filter(isContentStaff), [employees]);
   const mediaStaff = useMemo(() => employees.filter(isMediaStaff), [employees]);
   const now = todayStart();
 
-  // Bên ĐẶT: người tạo dòng (hoặc Admin) mới sửa được phần yêu cầu.
-  const canEditBrief = (o: ContentMediaOrder) => isAdmin || (!!currentUserId && o.requesterId === currentUserId);
+  // Bên ĐẶT = người TẠO dòng (Media có thể nhập hộ) hoặc người ĐỨNG TÊN đặt.
+  // Dòng cũ chưa gắn người tạo thì chỉ xét người đặt.
+  const canEditBrief = (o: ContentMediaOrder) =>
+    isAdmin || (!!currentUserId && (o.createdById === currentUserId || o.requesterId === currentUserId));
   // Bên NHẬN: team Media cập nhật tiến độ; người đặt và Admin cũng sửa được.
   const canEditProgress = (o: ContentMediaOrder) => isAdmin || isMediaUser || canEditBrief(o);
-  const canDelete = (o: ContentMediaOrder) => isAdmin || (!!currentUserId && o.requesterId === currentUserId);
+  // Xóa — khớp đúng policy delete ở migration 0014:
+  // dòng chưa có người tạo, hoặc mình là người tạo / người đặt, hoặc Admin.
+  const canDelete = (o: ContentMediaOrder) =>
+    isAdmin || !o.createdById || (!!currentUserId && (o.createdById === currentUserId || o.requesterId === currentUserId));
 
   const monthOrders = useMemo(() => orders.filter((o) => orderInPeriod(o.orderDate, period)), [orders, period]);
   const counts = useMemo(() => countAlerts(monthOrders, now), [monthOrders, now]);
@@ -80,12 +90,18 @@ export default function OrderMediaComponent({ orders, employees, session, curren
   // Lọc thẳng vào một trạng thái đã đóng thì mở sẵn khối đó, nếu không danh sách trông như rỗng.
   const closedOpen = showClosed || (statusFilter !== 'all' && isOrderClosed(statusFilter));
 
+  // Người đang đăng nhập có thuộc team Content không — chỉ khi đó mới điền sẵn
+  // ô "Người đặt"; nhân sự Media tạo hộ thì phải tự chọn người Content đứng tên.
+  const meIsContentStaff = session.department !== 'Media' && session.department !== 'Ads Facebook';
+
   const blank = (): ContentMediaOrder => ({
     id: '', orderDate: todayUi(), category: '', title: '', orderLink: '', note: '',
     priority: 'TRUNG BÌNH',
-    requesterId: currentUserId, requesterName: session.name,
+    requesterId: meIsContentStaff ? currentUserId : null,
+    requesterName: meIsContentStaff ? session.name : '',
     assigneeId: null, assigneeName: '',
     deadline: '', status: 'Chờ nhận', resultLink: '',
+    createdById: currentUserId,
   });
 
   /**
@@ -160,7 +176,7 @@ export default function OrderMediaComponent({ orders, employees, session, curren
         <div>
           <h1 className="text-xl font-bold text-slate-900 font-display flex items-center gap-2">
             <span className="material-symbols-outlined text-[#D32027] text-2xl">assignment</span>
-            <span>Order — Team Content đặt team Media</span>
+            <span>Order — Đặt kịch bản cho team Media</span>
           </h1>
           <p className="text-[11px] text-slate-400 mt-0.5">Đặt video/ảnh cho team Media · theo dõi hạn, tiến độ và link trả về.</p>
         </div>
@@ -253,6 +269,7 @@ export default function OrderMediaComponent({ orders, employees, session, curren
           order={editing}
           contentStaff={contentStaff}
           mediaStaff={mediaStaff}
+          onBehalf={!meIsContentStaff}
           canEditBrief={editing.id === '' || canEditBrief(editing)}
           canEditProgress={editing.id === '' || canEditProgress(editing)}
           onClose={() => setEditing(null)}
@@ -281,11 +298,14 @@ const TH_NAME = `${NAME_BASE} bg-slate-50 text-left ${TH_BASE}`;
 
 /* ── Popup thêm/sửa order ──
    Ô của bên ĐẶT khóa lại với người không phải người đặt/Admin;
-   ô tiến độ (trạng thái, người làm, link trả) mở cho team Media. */
-function OrderModal({ order, contentStaff, mediaStaff, canEditBrief, canEditProgress, onClose, onSubmit }: {
+   ô tiến độ (trạng thái, người làm, link trả) mở cho team Media.
+   onBehalf = người đang tạo không thuộc team Content (Media nhập hộ) —
+   khi đó ô "Người đặt" để trống và bắt buộc chọn một người bên Content. */
+function OrderModal({ order, contentStaff, mediaStaff, onBehalf, canEditBrief, canEditProgress, onClose, onSubmit }: {
   order: ContentMediaOrder;
   contentStaff: Employee[];
   mediaStaff: Employee[];
+  onBehalf: boolean;
   canEditBrief: boolean;
   canEditProgress: boolean;
   onClose: () => void;
@@ -312,6 +332,12 @@ function OrderModal({ order, contentStaff, mediaStaff, canEditBrief, canEditProg
         <div className="p-6 space-y-5">
           {/* Phần yêu cầu — bên đặt */}
           <div>
+            {isNew && onBehalf && (
+              <p className="mb-3 text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[15px]">info</span>
+                Bạn tạo hộ order này. Hãy chọn người bên Content đứng tên đặt ở ô "Người đặt".
+              </p>
+            )}
             <p className="text-[11px] font-bold text-[#D32027] uppercase tracking-widest mb-3">Yêu cầu · bên đặt (Content)</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Ngày order">
@@ -345,12 +371,14 @@ function OrderModal({ order, contentStaff, mediaStaff, canEditBrief, canEditProg
                 <textarea className={`${INPUT} min-h-[70px]`} disabled={!canEditBrief} value={f.note ?? ''}
                   onChange={(e) => set({ note: e.target.value })} placeholder="Ghi chú thêm cho team Media…" />
               </Field>
-              <Field label="Người đặt">
-                <StaffSelect value={f.requesterId} staff={contentStaff} disabled={!canEditBrief}
+              <Field label="Người đặt (Content)"
+                hint={isNew && onBehalf ? 'Bạn đang tạo hộ — chọn người bên Content đứng tên order này.' : 'Bắt buộc — người bên Content đứng tên order.'}>
+                <StaffSelect value={f.requesterId} valueName={f.requesterName} staff={contentStaff}
+                  disabled={!canEditBrief} required
                   onChange={(id, name) => set({ requesterId: id, requesterName: name })} />
               </Field>
               <Field label="Người làm (Media)">
-                <StaffSelect value={f.assigneeId} staff={mediaStaff} disabled={!canEditProgress}
+                <StaffSelect value={f.assigneeId} valueName={f.assigneeName} staff={mediaStaff} disabled={!canEditProgress}
                   onChange={(id, name) => set({ assigneeId: id, assigneeName: name })} placeholder="— chưa giao —" />
               </Field>
             </div>

@@ -1,15 +1,18 @@
 'use client';
 /**
- * ORDER — Team Ads Facebook ĐẶT team Content (bảng ads_content_orders).
- * Vòng đời theo sheet gốc: Ads đặt brief → Content viết kịch bản → Editor dựng
+ * ORDER — ĐẶT KỊCH BẢN CHO TEAM CONTENT (bảng ads_content_orders).
+ * Bên đặt: team Ads Facebook và team Media (chốt 06/08/2026 — Media cũng order được).
+ * Vòng đời theo sheet gốc: bên đặt gửi brief → Content viết kịch bản → Editor dựng
  * video → Ads chạy và ghi kết quả (tiền tiêu / số data / giải trình).
  *
  * QUYỀN (chốt với user — đúng vai):
- *   • Bên ĐẶT (người tạo = Ads, hoặc Admin): brief, kích thước, link mẫu, hạn,
- *     ưu tiên + toàn bộ khối "kết quả chạy" và ô comment của Ads.
+ *   • Bên ĐẶT (người tạo / người đứng tên đặt, hoặc Admin): brief, kích thước,
+ *     link mẫu, hạn, ưu tiên + khối "kết quả chạy" và ô comment của bên đặt.
  *   • Bên NHẬN (team Content, hoặc Admin): trạng thái, kịch bản, người phụ trách,
  *     video final và ô comment của Content.
  *   • Xóa: chỉ người tạo hoặc Admin.
+ *
+ * Khối "kết quả chạy" chỉ có nghĩa với order của team Ads nên ẩn với nick Media.
  */
 import React, { useMemo, useState } from 'react';
 import {
@@ -23,7 +26,7 @@ import {
 import { MonthPicker } from './dashboardKit';
 import {
   AlertStrip, DeadlineBadge, PriorityBadge, StatusBadge, LinkCell,
-  Field, StaffSelect, DateField, INPUT, isContentStaff, isAdsStaff,
+  Field, StaffSelect, DateField, INPUT, isContentStaff, isAdsStaff, isMediaStaff,
 } from './orderKit';
 import ConfirmDialog from './ConfirmDialog';
 
@@ -53,15 +56,24 @@ export default function OrderAdsContentComponent({ orders, employees, session, c
   const isAdmin = session.role === 'Admin';
   // Team Content = không thuộc Media / Ads Facebook (đúng quy ước Checklist Content).
   const isContentUser = session.department !== 'Media' && session.department !== 'Ads Facebook';
-  // Chỉ BÊN ĐẶT (team Ads Facebook) và Admin được tạo order; bên nhận (Content) chỉ nhận việc.
-  const canCreate = isAdmin || session.department === 'Ads Facebook';
+  const isMediaUser = session.department === 'Media';
+  // BÊN ĐẶT = team Ads Facebook + team Media (và Admin); bên nhận (Content) chỉ nhận việc.
+  const canCreate = isAdmin || session.department === 'Ads Facebook' || isMediaUser;
   const contentStaff = useMemo(() => employees.filter(isContentStaff), [employees]);
   const adsStaff = useMemo(() => employees.filter(isAdsStaff), [employees]);
+  const mediaStaff = useMemo(() => employees.filter(isMediaStaff), [employees]);
+  // Danh sách chọn "Người đặt" — gộp cả 2 team được phép đặt kịch bản.
+  const requesterStaff = useMemo(() => [...adsStaff, ...mediaStaff], [adsStaff, mediaStaff]);
   const now = todayStart();
 
-  const canEditBrief = (o: AdsContentOrder) => isAdmin || (!!currentUserId && o.adsOwnerId === currentUserId);
+  // Bên ĐẶT = người TẠO dòng hoặc người ĐỨNG TÊN đặt (Ads hoặc Media).
+  const canEditBrief = (o: AdsContentOrder) =>
+    isAdmin || (!!currentUserId && (o.createdById === currentUserId || o.adsOwnerId === currentUserId));
   const canEditProgress = (o: AdsContentOrder) => isAdmin || isContentUser || canEditBrief(o);
-  const canDelete = (o: AdsContentOrder) => isAdmin || (!!currentUserId && o.adsOwnerId === currentUserId);
+  // Xóa — khớp đúng policy delete ở migration 0014:
+  // dòng chưa có người tạo, hoặc mình là người tạo / người đặt, hoặc Admin.
+  const canDelete = (o: AdsContentOrder) =>
+    isAdmin || !o.createdById || (!!currentUserId && (o.createdById === currentUserId || o.adsOwnerId === currentUserId));
 
   const monthOrders = useMemo(() => orders.filter((o) => orderInPeriod(o.orderDate, period)), [orders, period]);
   const counts = useMemo(() => countAlerts(monthOrders, now), [monthOrders, now]);
@@ -80,14 +92,20 @@ export default function OrderAdsContentComponent({ orders, employees, session, c
   const closedRows = filtered.filter((o) => isOrderClosed(o.status));
   const closedOpen = showClosed || (statusFilter !== 'all' && isOrderClosed(statusFilter));
 
+  // Chỉ điền sẵn "Người đặt" khi người đang đăng nhập thuộc bên đặt (Ads / Media);
+  // Admin thuộc team khác thì để trống và tự chọn.
+  const meIsRequester = session.department === 'Ads Facebook' || isMediaUser;
+
   const blank = (): AdsContentOrder => ({
     id: '', orderDate: todayUi(), postCode: '', topic: '',
-    adsOwnerId: currentUserId, adsOwnerName: session.name,
+    adsOwnerId: meIsRequester ? currentUserId : null,
+    adsOwnerName: meIsRequester ? session.name : '',
     size: '9:16', sampleLink: '', brief: '',
     priority: 'TRUNG BÌNH', deadline: '', status: 'Chờ nhận',
     scriptLink: '', contentOwnerId: null, contentOwnerName: '', videoFinal: '',
     commentContent: '', commentAds: '',
     isRunning: false, runOwnerName: '', airDate: '', spend: 0, dataCount: 0, explanation: '',
+    createdById: currentUserId,
   });
 
   /**
@@ -172,9 +190,9 @@ export default function OrderAdsContentComponent({ orders, employees, session, c
         <div>
           <h1 className="text-xl font-bold text-slate-900 font-display flex items-center gap-2">
             <span className="material-symbols-outlined text-[#D32027] text-2xl">campaign</span>
-            <span>Order — Team Ads Facebook đặt team Content</span>
+            <span>Order — Đặt kịch bản cho team Content</span>
           </h1>
-          <p className="text-[11px] text-slate-400 mt-0.5">Đặt kịch bản/video quảng cáo · theo dõi hạn, tiến độ và kết quả chạy.</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Team Ads Facebook và team Media đều đặt được · theo dõi hạn, tiến độ và kết quả chạy.</p>
         </div>
         <div className="flex items-center gap-2">
           <MonthPicker value={period} onChange={setPeriod} allowFuture />
@@ -222,7 +240,7 @@ export default function OrderAdsContentComponent({ orders, employees, session, c
                 <th className={`${TH} text-left`}>Loại kịch bản</th>
                 <th className={TH}>Kích thước</th>
                 <th className={TH}>Ưu tiên</th>
-                <th className={`${TH} text-left`}>Ads đặt</th>
+                <th className={`${TH} text-left`}>Người đặt</th>
                 <th className={`${TH} text-left`}>Content phụ trách</th>
                 <th className={`${TH} text-left`}>Trạng thái</th>
                 <th className={`${TH} text-left`}>Video final</th>
@@ -263,7 +281,8 @@ export default function OrderAdsContentComponent({ orders, employees, session, c
         <AdsOrderModal
           order={editing}
           contentStaff={contentStaff}
-          adsStaff={adsStaff}
+          requesterStaff={requesterStaff}
+          showRunResult={!isMediaUser || isAdmin}
           canEditBrief={editing.id === '' || canEditBrief(editing)}
           canEditProgress={editing.id === '' || canEditProgress(editing)}
           onClose={() => setEditing(null)}
@@ -290,11 +309,14 @@ const TH_BASE = 'text-[10px] font-bold uppercase tracking-wide text-slate-400 bo
 const TH = `px-3 py-2.5 text-center whitespace-nowrap bg-slate-50 ${TH_BASE}`;
 const TH_NAME = `${NAME_BASE} bg-slate-50 text-left ${TH_BASE}`;
 
-/* ── Popup thêm/sửa: 3 khối theo đúng 3 vai trong sheet gốc ── */
-function AdsOrderModal({ order, contentStaff, adsStaff, canEditBrief, canEditProgress, onClose, onSubmit }: {
+/* ── Popup thêm/sửa: 3 khối theo đúng 3 vai trong sheet gốc ──
+   requesterStaff = nhân sự được đứng tên đặt (team Ads + team Media).
+   showRunResult = có hiện khối "kết quả chạy" không (chỉ có nghĩa với order Ads). */
+function AdsOrderModal({ order, contentStaff, requesterStaff, showRunResult, canEditBrief, canEditProgress, onClose, onSubmit }: {
   order: AdsContentOrder;
   contentStaff: Employee[];
-  adsStaff: Employee[];
+  requesterStaff: Employee[];
+  showRunResult: boolean;
   canEditBrief: boolean;
   canEditProgress: boolean;
   onClose: () => void;
@@ -320,9 +342,9 @@ function AdsOrderModal({ order, contentStaff, adsStaff, canEditBrief, canEditPro
         </div>
 
         <div className="p-6 space-y-5">
-          {/* 1. Ads đặt */}
+          {/* 1. Bên đặt (Ads / Media) */}
           <div>
-            <p className="text-[11px] font-bold text-[#D32027] uppercase tracking-widest mb-3">Yêu cầu · bên đặt (Ads)</p>
+            <p className="text-[11px] font-bold text-[#D32027] uppercase tracking-widest mb-3">Yêu cầu · bên đặt (Ads / Media)</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Ngày order">
                 <DateField value={f.orderDate} onChange={(v) => set({ orderDate: v })} disabled={!canEditBrief} />
@@ -362,11 +384,12 @@ function AdsOrderModal({ order, contentStaff, adsStaff, canEditBrief, canEditPro
                 <textarea className={`${INPUT} min-h-[90px]`} disabled={!canEditBrief} value={f.brief ?? ''}
                   onChange={(e) => set({ brief: e.target.value })} placeholder="Mô tả yêu cầu chi tiết cho team Content…" />
               </Field>
-              <Field label="Người đặt (Ads)">
-                <StaffSelect value={f.adsOwnerId} staff={adsStaff} disabled={!canEditBrief}
+              <Field label="Người đặt" hint="Bắt buộc — nhân sự team Ads hoặc team Media.">
+                <StaffSelect value={f.adsOwnerId} valueName={f.adsOwnerName} staff={requesterStaff}
+                  disabled={!canEditBrief} required
                   onChange={(id, name) => set({ adsOwnerId: id, adsOwnerName: name })} />
               </Field>
-              <Field label="Comment của Ads" hint="Phản hồi gửi lại team Content.">
+              <Field label="Comment của bên đặt" hint="Phản hồi gửi lại team Content.">
                 <input className={INPUT} disabled={!canEditBrief} value={f.commentAds ?? ''}
                   onChange={(e) => set({ commentAds: e.target.value })} placeholder="Video ok rồi / cần sửa…" />
               </Field>
@@ -384,7 +407,7 @@ function AdsOrderModal({ order, contentStaff, adsStaff, canEditBrief, canEditPro
                 </select>
               </Field>
               <Field label="Content phụ trách">
-                <StaffSelect value={f.contentOwnerId} staff={contentStaff} disabled={!canEditProgress}
+                <StaffSelect value={f.contentOwnerId} valueName={f.contentOwnerName} staff={contentStaff} disabled={!canEditProgress}
                   onChange={(id, name) => set({ contentOwnerId: id, contentOwnerName: name })} placeholder="— chưa giao —" />
               </Field>
               <Field label="Kịch bản / link edit video">
@@ -402,7 +425,8 @@ function AdsOrderModal({ order, contentStaff, adsStaff, canEditBrief, canEditPro
             </div>
           </div>
 
-          {/* 3. Ads chạy */}
+          {/* 3. Ads chạy — chỉ có nghĩa với order của team Ads */}
+          {showRunResult && (
           <div className="pt-4 border-t border-slate-100">
             <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-widest mb-3">Kết quả chạy · bên đặt (Ads)</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -434,6 +458,7 @@ function AdsOrderModal({ order, contentStaff, adsStaff, canEditBrief, canEditPro
               </Field>
             </div>
           </div>
+          )}
 
           {!canEditBrief && (
             <p className="text-[11px] text-amber-600 flex items-center gap-1">

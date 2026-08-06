@@ -21,6 +21,7 @@ import {
   AdsFbTarget,
   ContentMediaOrder,
   AdsContentOrder,
+  ContentKpiTarget,
 } from '../types';
 
 type ChannelRow = Database['public']['Tables']['channels']['Row'];
@@ -37,6 +38,7 @@ type AdsFbLogRow = Database['public']['Tables']['ads_fb_task_logs']['Row'];
 type AdsFbTargetRow = Database['public']['Tables']['ads_fb_targets']['Row'];
 type ContentMediaOrderRow = Database['public']['Tables']['content_media_orders']['Row'];
 type AdsContentOrderRow = Database['public']['Tables']['ads_content_orders']['Row'];
+type ContentKpiTargetRow = Database['public']['Tables']['content_kpi_targets']['Row'];
 
 /**
  * Quy ước nguồn doanh thu (source_platform) suy từ loại kênh của báo cáo.
@@ -616,6 +618,7 @@ export function contentMediaOrderFromRow(r: ContentMediaOrderRow): ContentMediaO
     deadline: r.deadline ? toUiDate(r.deadline) : undefined,
     status: r.status as ContentMediaOrder['status'],
     resultLink: r.result_link ?? undefined,
+    createdById: r.created_by,
   };
 }
 
@@ -688,6 +691,7 @@ export function adsContentOrderFromRow(r: AdsContentOrderRow): AdsContentOrder {
     spend: r.spend ?? 0,
     dataCount: r.data_count ?? 0,
     explanation: r.explanation ?? undefined,
+    createdById: r.created_by,
   };
 }
 
@@ -750,5 +754,47 @@ export function adsContentOrderToUpdate(
   if (patch.spend !== undefined) u.spend = patch.spend || 0;
   if (patch.dataCount !== undefined) u.data_count = patch.dataCount || 0;
   if (patch.explanation !== undefined) u.explanation = patch.explanation ?? null;
+  return u;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  KPI THÁNG — TEAM CONTENT (content_kpi_targets, migration 0015)
+//  Chỉ lưu CON SỐ; danh mục hạng mục nằm trong src/lib/contentKpi.ts.
+// ════════════════════════════════════════════════════════════════
+export function contentKpiTargetFromRow(r: ContentKpiTargetRow): ContentKpiTarget {
+  return {
+    id: r.id,
+    period: r.period,
+    itemId: r.item_id,
+    itemLabel: r.item_label ?? '',
+    kind: (r.kind === 'viewreach' ? 'viewreach' : 'revenue'),
+    targetValue: r.target_value ?? 0,
+    note: r.note ?? undefined,
+  };
+}
+
+export function contentKpiTargetToInsert(
+  item: ContentKpiTarget,
+  createdBy: string,
+): Database['public']['Tables']['content_kpi_targets']['Insert'] {
+  return {
+    period: item.period,
+    item_id: item.itemId,
+    item_label: item.itemLabel || '',
+    kind: item.kind,
+    target_value: item.targetValue || 0,
+    note: item.note ?? null,
+    created_by: createdBy,
+  };
+}
+
+export function contentKpiTargetToUpdate(
+  patch: Partial<ContentKpiTarget>,
+): Database['public']['Tables']['content_kpi_targets']['Update'] {
+  const u: Database['public']['Tables']['content_kpi_targets']['Update'] = {};
+  if (patch.itemLabel !== undefined) u.item_label = patch.itemLabel || '';
+  if (patch.kind !== undefined) u.kind = patch.kind;
+  if (patch.targetValue !== undefined) u.target_value = patch.targetValue || 0;
+  if (patch.note !== undefined) u.note = patch.note ?? null;
   return u;
 }
