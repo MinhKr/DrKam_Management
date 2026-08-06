@@ -6,6 +6,9 @@
  * Báo cáo chung: 13 kênh doanh thu + 2 dòng view/reach. Danh mục cố định trong
  * src/lib/contentKpi.ts nên 2 màn không thể lệch nhau.
  *
+ * PHẠM VI: màn này CHỈ để đặt số (chốt với user) — không hiển thị thực hiện /
+ * % đạt, vì phần theo dõi tiến trình đã có ở Tổng quan > Báo cáo chung.
+ *
  * CÁCH DÙNG: chọn tháng → gõ số → bấm "Lưu KPI". Trước khi lưu, mọi số đang gõ
  * chỉ là NHÁP (ô viền vàng) và Tổng quan chưa đổi theo.
  *
@@ -16,16 +19,12 @@
  * báo cáo cũ không tụt về 0; lưu lần đầu là số đó được chốt lại cho tháng đó.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { DailyReport, AffiliateChannel, UserSession, ContentKpiTarget } from '../types';
-import {
-  CONTENT_KPI_ITEMS, contentKpiActuals, targetResolver, hasSavedTargets, BadgeKind,
-} from '../lib/contentKpi';
+import { UserSession, ContentKpiTarget } from '../types';
+import { CONTENT_KPI_ITEMS, targetResolver, hasSavedTargets, BadgeKind } from '../lib/contentKpi';
 import { MonthPicker, shiftMonthKey } from './dashboardKit';
 
 interface Props {
   targets: ContentKpiTarget[];
-  reports: DailyReport[];
-  channels: AffiliateChannel[];
   session: UserSession;
   onSave: (period: string, rows: ContentKpiTarget[]) => void;
 }
@@ -35,19 +34,8 @@ const monthLabel = (p: string) => `tháng ${p.slice(5)}/${p.slice(0, 4)}`;
 const onlyDigits = (s: string) => s.replace(/\D/g, '');
 const groupDigits = (s: string) => (s ? Number(s).toLocaleString('vi-VN') : '');
 const fmt = (n: number) => n.toLocaleString('vi-VN');
-/** Rút gọn tiền cho ô tổng: 650.000.000 → 650tr. */
-const vndShort = (n: number) =>
-  n >= 1_000_000_000 ? (n / 1_000_000_000).toFixed(n % 1_000_000_000 ? 1 : 0) + ' tỷ'
-    : n >= 1_000_000 ? Math.round(n / 1_000_000) + ' tr'
-    : fmt(n);
 
-const pctColor = (p: number | null) =>
-  p == null ? 'text-slate-400 bg-slate-50'
-    : p >= 100 ? 'text-green-700 bg-green-50'
-    : p >= 70 ? 'text-amber-700 bg-amber-50'
-    : 'text-rose-700 bg-rose-50';
-
-export default function ContentKpiComponent({ targets, reports, channels, session, onSave }: Props) {
+export default function ContentKpiComponent({ targets, session, onSave }: Props) {
   const [period, setPeriod] = useState(nowMonthKey);
   const [draft, setDraft] = useState<Record<string, string>>({});   // itemId → chuỗi số đang gõ
   const [notice, setNotice] = useState('');
@@ -61,19 +49,13 @@ export default function ContentKpiComponent({ targets, reports, channels, sessio
 
   const savedFor = useMemo(() => targetResolver(targets, period), [targets, period]);
   const isSetup = useMemo(() => hasSavedTargets(targets, period), [targets, period]);
-  const actuals = useMemo(() => contentKpiActuals(reports, channels, period), [reports, channels, period]);
 
-  // Mỗi hạng mục: số đã lưu (hoặc mặc định), số đang gõ, thực hiện, % đạt.
+  // Mỗi hạng mục: số đã lưu (hoặc mặc định) và số đang gõ.
   const lines = CONTENT_KPI_ITEMS.map((item) => {
     const saved = savedFor(item.id);
     const typed = draft[item.id];
     const value = typed !== undefined ? Number(typed || 0) : saved;
-    const actual = actuals.get(item.id) ?? 0;
-    return {
-      item, saved, value, actual,
-      dirty: value !== saved,
-      pct: value > 0 ? Math.round((actual / value) * 1000) / 10 : null,
-    };
+    return { item, saved, value, dirty: value !== saved };
   });
 
   const revLines = lines.filter((l) => l.item.kind === 'revenue');
@@ -81,9 +63,6 @@ export default function ContentKpiComponent({ targets, reports, channels, sessio
   const dirtyLines = lines.filter((l) => l.dirty);
 
   const totalTarget = revLines.reduce((s, l) => s + l.value, 0);
-  const totalActual = revLines.reduce((s, l) => s + l.actual, 0);
-  const totalPct = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 1000) / 10 : null;
-  const reached = revLines.filter((l) => l.value > 0 && l.actual >= l.value).length;
   const withTarget = revLines.filter((l) => l.value > 0).length;
 
   const setValue = (itemId: string, raw: string) => setDraft((p) => ({ ...p, [itemId]: onlyDigits(raw) }));
@@ -105,7 +84,7 @@ export default function ContentKpiComponent({ targets, reports, channels, sessio
     }));
     onSave(period, rows);
     setDraft({});
-    flash(`Đã lưu KPI ${monthLabel(period)} — ${CONTENT_KPI_ITEMS.length} hạng mục. Tổng quan sẽ hiển thị theo số này.`);
+    flash(`Đã lưu KPI ${monthLabel(period)} — ${CONTENT_KPI_ITEMS.length} hạng mục. Tổng quan sẽ chấm theo số này.`);
   };
 
   /** Lấy KPI tháng trước làm nháp — vẫn phải bấm "Lưu KPI" mới ghi. */
@@ -145,17 +124,11 @@ export default function ContentKpiComponent({ targets, reports, channels, sessio
       <td className={`${CELL} text-right tabular-nums text-slate-400 whitespace-nowrap`}>
         {l.value > 0 ? `${fmt(Math.round(l.value / 4))} ${unit}` : <span className="text-slate-300">—</span>}
       </td>
-      <td className={`${CELL} text-right tabular-nums text-slate-700 font-semibold whitespace-nowrap`}>{fmt(l.actual)}</td>
-      <td className={`${CELL} text-right`}>
-        {l.pct == null
-          ? <span className="text-slate-300">—</span>
-          : <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-extrabold ${pctColor(l.pct)}`}>{l.pct}%</span>}
-      </td>
     </tr>
   );
 
   return (
-    <div className="max-w-[1080px] mx-auto flex flex-col gap-5 text-slate-800">
+    <div className="max-w-[900px] mx-auto flex flex-col gap-5 text-slate-800">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900 font-display flex items-center gap-2">
@@ -163,7 +136,7 @@ export default function ContentKpiComponent({ targets, reports, channels, sessio
             <span>KPI tháng — Team Content</span>
           </h1>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            Đặt chỉ tiêu cho từng kênh · Tổng quan &gt; Báo cáo chung sẽ chấm % đạt theo đúng số ở đây.
+            Đặt chỉ tiêu cho từng kênh · tiến độ và % đạt xem ở Tổng quan &gt; Báo cáo chung.
           </p>
         </div>
         {/* allowFuture: KPI thường đặt trước cho tháng sau. */}
@@ -195,27 +168,11 @@ export default function ContentKpiComponent({ targets, reports, channels, sessio
 
       {/* Tổng KPI doanh thu cả tháng */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              Tổng KPI doanh thu · {monthLabel(period)}
-            </p>
-            <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums mt-1">{fmt(totalTarget)} đ</div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              {withTarget}/{revLines.length} hạng mục có chỉ tiêu · đã đạt {reached}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Thực hiện</p>
-            <div className="text-lg font-bold text-slate-700 tabular-nums">{vndShort(totalActual)} đ</div>
-            <span className={`inline-block mt-1 px-2.5 py-0.5 rounded-full text-sm font-extrabold ${pctColor(totalPct)}`}>
-              {totalPct == null ? '—' : totalPct + '%'}
-            </span>
-          </div>
-        </div>
-        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mt-4">
-          <div className="h-full rounded-full bg-[#D32027] transition-all duration-500" style={{ width: `${Math.min(totalPct ?? 0, 100)}%` }} />
-        </div>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          Tổng KPI doanh thu · {monthLabel(period)}
+        </p>
+        <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums mt-1">{fmt(totalTarget)} đ</div>
+        <p className="text-[11px] text-slate-400 mt-1">{withTarget}/{revLines.length} hạng mục có chỉ tiêu</p>
         {dirtyLines.length > 0 && (
           <p className="text-[11px] text-amber-600 mt-2 flex items-center gap-1">
             <span className="material-symbols-outlined text-[14px]">edit</span>
@@ -239,14 +196,12 @@ export default function ContentKpiComponent({ targets, reports, channels, sessio
           )}
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs border-separate border-spacing-0 min-w-[760px]">
+          <table className="w-full text-xs border-separate border-spacing-0 min-w-[560px]">
             <thead>
               <tr>
                 <th className={TH_NAME}>Hạng mục</th>
                 <th className={TH}>KPI tháng (đ)</th>
                 <th className={TH}>≈ Mục tiêu tuần</th>
-                <th className={TH}>Thực hiện</th>
-                <th className={TH}>% đạt</th>
               </tr>
             </thead>
             <tbody>
@@ -255,12 +210,6 @@ export default function ContentKpiComponent({ targets, reports, channels, sessio
                 <td className={`${NAME_BASE} bg-slate-50 text-slate-700`}>Tổng doanh thu</td>
                 <td className={`${CELL} text-right tabular-nums text-slate-900`}>{fmt(totalTarget)}</td>
                 <td className={`${CELL} text-right tabular-nums text-slate-400`}>{fmt(Math.round(totalTarget / 4))}</td>
-                <td className={`${CELL} text-right tabular-nums text-slate-900`}>{fmt(totalActual)}</td>
-                <td className={`${CELL} text-right`}>
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-extrabold ${pctColor(totalPct)}`}>
-                    {totalPct == null ? '—' : totalPct + '%'}
-                  </span>
-                </td>
               </tr>
             </tbody>
           </table>
@@ -271,17 +220,15 @@ export default function ContentKpiComponent({ targets, reports, channels, sessio
       <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100">
           <h3 className="text-sm font-bold text-slate-800 font-display">Chỉ tiêu view / lượt tiếp cận</h3>
-          <p className="text-[11px] text-slate-400 mt-0.5">Thực hiện cộng từ ô Reach nhập theo tuần ở form TikTok / Facebook thương hiệu.</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Đối chiếu với ô Reach nhập theo tuần ở form TikTok / Facebook thương hiệu.</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs border-separate border-spacing-0 min-w-[760px]">
+          <table className="w-full text-xs border-separate border-spacing-0 min-w-[560px]">
             <thead>
               <tr>
                 <th className={TH_NAME}>Hạng mục</th>
                 <th className={TH}>KPI tháng (lượt)</th>
                 <th className={TH}>≈ Mục tiêu tuần</th>
-                <th className={TH}>Thực hiện</th>
-                <th className={TH}>% đạt</th>
               </tr>
             </thead>
             <tbody>{vrLines.map((l) => renderRow(l, 'lượt'))}</tbody>

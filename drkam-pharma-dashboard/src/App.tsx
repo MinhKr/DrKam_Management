@@ -1424,8 +1424,6 @@ export default function App() {
         return (
           <ContentKpiComponent
             targets={contentKpiTargets}
-            reports={reports}
-            channels={channels}
             session={session}
             onSave={handleSaveContentKpi}
           />

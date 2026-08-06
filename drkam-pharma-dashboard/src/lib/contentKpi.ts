@@ -83,54 +83,5 @@ export function targetResolver(targets: ContentKpiTarget[], period: string): (it
 export const hasSavedTargets = (targets: ContentKpiTarget[], period: string): boolean =>
   targets.some((t) => t.period === period);
 
-/**
- * Báo cáo thuộc nền tảng nào — dùng để gom reach về đúng dòng view/reach.
- * Giữ ĐÚNG cách phân loại của catKeyOf ở Tổng quan (kể cả trường hợp kênh TikTok
- * có loại lạ thì rơi vào 'other' và không được cộng), để 2 màn ra cùng một số.
- */
-function platformOf(r: DailyReport, chMeta: Map<string, AffiliateChannel>): 'tt' | 'fb' | 'other' {
-  const ch = chMeta.get(r.channelName);
-  const plat = ch?.platform;
-  const type = ch?.channelType;
-  if (plat === 'TikTok') return type === 'Brand' || type === 'AI KOC' || type === 'Real KOC' ? 'tt' : 'other';
-  if (plat === 'Facebook') return 'fb';
-  if (r.channelType.startsWith('TikTok')) return 'tt';
-  if (r.channelType.startsWith('Facebook')) return 'fb';
-  return 'other';
-}
-
-/** Báo cáo có thuộc tháng 'yyyy-mm' không (ngày ở UI là dd/mm/yyyy). */
-export function reportInPeriod(date: string, period: string): boolean {
-  const [d, m, y] = date.split('/');
-  return !!d && `${y}-${m}` === period;
-}
-
-/**
- * THỰC HIỆN của từng hạng mục trong tháng — tính đúng như Tổng quan:
- *   • hạng mục doanh thu → cộng revenue của báo cáo khớp `match`
- *   • hạng mục view/reach → cộng traffic.viewsReach theo nền tảng
- * Trả Map theo id hạng mục; hạng mục không có số thì bằng 0.
- */
-export function contentKpiActuals(
-  reports: DailyReport[],
-  channels: AffiliateChannel[],
-  period: string,
-): Map<string, number> {
-  const chMeta = new Map(channels.map((c) => [c.name, c]));
-  const out = new Map<string, number>(CONTENT_KPI_ITEMS.map((i) => [i.id, 0]));
-  reports.filter((r) => reportInPeriod(r.date, period)).forEach((r) => {
-    const ch = chMeta.get(r.channelName);
-    const li = CONTENT_LINE_ITEMS.find((x) => x.match(ch, r));
-    // Doanh thu lạc hạng mục rơi vào "Khác" ở Tổng quan — ở đây bỏ qua vì
-    // "Khác" không phải hạng mục đặt KPI.
-    if (li) out.set(li.id, (out.get(li.id) ?? 0) + r.revenue);
-
-    const reach = r.traffic?.viewsReach ?? 0;
-    if (reach) {
-      const plat = platformOf(r, chMeta);
-      const v = CONTENT_VIEW_REACH.find((x) => x.plat === plat);
-      if (v) out.set(v.id, (out.get(v.id) ?? 0) + reach);
-    }
-  });
-  return out;
-}
+// Ghi chú: phần tính THỰC HIỆN / % đạt cố tình KHÔNG nằm ở đây — màn KPI chỉ để
+// đặt số, còn tiến độ đã có sẵn ở Tổng quan > Báo cáo chung (chốt với user).
