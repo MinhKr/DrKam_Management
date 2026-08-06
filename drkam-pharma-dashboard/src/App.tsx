@@ -1197,7 +1197,8 @@ export default function App() {
   // Render main tab view based on selection
   const renderTabContent = () => {
     // Nick Media mở nhầm tab ngoài Media (vd sau khi reload demo) → về Tổng quan Media.
-    if (isMediaUser && !MEDIA_TABS.includes(activeTab) && activeTab !== ORDER_MEDIA_TAB) {
+    // Cả 2 màn Order đều hợp lệ với nick Media — phải khớp đúng canAccessTab ở trên.
+    if (isMediaUser && !MEDIA_TABS.includes(activeTab) && !ORDER_TABS.includes(activeTab)) {
       return (
         <MediaOverviewComponent
           logs={mediaLogs}
