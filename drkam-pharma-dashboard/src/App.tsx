@@ -1835,91 +1835,10 @@ export default function App() {
 
               {renderOrderNav()}
 
-              <button
-                onClick={() => navigateToTab('stats')}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                  !canAccessTab('stats') ? 'opacity-50 cursor-not-allowed' : ''
-                } ${
-                  activeTab === 'stats'
-                    ? 'bg-rose-50 text-[#D32027]'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-                disabled={!canAccessTab('stats')}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="w-8 h-8 rounded-lg flex items-center justify-center text-amber-600 bg-amber-50 flex-shrink-0">
-                    <span className="material-symbols-outlined text-[18px]">insights</span>
-                  </span>
-                  <span>Thống kê chi tiết</span>
-                </div>
-                {!canAccessTab('stats') && <span className="material-symbols-outlined text-[14px]">lock</span>}
-              </button>
-
-              {/* Protected HR Tabs for Admin / Leader roles */}
-              <div className="pt-4 border-t border-slate-100 my-2">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2">Nhóm & Quản trị</p>
-                
-                <button 
-                  onClick={() => navigateToTab('employees')}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                    !canAccessTab('employees') ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${
-                    activeTab === 'employees' 
-                      ? 'bg-rose-50 text-[#D32027]' 
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                  disabled={!canAccessTab('employees')}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-violet-600 bg-violet-50 flex-shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">badge</span>
-                    </span>
-                    <span>Quản lý nhân sự</span>
-                  </div>
-                  {!canAccessTab('employees') && <span className="material-symbols-outlined text-[14px]">lock</span>}
-                </button>
-
-                <button 
-                  onClick={() => navigateToTab('chi-tieu')}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                    !canAccessTab('chi-tieu') ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${
-                    activeTab === 'chi-tieu' 
-                      ? 'bg-rose-50 text-[#D32027]' 
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                  disabled={!canAccessTab('chi-tieu')}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-600 bg-emerald-50 flex-shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">target</span>
-                    </span>
-                    <span>Thiết lập KPI</span>
-                  </div>
-                  {!canAccessTab('chi-tieu') && <span className="material-symbols-outlined text-[14px]">lock</span>}
-                </button>
-
-                <button 
-                  onClick={() => navigateToTab('logs')}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
-                    !canAccessTab('logs') ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${
-                    activeTab === 'logs' 
-                      ? 'bg-rose-50 text-[#D32027]' 
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                  disabled={!canAccessTab('logs')}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-600 bg-cyan-50 flex-shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">security</span>
-                    </span>
-                    <span>Nhật ký hệ thống</span>
-                  </div>
-                  {!canAccessTab('logs') && <span className="material-symbols-outlined text-[14px]">lock</span>}
-                </button>
-
-              </div>
+              {/* Đã bỏ khỏi sidebar theo yêu cầu: Thống kê chi tiết, và nhóm
+                  "Nhóm & Quản trị" (Quản lý nhân sự · Thiết lập KPI · Nhật ký hệ thống).
+                  Các màn này vẫn còn trong renderTabContent — muốn bật lại thì thêm nút
+                  ở đây và thêm tab vào ALLOWED_TABS. */}
 
               {/* Module Media — chỉ Admin thấy thêm ở đây (nick Media đã render riêng ở trên) */}
               {isAdmin && renderMediaNav()}
