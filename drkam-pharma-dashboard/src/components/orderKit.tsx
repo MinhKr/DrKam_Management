@@ -100,25 +100,40 @@ export function Field({ label, hint, children, className }: {
   );
 }
 
-/** Ô chọn nhân sự (theo danh sách đã lọc phòng ban) — lưu cả id và tên. */
-export function StaffSelect({ value, staff, onChange, disabled, placeholder = '— chọn —' }: {
+/**
+ * Ô chọn nhân sự (theo danh sách đã lọc phòng ban) — lưu cả id và tên.
+ * Người đã lưu trên order cũ có thể đã nghỉ nên không còn trong danh sách
+ * "Hoạt động": vẫn thêm lại thành 1 lựa chọn để mở order cũ không bị mất tên
+ * và không bị chặn lưu khi ô này bắt buộc.
+ */
+export function StaffSelect({ value, valueName, staff, onChange, disabled, placeholder = '— chọn —', required }: {
   value?: string | null;
+  /** Tên đang lưu trên order — dùng khi người đó không còn trong danh sách. */
+  valueName?: string;
   staff: Employee[];
   onChange: (id: string | null, name: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** Bắt buộc chọn — ô trống sẽ chặn submit form (dùng cho "Người đặt"). */
+  required?: boolean;
 }) {
+  const missing = !!value && !staff.some((s) => s.id === value);
   return (
     <select
       className={INPUT}
       disabled={disabled}
+      required={required}
       value={value ?? ''}
       onChange={(e) => {
-        const emp = staff.find((s) => s.id === e.target.value);
-        onChange(emp ? emp.id : null, emp ? emp.name : '');
+        const id = e.target.value;
+        if (!id) return onChange(null, '');
+        const emp = staff.find((s) => s.id === id);
+        // Chọn lại đúng người đã nghỉ thì giữ nguyên tên đang lưu.
+        onChange(id, emp ? emp.name : valueName || '');
       }}
     >
       <option value="">{placeholder}</option>
+      {missing && <option value={value as string}>{valueName || '(nhân sự đã nghỉ)'}</option>}
       {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
     </select>
   );

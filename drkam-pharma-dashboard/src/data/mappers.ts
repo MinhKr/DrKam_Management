@@ -616,6 +616,7 @@ export function contentMediaOrderFromRow(r: ContentMediaOrderRow): ContentMediaO
     deadline: r.deadline ? toUiDate(r.deadline) : undefined,
     status: r.status as ContentMediaOrder['status'],
     resultLink: r.result_link ?? undefined,
+    createdById: r.created_by,
   };
 }
 
@@ -688,6 +689,7 @@ export function adsContentOrderFromRow(r: AdsContentOrderRow): AdsContentOrder {
     spend: r.spend ?? 0,
     dataCount: r.data_count ?? 0,
     explanation: r.explanation ?? undefined,
+    createdById: r.created_by,
   };
 }
 

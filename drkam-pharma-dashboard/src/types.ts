@@ -254,6 +254,9 @@ export interface ContentMediaOrder {
   deadline?: string;          // dd/mm/yyyy — trống = chưa đặt hạn
   status: ContentMediaStatus;
   resultLink?: string;        // LINK VIDEO trả về
+  // Người TẠO dòng — có thể khác người đặt (nhân sự Media nhập hộ cho Content).
+  // Quyết định quyền sửa phần yêu cầu và quyền xóa (khớp created_by ở RLS).
+  createdById?: string | null;
 }
 
 // B. Team Ads Facebook ĐẶT team Content — Ads brief → Content viết KB →
@@ -263,7 +266,7 @@ export interface AdsContentOrder {
   orderDate: string;          // dd/mm/yyyy
   postCode?: string;          // ID - BÀI VIẾT
   topic: string;              // LOẠI KỊCH BẢN
-  adsOwnerId?: string | null; // ADS đặt
+  adsOwnerId?: string | null; // NGƯỜI ĐẶT — nhân sự Ads Facebook hoặc Media
   adsOwnerName: string;
   size?: string;              // KÍCH THƯỚC (9:16, 3:4, 1:1…)
   sampleLink?: string;        // Link bài mẫu
@@ -285,6 +288,8 @@ export interface AdsContentOrder {
   spend: number;              // SỐ TIỀN TIÊU (đ)
   dataCount: number;          // SỐ LƯỢNG SỐ
   explanation?: string;       // GIẢI TRÌNH
+  // Người TẠO dòng — khớp created_by ở RLS, dùng cho quyền sửa yêu cầu / xóa.
+  createdById?: string | null;
 }
 
 // Initial Mock Data

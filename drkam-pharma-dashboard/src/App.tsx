@@ -1060,8 +1060,9 @@ export default function App() {
 
   // Role permissions checking helper
   const canAccessTab = (tab: string) => {
-    // Nick Media (Khải/Sơn): CHỈ truy cập được các màn Media.
-    if (isMediaUser) return MEDIA_TABS.includes(tab) || tab === ORDER_MEDIA_TAB;
+    // Nick Media (Khải/Sơn): các màn Media + CẢ 2 màn Order —
+    // vừa nhận việc từ Content, vừa đặt kịch bản cho Content (chốt 06/08/2026).
+    if (isMediaUser) return MEDIA_TABS.includes(tab) || ORDER_TABS.includes(tab);
     // Nick Ads Facebook: CHỈ truy cập được các màn Ads Facebook.
     if (isAdsFbUser) return ADS_FB_TABS.includes(tab) || tab === ORDER_CONTENT_TAB;
 
@@ -1153,8 +1154,8 @@ export default function App() {
           <span>{item.label}</span>
         </button>
       ))}
-      {/* Nick Media thấy thêm màn Order mà team Content giao cho mình. */}
-      {isMediaUser && renderOrderNav([ORDER_MEDIA_TAB])}
+      {/* Nick Media thấy cả 2 màn Order: việc Content giao cho mình, và việc mình đặt team Content. */}
+      {isMediaUser && renderOrderNav()}
     </div>
   );
 
