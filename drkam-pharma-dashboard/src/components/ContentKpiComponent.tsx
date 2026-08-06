@@ -156,16 +156,6 @@ export default function ContentKpiComponent({ targets, session, onSave }: Props)
         </div>
       )}
 
-      {!isSetup && (
-        <div className="bg-sky-50 border border-sky-200 text-sky-800 text-xs font-semibold rounded-xl px-4 py-2.5 flex items-start gap-2">
-          <span className="material-symbols-outlined text-[16px] mt-px">info</span>
-          <span>
-            {monthLabel(period).replace('tháng', 'Tháng')} chưa thiết lập KPI — các số dưới đây là <b>mặc định</b> đang
-            dùng ở Tổng quan. Chỉnh lại rồi bấm <b>Lưu KPI</b> để chốt cho tháng này.
-          </span>
-        </div>
-      )}
-
       {/* Tổng KPI doanh thu cả tháng */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
