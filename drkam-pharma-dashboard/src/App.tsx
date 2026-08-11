@@ -990,13 +990,8 @@ export default function App() {
     }
     setAdsFbTargets(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)));
   };
-  const handleDeleteAdsFbTarget = async (id: string) => {
-    if (cloud) {
-      try { await repo.deleteAdsFbTarget(id); }
-      catch (e) { alert('Xóa target Ads thất bại: ' + errMsg(e)); return; }
-    }
-    setAdsFbTargets(prev => prev.filter(t => t.id !== id));
-  };
+  // Không còn nút xóa target: tab "KPI tháng" là nơi duy nhất đặt KPI, bỏ KPI =
+  // để về 0. repo.deleteAdsFbTarget vẫn giữ ở tầng data cho thao tác thủ công.
 
   // ── MODULE ORDER — Content đặt Media ──
   // RLS: bên đặt tạo (created_by), bên nhận (team Media) và Admin cập nhật được.
@@ -1264,9 +1259,6 @@ export default function App() {
           employees={employees}
           session={session}
           onNavigateToTab={navigateToTab}
-          onAddTarget={handleAddAdsFbTarget}
-          onUpdateTarget={handleUpdateAdsFbTarget}
-          onDeleteTarget={handleDeleteAdsFbTarget}
         />
       );
     }
@@ -1386,9 +1378,6 @@ export default function App() {
             employees={employees}
             session={session}
             onNavigateToTab={navigateToTab}
-            onAddTarget={handleAddAdsFbTarget}
-            onUpdateTarget={handleUpdateAdsFbTarget}
-            onDeleteTarget={handleDeleteAdsFbTarget}
           />
         );
       case 'adsfb-daily':
@@ -1413,7 +1402,6 @@ export default function App() {
         );
         return (
           <AdsFbKpiComponent
-            logs={adsFbLogs}
             targets={adsFbTargets}
             employees={employees}
             session={session}

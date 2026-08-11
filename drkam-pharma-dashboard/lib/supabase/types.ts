@@ -286,6 +286,7 @@ export interface Database {
           spend_target: number;
           revenue_target: number;
           orders_target: number;
+          roi_target: number;       // tỉ lệ: 1.5 = ROI 150% (migration 0016)
           days_in_month: number;
           note: string | null;
           created_by: string | null;

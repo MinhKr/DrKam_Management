@@ -442,7 +442,7 @@ function AdsOrderModal({ order, contentStaff, requesterStaff, showRunResult, can
               </Field>
               <Field label="Người chạy (team Ads)">
                 <input className={INPUT} disabled={!canEditBrief} value={f.runOwnerName}
-                  onChange={(e) => set({ runOwnerName: e.target.value })} placeholder="Đức / Tuân / Hà…" />
+                  onChange={(e) => set({ runOwnerName: e.target.value })} placeholder="Hà / Hiếu / Tuấn…" />
               </Field>
               <Field label="Số tiền tiêu (đ)">
                 <input type="text" inputMode="numeric" className={`${INPUT} text-right tabular-nums`} disabled={!canEditBrief}
