@@ -559,6 +559,8 @@ export function adsFbTargetFromRow(r: AdsFbTargetRow): AdsFbTarget {
     spendTarget: r.spend_target,
     revenueTarget: r.revenue_target,
     ordersTarget: r.orders_target,
+    // Chưa chạy migration 0016 → cột chưa có → coi như chưa đặt chỉ tiêu ROI.
+    roiTarget: Number(r.roi_target ?? 0),
     daysInMonth: r.days_in_month,
     note: r.note ?? undefined,
   };
@@ -575,6 +577,7 @@ export function adsFbTargetToInsert(
     spend_target: item.spendTarget || 0,
     revenue_target: item.revenueTarget || 0,
     orders_target: item.ordersTarget || 0,
+    roi_target: item.roiTarget || 0,
     days_in_month: item.daysInMonth || 30,
     note: item.note ?? null,
     created_by: createdBy,
@@ -590,6 +593,7 @@ export function adsFbTargetToUpdate(
   if (patch.spendTarget !== undefined) u.spend_target = patch.spendTarget || 0;
   if (patch.revenueTarget !== undefined) u.revenue_target = patch.revenueTarget || 0;
   if (patch.ordersTarget !== undefined) u.orders_target = patch.ordersTarget || 0;
+  if (patch.roiTarget !== undefined) u.roi_target = patch.roiTarget || 0;
   if (patch.daysInMonth !== undefined) u.days_in_month = patch.daysInMonth || 30;
   if (patch.note !== undefined) u.note = patch.note ?? null;
   return u;

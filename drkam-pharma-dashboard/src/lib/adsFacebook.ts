@@ -232,3 +232,20 @@ export const fmtNum = (v: number | null, digits = 2): string =>
 export const fmtPct = (ratio: number | null, digits = 1): string =>
   ratio == null ? '—' : (ratio * 100).toLocaleString('vi-VN', { maximumFractionDigits: digits }) + '%';
 export const fmtScore = (v: number | null): string => (v == null ? '—' : Math.round(v).toString());
+
+// ── Ô nhập chỉ tiêu ROI ────────────────────────────────────────
+// Admin nhập theo % ("150"), DB lưu dạng tỉ lệ (1.5) cho khớp ROI = ROAS − 1.
+/** Lọc ký tự ô nhập ROI: chỉ số + tối đa 1 dấu thập phân ("," → "."). */
+export const roiInputChars = (s: string): string => {
+  const cleaned = s.replace(/[^\d.,]/g, '').replace(/,/g, '.');
+  const [head, ...rest] = cleaned.split('.');
+  return rest.length ? `${head}.${rest.join('')}` : head;
+};
+/** "150.5" (%) → 1.505 (tỉ lệ). Làm tròn 4 số lẻ cho khớp numeric(8,4). */
+export const roiPctToRatio = (s: string): number => {
+  const n = Number(s);
+  return Number.isFinite(n) ? Math.round((n / 100) * 10000) / 10000 : 0;
+};
+/** 1.505 (tỉ lệ) → "150,5" để đổ ngược vào ô nhập (0 = chưa đặt → rỗng). */
+export const roiRatioToPct = (r: number): string =>
+  r ? String(Math.round(r * 10000) / 100).replace('.', ',') : '';

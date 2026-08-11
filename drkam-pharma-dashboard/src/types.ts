@@ -216,6 +216,7 @@ export interface AdsFbTarget {
   spendTarget: number;       // Chi tiêu / tháng (đ)
   revenueTarget: number;     // Doanh thu / tháng (đ)
   ordersTarget: number;      // Đơn / tháng
+  roiTarget: number;         // Chỉ tiêu ROI, dạng tỉ lệ: 1.5 = ROI 150% (0 = chưa đặt)
   daysInMonth: number;       // Số ngày dùng để chia (mặc định 30)
   note?: string;
 }

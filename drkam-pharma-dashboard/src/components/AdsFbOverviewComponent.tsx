@@ -18,9 +18,8 @@ interface Props {
   employees: Employee[];
   session: UserSession;
   onNavigateToTab: (tab: string) => void;
-  onAddTarget: (t: AdsFbTarget) => void;
-  onUpdateTarget: (id: string, patch: Partial<AdsFbTarget>) => void;
-  onDeleteTarget: (id: string) => void;
+  // Target tháng CHỈ đặt ở tab "KPI tháng" (AdsFbKpiComponent) — màn này chỉ đọc,
+  // tránh 2 đường vào cho cùng một bản ghi ads_fb_targets.
 }
 
 const nowMonthKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -32,12 +31,11 @@ const pctColor = (p: number | null) =>
     : p >= 70 ? 'text-amber-700 bg-amber-50'
     : 'text-rose-700 bg-rose-50';
 
-export default function AdsFbOverviewComponent({ logs, targets, employees, session, onNavigateToTab, onAddTarget, onUpdateTarget, onDeleteTarget }: Props) {
+export default function AdsFbOverviewComponent({ logs, targets, employees, session, onNavigateToTab }: Props) {
   const [period, setPeriod] = useState(() => {
     const ms = [...new Set(logs.map((l) => { const [d, m, y] = l.date.split('/'); return d ? `${y}-${m}` : ''; }).filter(Boolean))].sort().reverse();
     return ms[0] ?? nowMonthKey();
   });
-  const [targetModal, setTargetModal] = useState<AdsFbTarget | null>(null);
   const [openAlert, setOpenAlert] = useState<string | null>(null);
 
   const isAdmin = session.role === 'Admin';
@@ -207,7 +205,14 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
         </div>
         {revenueTarget === 0 && (
           <p className="text-[11px] text-amber-600 mt-2">
-            Chưa đặt target doanh thu cho tháng này — đặt ở cột <b>Đặt target</b> trong bảng So sánh nhân viên bên dưới.
+            Chưa đặt KPI doanh thu cho tháng này
+            {isAdmin ? (
+              <> — đặt ở tab{' '}
+                <button onClick={() => onNavigateToTab('adsfb-kpi')} className="font-bold underline hover:text-[#D32027]">
+                  KPI tháng
+                </button>.
+              </>
+            ) : ' — nhờ Admin đặt ở tab KPI tháng.'}
           </p>
         )}
       </div>
@@ -309,7 +314,6 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
                 <th className={TH}>% đạt<br />DT tháng</th>
                 <th className={`${TH} border-l-2 border-l-slate-200`}>Điểm TB</th>
                 <th className={`${TH} text-left`}>Xếp loại</th>
-                {isAdmin && <th className={`${TH} text-center`}></th>}
               </tr>
             </thead>
             <tbody>
@@ -337,19 +341,10 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
                       ? <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${s.rank.color}`}>{s.rank.label}</span>
                       : <span className="text-slate-300">—</span>}
                   </td>
-                  {isAdmin && (
-                    <td className={`${CELL} text-center whitespace-nowrap`}>
-                      <button
-                        onClick={() => setTargetModal(s.target ?? blankTarget(s.emp.id, s.emp.name, period))}
-                        className="text-[11px] font-bold text-slate-500 hover:text-[#D32027] inline-flex items-center gap-0.5">
-                        <span className="material-symbols-outlined text-[15px]">tune</span>{s.target ? 'Sửa target' : 'Đặt target'}
-                      </button>
-                    </td>
-                  )}
                 </tr>
               ))}
               {perStaff.length === 0 && (
-                <tr><td colSpan={isAdmin ? 12 : 11} className="px-4 py-8 text-center text-slate-400">Chưa có nhân sự nào thuộc team Ads Facebook.</td></tr>
+                <tr><td colSpan={11} className="px-4 py-8 text-center text-slate-400">Chưa có nhân sự nào thuộc team Ads Facebook.</td></tr>
               )}
             </tbody>
           </table>
@@ -437,24 +432,8 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
         </div>
       </div>
 
-      {targetModal && (
-        <TargetModal
-          target={targetModal}
-          onClose={() => setTargetModal(null)}
-          onSubmit={(t) => {
-            if (t.id) onUpdateTarget(t.id, t);
-            else onAddTarget({ ...t, id: 'afbt_' + Date.now() });
-            setTargetModal(null);
-          }}
-          onDelete={targetModal.id ? () => { onDeleteTarget(targetModal.id); setTargetModal(null); } : undefined}
-        />
-      )}
     </div>
   );
-}
-
-function blankTarget(employeeId: string, employeeName: string, period: string): AdsFbTarget {
-  return { id: '', period, employeeId, employeeName, spendTarget: 0, revenueTarget: 0, ordersTarget: 0, daysInMonth: 30, note: '' };
 }
 
 /* ── Lớp dùng chung cho 2 bảng so sánh (mỗi đối tượng 1 dòng) ──
@@ -484,71 +463,5 @@ function NumCell({ v, format, best, strong, tone, empty, rule }: {
     } ${isBest ? 'bg-emerald-50 group-hover:bg-emerald-100 text-emerald-700 font-bold' : tone || 'text-slate-700'}`}>
       {v == null ? (empty ?? <span className="text-slate-300">—</span>) : format(v)}
     </td>
-  );
-}
-
-/* ── Popup đặt/sửa target tháng ── */
-function TargetModal({ target, onClose, onSubmit, onDelete }: {
-  target: AdsFbTarget;
-  onClose: () => void;
-  onSubmit: (t: AdsFbTarget) => void;
-  onDelete?: () => void;
-}) {
-  const [f, setF] = useState<AdsFbTarget>(target);
-  const set = (patch: Partial<AdsFbTarget>) => setF((p) => ({ ...p, ...patch }));
-  const cls = 'w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-[#D32027] focus:border-[#D32027] bg-white text-right tabular-nums';
-  const numChange = (k: keyof AdsFbTarget) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    set({ [k]: parseInt(e.target.value.replace(/\D/g, ''), 10) || 0 } as Partial<AdsFbTarget>);
-  const perDay = (v: number) => f.daysInMonth > 0 ? Math.round(v / f.daysInMonth) : 0;
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm" onClick={onClose}>
-      <form onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); onSubmit(f); }}
-        className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-100">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 font-display">Target tháng</h3>
-            <p className="text-[11px] text-slate-400 mt-0.5"><b className="text-slate-600">{f.employeeName}</b> · Tháng {f.period.slice(5)}/{f.period.slice(0, 4)}</p>
-          </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100">
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Chi tiêu / tháng (đ)</span>
-              <input type="text" inputMode="numeric" value={f.spendTarget ? f.spendTarget.toLocaleString('vi-VN') : ''} onChange={numChange('spendTarget')} className={cls} placeholder="0" />
-              <span className="text-[10px] text-slate-400 text-right">≈ {perDay(f.spendTarget).toLocaleString('vi-VN')} đ/ngày</span>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Doanh thu / tháng (đ)</span>
-              <input type="text" inputMode="numeric" value={f.revenueTarget ? f.revenueTarget.toLocaleString('vi-VN') : ''} onChange={numChange('revenueTarget')} className={cls} placeholder="0" />
-              <span className="text-[10px] text-slate-400 text-right">≈ {perDay(f.revenueTarget).toLocaleString('vi-VN')} đ/ngày</span>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Đơn / tháng</span>
-              <input type="text" inputMode="numeric" value={f.ordersTarget ? f.ordersTarget.toLocaleString('vi-VN') : ''} onChange={numChange('ordersTarget')} className={cls} placeholder="0" />
-              <span className="text-[10px] text-slate-400 text-right">≈ {perDay(f.ordersTarget).toLocaleString('vi-VN')} đơn/ngày</span>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Số ngày / tháng</span>
-              <input type="text" inputMode="numeric" value={f.daysInMonth || ''} onChange={numChange('daysInMonth')} className={cls} placeholder="30" />
-              <span className="text-[10px] text-slate-400 text-right">dùng để chia target/ngày</span>
-            </label>
-          </div>
-          <p className="text-[11px] text-slate-400">Target/ngày (target tháng ÷ số ngày) là mẫu số tính <b>% đạt</b> → Trục C của mỗi báo cáo.</p>
-        </div>
-        <div className="px-6 py-4 border-t border-slate-100 flex justify-between items-center gap-2">
-          {onDelete
-            ? <button type="button" onClick={onDelete} className="px-3 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">Xóa target</button>
-            : <span />}
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Hủy</button>
-            <button type="submit" className="px-6 py-2 bg-[#D32027] hover:bg-[#B70F1B] text-white text-sm font-bold rounded-lg transition-colors">Lưu target</button>
-          </div>
-        </div>
-      </form>
-    </div>
   );
 }

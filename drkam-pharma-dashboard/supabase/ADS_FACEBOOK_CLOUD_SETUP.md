@@ -20,6 +20,10 @@ supabase/migrations/0011_ads_facebook_reports.sql
 Tạo 2 bảng: `ads_fb_task_logs` (báo cáo ngày), `ads_fb_targets` (target tháng) + RLS
 (xem chung; thêm = `created_by`; **sửa/xóa báo cáo ngày chỉ người tạo hoặc Admin**).
 
+Chạy tiếp file `supabase/migrations/0016_ads_fb_roi_target.sql` — thêm cột `roi_target`
+(chỉ tiêu ROI, dạng tỉ lệ: `1.5` = ROI 150%) để đặt được KPI ROI ở màn KPI tháng.
+> Chưa chạy 0016 thì màn KPI vẫn mở được nhưng **bấm Lưu KPI sẽ lỗi** vì DB chưa có cột.
+
 ## Bước 2 — Tạo tài khoản nhân viên Ads
 **Dashboard → Authentication → Users → Add user** (bật **Auto Confirm User**):
 
@@ -41,7 +45,10 @@ File này sẽ:
 2. Đặt **target tháng 7/2026**: chi 80tr · DT 200tr · 700 đơn ÷ 30 ngày.
 
 > Nếu báo lỗi *"Chưa có tài khoản Hà"* → quay lại Bước 2.
-> Target còn có thể sửa trực tiếp trong app: Admin vào **Tổng quan Ads → cột thao tác → Đặt/Sửa target**.
+> **Nơi duy nhất đặt KPI trong app là tab "KPI tháng"** (Admin): doanh thu/tháng + ROI.
+> Màn Tổng quan Ads chỉ đọc — đã bỏ nút "Đặt/Sửa target" để không có 2 đường vào
+> cho cùng một dòng `ads_fb_targets`. Các chỉ tiêu chi tiêu/đơn/số ngày hiện chỉ đặt
+> được bằng SQL (dùng cho "% đạt đơn" và "% ngân sách" ở báo cáo ngày).
 
 ## Bước 4 — Chạy app ở chế độ cloud
 ```
@@ -75,4 +82,6 @@ Admin đăng nhập thấy toàn hệ thống + nhóm **Team Ads Facebook** ở 
 ## Ghi chú kỹ thuật
 - Nick Ads FB nhận diện qua `profiles.department = 'Ads Facebook'`.
 - Chưa chạy migration 0011 → app vẫn chạy bình thường, chỉ log cảnh báo và phần Ads FB rỗng.
-- Thêm nhân viên khác (Đức/Tuân…): copy `adsfb_seed_ha.sql`, đổi email + target tương ứng.
+- Thêm nhân viên khác: tạo Auth user rồi chạy `supabase/data/adsfb_add_staff.sql`
+  (sửa mảng `staff` trong file — email · họ tên · vai trò). File này CHỈ gán phòng ban;
+  KPI doanh thu/tháng nhập trong app ở màn **KPI tháng — Team Ads Facebook** (Admin).
