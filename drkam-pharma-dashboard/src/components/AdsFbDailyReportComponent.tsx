@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { AdsFbTaskLog, AdsFbTarget, AdsFbFormType, Employee, UserSession } from '../types';
 import {
   inPeriod, weekdayVi, adsFbScore, fmtMoney, fmtNum, fmtPct, fmtScore,
-  fmtCriterionValue, AdsFbCriterion,
+  fmtCriterionValue, AdsFbCriterion, adsFbContentCheck, parseContentLinks, isHttpLink,
 } from '../lib/adsFacebook';
 import ConfirmDialog from './ConfirmDialog';
 import { MonthPicker } from './dashboardKit';
@@ -170,6 +170,10 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
                         <Stat label="ROAS" value={fmtNum(sc.kpis.roas)} accent="text-sky-700" />
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
+                        {adsFbContentCheck(l).mismatch && (
+                          <span className="material-symbols-outlined text-[17px] text-amber-500"
+                            title={`Content mới khai ${l.contentTest} nhưng có ${adsFbContentCheck(l).count} link`}>link_off</span>
+                        )}
                         <div className="text-center">
                           <div className="text-[10px] font-bold uppercase text-slate-400 leading-tight">Tổng</div>
                           <div className="text-lg font-extrabold text-[#D32027] tabular-nums leading-tight">{fmtScore(sc.total)}</div>
@@ -208,6 +212,7 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
                           <Pair label="Số hành động tối ưu" value={String(l.optimizeActions)} />
                           <Pair label="Đánh giá TP" value={l.tpRating ? `${l.tpRating} ★` : '—'} />
                         </DetailSection>
+                        <ContentLinksBlock check={adsFbContentCheck(l)} />
                         <DetailSection title="KPI tự tính" color="text-sky-600">
                           <Pair label="ROAS" value={fmtNum(sc.kpis.roas)} />
                           <Pair label="ROI (DT/Chi)" value={fmtPct(sc.kpis.roi)} />
@@ -318,6 +323,43 @@ function Pair({ label, value, strong }: { label: string; value: string; strong?:
   );
 }
 
+/* Danh sách link content mới + cảnh báo khi số khai không khớp số link. */
+function ContentLinksBlock({ check }: { check: ReturnType<typeof adsFbContentCheck> }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[13px] font-bold uppercase tracking-wide text-slate-400">Content mới</span>
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-600">
+          khai {check.declared} · {check.count} link
+        </span>
+        {check.mismatch && (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 flex items-center gap-1">
+            <span className="material-symbols-outlined text-[13px]">link_off</span>
+            Lệch {Math.abs(check.declared - check.count)} so với số link
+          </span>
+        )}
+      </div>
+      {check.links.length === 0 ? (
+        <div className="text-xs text-slate-400 italic">Chưa dán link content nào.</div>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {check.links.map((link, i) => (
+            <li key={i} className="flex items-baseline gap-2 text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+              <span className="text-slate-400 tabular-nums shrink-0">{i + 1}.</span>
+              {isHttpLink(link) ? (
+                <a href={link} target="_blank" rel="noopener noreferrer"
+                  className="text-sky-700 hover:underline break-all">{link}</a>
+              ) : (
+                <span className="text-slate-600 break-all">{link}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /* Bảng phân tích điểm 5 chỉ tiêu: thực tế · mốc · điểm mục · trọng số · quy đổi. */
 const scoreTone = (s: number) =>
   s >= 100 ? 'text-emerald-600' : s >= 70 ? 'text-slate-700' : s > 0 ? 'text-amber-600' : 'text-rose-600';
@@ -328,7 +370,8 @@ function ScoreBreakdown({ criteria, total, rank }: {
   rank: { label: string; color: string };
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+    <div className="bg-white border border-slate-200 rounded-xl">
+      <div className="overflow-x-auto">
       <table className="w-full text-xs min-w-[560px]">
         <thead>
           <tr className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-400">
@@ -365,6 +408,11 @@ function ScoreBreakdown({ criteria, total, rank }: {
           </tr>
         </tfoot>
       </table>
+      </div>
+      <p className="px-3 py-2 text-[10px] text-slate-400 border-t border-slate-100">
+        4 mục đầu không chặn trần — vượt mốc được thưởng điểm; riêng Content mới tối đa 100.
+        Xếp loại: &gt;120 Xuất sắc · 100–120 Tốt · 80–99 Đạt · &lt;80 Chưa đạt.
+      </p>
     </div>
   );
 }
@@ -385,7 +433,7 @@ function blankLog(employeeId: string, employeeName: string, date: string): AdsFb
     spend: 0, revenue: 0, orders: 0, dataCount: 0, messages: 0,
     impressions: 0, clicks: 0, addToCart: 0,
     campsRunning: 0, campsTest: 0, contentTest: 0, optimizeActions: 0,
-    tpRating: null, note: '',
+    tpRating: null, contentLinks: '', note: '',
   };
 }
 
@@ -404,6 +452,16 @@ function AdsFbLogModal({ log, personName, targetOf, onClose, onSubmit }: {
   // Xem trước điểm theo target tháng của chính ngày đang nhập (chưa đặt KPI → mục Doanh thu 0đ).
   const target = targetOf(f.date);
   const preview = adsFbScore(f, target);
+
+  // Ô "Content mới" tự khớp số link dán vào, TRỪ KHI người nhập tự sửa số
+  // (content không có link) — lúc đó ngừng tự khớp và hiện cảnh báo lệch.
+  const linkCount = parseContentLinks(f.contentLinks).length;
+  const [countManual, setCountManual] = useState(() => log.contentTest !== parseContentLinks(log.contentLinks).length);
+  const contentMismatch = f.contentTest !== linkCount;
+  const setLinks = (raw: string) => {
+    const n = parseContentLinks(raw).length;
+    setF((p) => ({ ...p, contentLinks: raw, ...(countManual ? {} : { contentTest: n }) }));
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -472,7 +530,8 @@ function AdsFbLogModal({ log, personName, targetOf, onClose, onSubmit }: {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <NumField label="Camp đang chạy" {...numOf('campsRunning')} />
               <NumField label="Camp test mới" {...numOf('campsTest')} />
-              <NumField label="Content mới" hint="(mốc ≥2/ngày)" {...numOf('contentTest')} />
+              <NumField label="Content mới" hint="(mốc ≥2/ngày)" value={f.contentTest}
+                onChange={(v) => { setCountManual(true); set({ contentTest: v }); }} />
               <NumField label="Số hành động tối ưu" {...numOf('optimizeActions')} />
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Đánh giá TP</span>
@@ -481,6 +540,31 @@ function AdsFbLogModal({ log, personName, targetOf, onClose, onSubmit }: {
                   {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} ★</option>)}
                 </select>
               </label>
+            </div>
+
+            {/* Link content mới — mỗi dòng 1 link; ô số ở trên tự khớp số link. */}
+            <label className="flex flex-col gap-1 mt-4">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
+                Link content mới <span className="text-slate-300 normal-case font-medium">(mỗi dòng 1 link)</span>
+              </span>
+              <textarea value={f.contentLinks ?? ''} onChange={(e) => setLinks(e.target.value)} rows={3}
+                className={`${cls} resize-y leading-relaxed font-mono text-[12px]`}
+                placeholder={'https://facebook.com/...\nhttps://drive.google.com/...'} />
+            </label>
+            <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[11px]">
+              <span className="text-slate-500">Đếm được <b className="text-slate-700">{linkCount}</b> link</span>
+              {contentMismatch ? (
+                <>
+                  <span className="text-amber-600 font-semibold flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">link_off</span>
+                    Ô "Content mới" ghi {f.contentTest} — lệch so với số link
+                  </span>
+                  <button type="button" onClick={() => { setCountManual(false); set({ contentTest: linkCount }); }}
+                    className="font-bold text-[#D32027] hover:underline">Khớp lại theo link</button>
+                </>
+              ) : (
+                <span className="text-slate-400">Ô "Content mới" đang tự khớp số link.</span>
+              )}
             </div>
           </fieldset>
 

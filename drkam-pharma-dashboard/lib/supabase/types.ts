@@ -266,14 +266,17 @@ export interface Database {
           optimize_actions: number;
           tp_rating: number | null;
           note: string | null;
+          // Link content mới, mỗi dòng 1 link (migration 0017). Chưa chạy 0017 →
+          // cột không tồn tại: mapper đọc `?? ''` và CHỈ gửi lên khi có nội dung.
+          content_links: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: Omit<
           Database['public']['Tables']['ads_fb_task_logs']['Row'],
-          'id' | 'created_at' | 'updated_at'
-        > & { id?: string; created_at?: string; updated_at?: string };
+          'id' | 'created_at' | 'updated_at' | 'content_links'
+        > & { id?: string; created_at?: string; updated_at?: string; content_links?: string | null };
         Update: Partial<Database['public']['Tables']['ads_fb_task_logs']['Insert']>;
         Relationships: [];
       };

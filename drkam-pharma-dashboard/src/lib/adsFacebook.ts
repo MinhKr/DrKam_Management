@@ -6,20 +6,25 @@
  *            CPA=Chi/Đơn · CTR=Click/Impr · CPM=Chi/Impr×1000 · CR=Đơn/Click ·
  *            ATC=ATC/Click · CP/mess=Chi/Mess · Chốt mess=Đơn/Mess · AOV=DT/Đơn
  *
- *  CHẤM ĐIỂM — 5 chỉ tiêu (công thức user chốt 2026-08-12), mỗi mục quy về
- *  thang 0–100 (chặn trần 100) rồi nhân trọng số:
+ *  CHẤM ĐIỂM — 5 chỉ tiêu (công thức user chốt 2026-08-12), mỗi mục quy về thang
+ *  100 = đạt mốc rồi nhân trọng số. 4 mục đầu "càng cao càng tốt" nên KHÔNG chặn
+ *  trần (vượt mốc được thưởng, điểm tổng có thể > 100); chỉ Content mới chặn 100:
  *
  *    1. Doanh thu   40%  target/ngày = KPI tháng ÷ SỐ NGÀY THẬT của tháng
- *                        điểm = MIN(100, DT ngày ÷ target/ngày × 100)
- *    2. ROI         30%  mốc cố định 2.5 — ĐẠT/KHÔNG ĐẠT: ≥2.5 → 100, <2.5 → 0
- *    3. CPA         10%  mốc ≤140k/đơn — điểm = MIN(100, 140k ÷ CPA × 100)
- *    4. Tỷ lệ chốt  10%  Đơn ÷ Số data, mốc ≥80% — điểm = MIN(100, tỷ lệ ÷ 80% × 100)
- *    5. Content mới 10%  Đơn vị: content/ngày, mốc ≥2 — điểm = MIN(100, số ÷ 2 × 100)
+ *                        điểm = DT ngày ÷ target/ngày × 100  (không trần)
+ *    2. ROI         30%  mốc 2.5 — điểm = ROI ÷ 2.5 × 100    (không trần)
+ *    3. CPA         10%  mốc ≤140k/đơn — điểm = 140k ÷ CPA × 100 (không trần)
+ *    4. Tỷ lệ chốt  10%  Đơn ÷ Số data, mốc ≥80% — điểm = tỷ lệ ÷ 80% × 100 (không trần)
+ *    5. Content mới 10%  mốc ≥2 content/ngày — điểm = MIN(100, số ÷ 2 × 100)
+ *                        ("đạt số là tối đa" nên mục này VẪN chặn trần 100)
+ *                        Ô số tự khớp SỐ LINK trong `contentLinks` (mỗi dòng 1 link,
+ *                        migration 0017) nhưng vẫn sửa được; lệch → UI cảnh báo.
  *
  *  Điểm tổng = Σ(điểm mục × trọng số). THIẾU DỮ LIỆU = 0 ĐIỂM ở mục đó
  *  (chưa đặt KPI tháng, số data = 0, số đơn = 0…) — không chia lại trọng số.
  *
- *  XẾP LOẠI: ≥85 Xuất sắc · ≥70 Đạt · ≥55 Cần cải thiện · <55 Kém.
+ *  XẾP LOẠI (thang mới, điểm không có trần): >120 Xuất sắc · 100–120 Tốt ·
+ *  80–99 Đạt · <80 Chưa đạt.
  *
  *  Các chỉ số CTR/CPM/ATC/CP-mess/camp test/hành động tối ưu/đánh giá TP vẫn
  *  được nhập và hiển thị để theo dõi, nhưng KHÔNG tham gia chấm điểm.
@@ -52,7 +57,7 @@ export const ADS_FB_WEIGHTS = {
 export const ADS_FB_ALERT = {
   roasBelow: 1.5,
   cpaAbove: 180_000,
-  scoreBelow: 55,
+  scoreBelow: 80, // dưới 80 = "Chưa đạt" theo thang xếp loại
 } as const;
 
 // ── Số ngày thật của tháng ──────────────────────────────────────
@@ -66,6 +71,36 @@ export const daysInMonthOfDate = (date: string): number => {
   const [, m, y] = date.split('/').map(Number);
   return y && m ? new Date(y, m, 0).getDate() : 30;
 };
+
+// ── LINK CONTENT MỚI (migration 0017) ───────────────────────────
+// Ô nhập là text, MỖI DÒNG 1 LINK. Ô số "Content mới" tự khớp số link nhưng
+// vẫn sửa được (content không có link) — lệch thì UI hiện cảnh báo.
+/** Tách ô text thành danh sách link: bỏ dòng trống, gạch đầu dòng, khoảng trắng. */
+export const parseContentLinks = (raw?: string | null): string[] =>
+  (raw ?? '')
+    .split(/\r?\n/)
+    .map((s) => s.trim().replace(/^[-•*]\s*/, ''))
+    .filter(Boolean);
+
+/** Link mở được bằng thẻ <a> (http/https). Còn lại chỉ hiện dạng text. */
+export const isHttpLink = (s: string): boolean => /^https?:\/\//i.test(s);
+
+export interface AdsFbContentCheck {
+  links: string[];
+  count: number;       // số link đếm được
+  declared: number;    // số ở ô "Content mới" (số dùng chấm điểm)
+  mismatch: boolean;   // true → khai không khớp số link
+}
+
+export function adsFbContentCheck(l: AdsFbTaskLog): AdsFbContentCheck {
+  const links = parseContentLinks(l.contentLinks);
+  return {
+    links,
+    count: links.length,
+    declared: l.contentTest,
+    mismatch: links.length !== l.contentTest,
+  };
+}
 
 // ── KPI dẫn xuất (null khi thiếu mẫu số) ───────────────────────
 export interface AdsFbKpis {
@@ -142,7 +177,9 @@ export interface AdsFbCriterion {
   note?: string;               // lý do thiếu dữ liệu, hiện trên UI
 }
 
-/** Chặn trần 100, chặn sàn 0. */
+/** Không chặn trần (càng cao càng tốt), chỉ chặn sàn 0. */
+const open = (x: number): number => Math.max(0, x);
+/** Chặn trần 100 — chỉ dùng cho Content mới ("đạt số là tối đa"). */
 const cap = (x: number): number => Math.min(100, Math.max(0, x));
 
 export function adsFbCriteria(
@@ -168,23 +205,24 @@ export function adsFbCriteria(
   });
 
   return [
-    // 1. Doanh thu — tỷ lệ đạt target/ngày, chặn trần 100.
+    // 1. Doanh thu — tỷ lệ đạt target/ngày, KHÔNG chặn trần (vượt target được thưởng).
     mk('revenue', 'Doanh thu', W.revenue, l.revenue, revTargetPerDay,
-      revTargetPerDay ? cap((l.revenue / revTargetPerDay) * 100) : null,
+      revTargetPerDay ? open((l.revenue / revTargetPerDay) * 100) : null,
       'chưa đặt KPI doanh thu tháng'),
-    // 2. ROI — đạt/không đạt quanh mốc 2.5.
+    // 2. ROI — tỷ lệ so với mốc 2.5, KHÔNG chặn trần.
     mk('roi', 'ROI (DT/Chi)', W.roi, k.roi, B.roi,
-      k.roi === null ? null : (k.roi >= B.roi ? 100 : 0),
+      k.roi === null ? null : open((k.roi / B.roi) * 100),
       'chưa nhập chi tiêu'),
-    // 3. CPA — tỷ lệ nghịch, CPA = 0 (có đơn mà chưa tốn chi phí) coi là 100.
+    // 3. CPA — tỷ lệ nghịch, KHÔNG chặn trần. CPA = 0 (có đơn mà chưa tốn chi phí)
+    //    thì không chia được → cho 200 (gấp đôi mốc) thay vì vô cực.
     mk('cpa', 'CPA', W.cpa, k.cpa, B.cpa,
-      k.cpa === null ? null : (k.cpa <= 0 ? 100 : cap((B.cpa / k.cpa) * 100)),
+      k.cpa === null ? null : (k.cpa <= 0 ? 200 : open((B.cpa / k.cpa) * 100)),
       'chưa có đơn'),
-    // 4. Tỷ lệ chốt Đơn ÷ Data.
+    // 4. Tỷ lệ chốt Đơn ÷ Data — KHÔNG chặn trần.
     mk('closeRate', 'Tỷ lệ chốt (data→đơn)', W.closeRate, k.closeDataRate, B.closeRate,
-      k.closeDataRate === null ? null : cap((k.closeDataRate / B.closeRate) * 100),
+      k.closeDataRate === null ? null : open((k.closeDataRate / B.closeRate) * 100),
       'chưa nhập số data'),
-    // 5. Content mới — đạt mốc là tối đa.
+    // 5. Content mới — "đạt số là tối đa" nên VẪN chặn trần 100.
     mk('contentNew', 'Content mới', W.contentNew, l.contentTest, B.contentNew,
       cap((l.contentTest / B.contentNew) * 100)),
   ];
@@ -202,10 +240,10 @@ export interface AdsFbScore {
 export type AdsFbRank = { label: string; color: string };
 
 export function adsFbRank(total: number): AdsFbRank {
-  if (total >= 85) return { label: 'Xuất sắc', color: 'text-green-700 bg-green-50 border-green-200' };
-  if (total >= 70) return { label: 'Đạt', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
-  if (total >= 55) return { label: 'Cần cải thiện', color: 'text-amber-700 bg-amber-50 border-amber-200' };
-  return { label: 'Kém', color: 'text-rose-700 bg-rose-50 border-rose-200' };
+  if (total > 120) return { label: 'Xuất sắc', color: 'text-green-700 bg-green-50 border-green-200' };
+  if (total >= 100) return { label: 'Tốt', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
+  if (total >= 80) return { label: 'Đạt', color: 'text-sky-700 bg-sky-50 border-sky-200' };
+  return { label: 'Chưa đạt', color: 'text-rose-700 bg-rose-50 border-rose-200' };
 }
 
 /** Tính toàn bộ điểm cho 1 dòng báo cáo (kèm target tháng của người đó). */

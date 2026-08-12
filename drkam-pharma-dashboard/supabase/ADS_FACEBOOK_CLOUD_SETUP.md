@@ -24,6 +24,11 @@ Chạy tiếp file `supabase/migrations/0016_ads_fb_roi_target.sql` — thêm c�
 (chỉ tiêu ROI, dạng tỉ lệ: `2.5` = ROI 250% = DT ÷ Chi 2,5 lần) để đặt được KPI ROI ở màn KPI tháng.
 > Chưa chạy 0016 thì màn KPI vẫn mở được nhưng **bấm Lưu KPI sẽ lỗi** vì DB chưa có cột.
 
+Chạy tiếp `supabase/migrations/0017_ads_fb_content_links.sql` — thêm cột `content_links`
+(link content mới của báo cáo ngày, **mỗi dòng 1 link**).
+> Chưa chạy 0017 thì báo cáo ngày vẫn lưu bình thường (app chỉ gửi cột này khi có dán link),
+> nhưng dán link rồi bấm Lưu sẽ lỗi vì DB chưa có cột.
+
 ## Bước 2 — Tạo tài khoản nhân viên Ads
 **Dashboard → Authentication → Users → Add user** (bật **Auto Confirm User**):
 
@@ -75,15 +80,27 @@ Admin đăng nhập thấy toàn hệ thống + nhóm **Team Ads Facebook** ở 
 
 | # | Chỉ tiêu | Mốc 100 điểm | Trọng số | Cách tính điểm mục |
 |---|----------|--------------|----------|--------------------|
-| 1 | Doanh thu | KPI tháng ÷ **số ngày thật của tháng** | 40% | MIN(100, DT ngày ÷ target/ngày × 100) |
-| 2 | ROI = DT ÷ Chi | ≥ 2.5 | 30% | **Đạt/không đạt**: ≥2.5 → 100, <2.5 → 0 |
-| 3 | CPA | ≤ 140k/đơn | 10% | MIN(100, 140k ÷ CPA × 100) |
-| 4 | Tỷ lệ chốt = Đơn ÷ Số data | ≥ 80% | 10% | MIN(100, tỷ lệ ÷ 80% × 100) |
-| 5 | Content mới | ≥ 2/ngày | 10% | MIN(100, số content ÷ 2 × 100) |
+| 1 | Doanh thu | KPI tháng ÷ **số ngày thật của tháng** | 40% | DT ngày ÷ target/ngày × 100 — **không chặn trần** |
+| 2 | ROI = DT ÷ Chi | ≥ 2.5 | 30% | ROI ÷ 2.5 × 100 — **không chặn trần** |
+| 3 | CPA | ≤ 140k/đơn | 10% | 140k ÷ CPA × 100 — **không chặn trần** (CPA = 0 → 200) |
+| 4 | Tỷ lệ chốt = Đơn ÷ Số data | ≥ 80% | 10% | tỷ lệ ÷ 80% × 100 — **không chặn trần** |
+| 5 | Content mới | ≥ 2/ngày | 10% | MIN(100, số content ÷ 2 × 100) — mục DUY NHẤT chặn trần |
+
+4 mục đầu là "càng cao càng tốt" nên vượt mốc được thưởng điểm ⇒ **điểm tổng không có max**
+(vd DT gấp 2 target/ngày + ROI 3.5 → điểm tổng ~122). Chỉ "Content mới" giữ trần 100 vì
+"đạt số là tối đa".
+
+**Link content mới (migration 0017):** ô text trong form báo cáo, mỗi dòng 1 link. Ô số
+"Content mới" **tự khớp số link** dán vào; nếu người nhập tự sửa số (content không có link)
+thì ngừng tự khớp và hiện cảnh báo `link_off` ở: dòng báo cáo, chi tiết báo cáo (kèm số lệch),
+và mục **"Content lệch số link"** trong Top cảnh báo ở Tổng quan. Điểm vẫn tính theo ô số —
+cảnh báo để TP/Admin đối chiếu. Báo cáo cũ (có số content nhưng chưa dán link) sẽ bị đánh dấu
+lệch cho tới khi bổ sung link.
 
 - **Điểm tổng** = Σ(điểm mục × trọng số). **Thiếu dữ liệu = 0 điểm** ở mục đó (chưa đặt KPI tháng,
   số data = 0, chưa có đơn…) — không chia lại trọng số.
-- **Xếp loại**: ≥85 Xuất sắc · ≥70 Đạt · ≥55 Cần cải thiện · <55 Kém.
+- **Xếp loại** (thang user chốt 2026-08-12): >120 Xuất sắc · 100–120 Tốt · 80–99 Đạt · <80 Chưa đạt.
+  Cảnh báo "Điểm tổng Chưa đạt" ở Tổng quan cũng dùng mốc <80.
 - **ROI = DT ÷ Chi** (không trừ 1) → trùng giá trị với ROAS; app hiển thị cả hai nhãn.
   Ô "KPI ROI" ở màn KPI tháng nhập theo % (**250** = ROI 250% = DT gấp 2,5 lần chi) và chỉ để
   theo dõi — chấm điểm dùng mốc cố định 2.5 cho cả team.

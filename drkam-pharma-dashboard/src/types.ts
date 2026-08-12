@@ -204,6 +204,7 @@ export interface AdsFbTaskLog {
   contentTest: number;       // Content test mới
   optimizeActions: number;   // Số hành động tối ưu
   tpRating?: number | null;  // Đánh giá TP (1–5★)
+  contentLinks?: string;     // Link content mới — MỖI DÒNG 1 LINK (migration 0017)
   note?: string;             // Ghi chú tối ưu
 }
 

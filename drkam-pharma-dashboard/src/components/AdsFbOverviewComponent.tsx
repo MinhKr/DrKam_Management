@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { AdsFbTaskLog, AdsFbTarget, AdsFbFormType, Employee, UserSession } from '../types';
 import {
-  inPeriod, adsFbScore, adsFbRank, avgOf, ADS_FB_ALERT, ADS_FB_BENCHMARK,
+  inPeriod, adsFbScore, adsFbRank, avgOf, adsFbContentCheck, ADS_FB_ALERT, ADS_FB_BENCHMARK,
   fmtMoney, fmtNum, fmtPct, fmtScore,
 } from '../lib/adsFacebook';
 import { KpiBox, ChartCard, MonthPicker, tooltipStyle, compact } from './dashboardKit';
@@ -158,9 +158,16 @@ export default function AdsFbOverviewComponent({ logs, targets, employees, sessi
       mk('cpa', `CPA đỏ (> ${Math.round(ADS_FB_ALERT.cpaAbove / 1000)}k)`, 'local_atm',
         (x) => x.sc.kpis.cpa != null && x.sc.kpis.cpa > ADS_FB_ALERT.cpaAbove,
         (x) => fmtMoney(x.sc.kpis.cpa) + ' đ'),
-      mk('score', `Điểm tổng Kém (< ${ADS_FB_ALERT.scoreBelow})`, 'warning',
+      mk('score', `Điểm tổng Chưa đạt (< ${ADS_FB_ALERT.scoreBelow})`, 'warning',
         (x) => x.sc.total < ADS_FB_ALERT.scoreBelow,
         (x) => fmtScore(x.sc.total) + ' điểm'),
+      // Số content khai không khớp số link đã dán — để TP kiểm tra lại.
+      mk('content', 'Content lệch số link', 'link_off',
+        (x) => adsFbContentCheck(x.log).mismatch,
+        (x) => {
+          const c = adsFbContentCheck(x.log);
+          return `khai ${c.declared} · ${c.count} link`;
+        }),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, targets]);

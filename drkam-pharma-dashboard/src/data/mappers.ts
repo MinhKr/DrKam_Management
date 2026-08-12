@@ -494,6 +494,8 @@ export function adsFbLogFromRow(r: AdsFbLogRow): AdsFbTaskLog {
     contentTest: r.content_test,
     optimizeActions: r.optimize_actions,
     tpRating: r.tp_rating,
+    // Chưa chạy migration 0017 → cột chưa có → coi như chưa nhập link nào.
+    contentLinks: r.content_links ?? undefined,
     note: r.note ?? undefined,
   };
 }
@@ -521,6 +523,8 @@ export function adsFbLogToInsert(
     optimize_actions: item.optimizeActions || 0,
     tp_rating: item.tpRating ?? null,
     note: item.note ?? null,
+    // CHỈ gửi khi có nội dung — để app vẫn lưu được báo cáo khi chưa chạy 0017.
+    ...(item.contentLinks ? { content_links: item.contentLinks } : {}),
     created_by: createdBy,
   };
 }
@@ -545,6 +549,7 @@ export function adsFbLogToUpdate(
   if (patch.contentTest !== undefined) u.content_test = patch.contentTest || 0;
   if (patch.optimizeActions !== undefined) u.optimize_actions = patch.optimizeActions || 0;
   if (patch.tpRating !== undefined) u.tp_rating = patch.tpRating ?? null;
+  if (patch.contentLinks !== undefined) u.content_links = patch.contentLinks || null;
   if (patch.note !== undefined) u.note = patch.note ?? null;
   return u;
 }
