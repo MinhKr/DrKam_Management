@@ -6,9 +6,9 @@ nick Ads Facebook (Hà…) đăng nhập bằng Supabase Auth, dữ liệu Báo 
 
 > Demo vẫn dùng được bằng `npm run dev:demo` (bỏ qua Supabase, dữ liệu localStorage).
 
-Mọi KPI (ROAS/CPA/CTR/CPM/AOV…) và **điểm 3 trục** (A ads · B tối ưu · C target) được **tính runtime**
-trong `src/lib/adsFacebook.ts` từ metrics + target — không lưu ở DB. Công thức trích trực tiếp từ
-file gốc `DrKam_Dashboard_MetaAds.xlsx` (sheet "Cấu hình"), đã verify khớp dữ liệu tháng 7/2026.
+Mọi KPI (ROI/ROAS/CPA/CTR/CPM/AOV…) và **điểm 5 chỉ tiêu** (Doanh thu 40% · ROI 30% · CPA 10% ·
+Tỷ lệ chốt 10% · Content mới 10%) được **tính runtime** trong `src/lib/adsFacebook.ts` từ metrics +
+KPI tháng — không lưu ở DB. Chi tiết công thức ở cuối file này.
 
 ---
 
@@ -21,7 +21,7 @@ Tạo 2 bảng: `ads_fb_task_logs` (báo cáo ngày), `ads_fb_targets` (target t
 (xem chung; thêm = `created_by`; **sửa/xóa báo cáo ngày chỉ người tạo hoặc Admin**).
 
 Chạy tiếp file `supabase/migrations/0016_ads_fb_roi_target.sql` — thêm cột `roi_target`
-(chỉ tiêu ROI, dạng tỉ lệ: `1.5` = ROI 150%) để đặt được KPI ROI ở màn KPI tháng.
+(chỉ tiêu ROI, dạng tỉ lệ: `2.5` = ROI 250% = DT ÷ Chi 2,5 lần) để đặt được KPI ROI ở màn KPI tháng.
 > Chưa chạy 0016 thì màn KPI vẫn mở được nhưng **bấm Lưu KPI sẽ lỗi** vì DB chưa có cột.
 
 ## Bước 2 — Tạo tài khoản nhân viên Ads
@@ -71,13 +71,27 @@ npm run dev
 
 Admin đăng nhập thấy toàn hệ thống + nhóm **Team Ads Facebook** ở sidebar, và cột "Đặt target".
 
-## Công thức chấm điểm (tham chiếu — `src/lib/adsFacebook.ts`)
-- **Benchmark 100đ**: ROAS 2.5 · CPA 120k · CTR 1.5% · CPM 120k · CR 2.5% · ATC 6% · CP-mess 15k · Chốt mess 25%.
-- **Trục A (50%)** = trung bình CÓ TRỌNG SỐ các sub-score có dữ liệu (ROAS 35 · CPA 25 · CTR 12 · CPM 8 · Phễu 20).
-  Phễu: hình thức "Mess" → CP-mess + Chốt mess; còn lại → CR đơn/click + Tỷ lệ ATC.
-- **Trục B (25%)** = MIN(100, tối_ưu×25 + content_test×20 + camp_test×5); có Đánh giá TP → 0.5×base + 0.5×(TP×20).
-- **Trục C (25%)** = MIN(100, %đạt_DT×100).
-- **Điểm tổng** = A×0.5 + B×0.25 + C×0.25. **Xếp loại**: ≥85 Xuất sắc · ≥70 Đạt · ≥55 Cần cải thiện · <55 Kém.
+## Công thức chấm điểm — 5 chỉ tiêu (chốt 2026-08-12, `src/lib/adsFacebook.ts`)
+
+| # | Chỉ tiêu | Mốc 100 điểm | Trọng số | Cách tính điểm mục |
+|---|----------|--------------|----------|--------------------|
+| 1 | Doanh thu | KPI tháng ÷ **số ngày thật của tháng** | 40% | MIN(100, DT ngày ÷ target/ngày × 100) |
+| 2 | ROI = DT ÷ Chi | ≥ 2.5 | 30% | **Đạt/không đạt**: ≥2.5 → 100, <2.5 → 0 |
+| 3 | CPA | ≤ 140k/đơn | 10% | MIN(100, 140k ÷ CPA × 100) |
+| 4 | Tỷ lệ chốt = Đơn ÷ Số data | ≥ 80% | 10% | MIN(100, tỷ lệ ÷ 80% × 100) |
+| 5 | Content mới | ≥ 2/ngày | 10% | MIN(100, số content ÷ 2 × 100) |
+
+- **Điểm tổng** = Σ(điểm mục × trọng số). **Thiếu dữ liệu = 0 điểm** ở mục đó (chưa đặt KPI tháng,
+  số data = 0, chưa có đơn…) — không chia lại trọng số.
+- **Xếp loại**: ≥85 Xuất sắc · ≥70 Đạt · ≥55 Cần cải thiện · <55 Kém.
+- **ROI = DT ÷ Chi** (không trừ 1) → trùng giá trị với ROAS; app hiển thị cả hai nhãn.
+  Ô "KPI ROI" ở màn KPI tháng nhập theo % (**250** = ROI 250% = DT gấp 2,5 lần chi) và chỉ để
+  theo dõi — chấm điểm dùng mốc cố định 2.5 cho cả team.
+- Bảng gốc user gửi ghi Doanh thu 50% nhưng 5 trọng số cộng lại 110%; user chốt hạ Doanh thu
+  còn **40%** để tổng đúng 100%.
+- Các chỉ số CTR · CPM · ATC · CP-mess · camp test · số hành động tối ưu · đánh giá TP ·
+  target đơn & ngân sách **vẫn nhập và hiển thị để theo dõi, KHÔNG tham gia chấm điểm**.
+  Cột `days_in_month` trong `ads_fb_targets` không còn dùng để chia target/ngày.
 
 ## Ghi chú kỹ thuật
 - Nick Ads FB nhận diện qua `profiles.department = 'Ads Facebook'`.

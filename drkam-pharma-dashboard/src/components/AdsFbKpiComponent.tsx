@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AdsFbTarget, Employee, UserSession } from '../types';
-import { fmtMoney, fmtPct, roiInputChars, roiPctToRatio, roiRatioToPct } from '../lib/adsFacebook';
+import {
+  ADS_FB_BENCHMARK, daysInPeriod, fmtMoney, fmtNum, fmtPct,
+  roiInputChars, roiPctToRatio, roiRatioToPct,
+} from '../lib/adsFacebook';
 import { MonthPicker, shiftMonthKey } from './dashboardKit';
 
 export const ADS_FB_DEPT = 'Ads Facebook';
@@ -13,8 +16,10 @@ export const ADS_FB_DEPT = 'Ads Facebook';
  * Đặt 2 chỉ tiêu cho từng nhân sự: doanh thu/tháng và ROI, ghi vào `revenueTarget`
  * + `roiTarget` của target tháng (ads_fb_targets) — đây là NƠI DUY NHẤT đặt KPI Ads.
  *
- * ROI: nhập theo % (ô "150" = ROI 150%) nhưng LƯU DẠNG TỈ LỆ (1.5) cho khớp engine
- * `adsFbKpis` (ROI = ROAS − 1 = DT/Chi − 1). ROI chưa dùng trong chấm điểm 3 trục.
+ * ROI: nhập theo % (ô "250" = ROI 250%) nhưng LƯU DẠNG TỈ LỆ (2.5) cho khớp engine
+ * `adsFbKpis` (ROI = DT/Chi, không trừ 1 — chốt 2026-08-12).
+ * Lưu ý: chấm điểm ngày dùng MỐC ROI CỐ ĐỊNH 2.5 cho cả team (`ADS_FB_BENCHMARK.roi`);
+ * ô KPI ROI ở đây là chỉ tiêu tháng để theo dõi, không đổi cách chấm điểm.
  */
 
 interface Props {
@@ -79,7 +84,7 @@ export default function AdsFbKpiComponent({ targets, employees, session, onAddTa
         id: `afbt_${Date.now()}_${i}`,
         period, employeeId: l.emp.id, employeeName: l.emp.name,
         spendTarget: 0, revenueTarget: l.value, ordersTarget: 0, roiTarget: l.roiValue,
-        daysInMonth: 30, note: '',
+        daysInMonth: daysInPeriod(period), note: '',
       });
     });
     setDraft({});
@@ -163,7 +168,10 @@ export default function AdsFbKpiComponent({ targets, employees, session, onAddTa
         <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100">
           <div>
             <h3 className="text-sm font-bold text-slate-800 font-display">KPI doanh thu &amp; ROI từng nhân sự</h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">KPI/ngày = KPI tháng ÷ 30 — dùng làm mẫu số tính % đạt của báo cáo ngày.</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              KPI/ngày = KPI tháng ÷ {daysInPeriod(period)} ngày (số ngày thật của tháng) — là mẫu số của chỉ tiêu Doanh thu (40% điểm) ở báo cáo ngày.
+              Chấm điểm ROI dùng mốc cố định {fmtNum(ADS_FB_BENCHMARK.roi)} cho cả team; ô KPI ROI dưới đây chỉ để theo dõi.
+            </p>
           </div>
           {isAdmin && (
             <button onClick={copyPrevMonth}
@@ -217,7 +225,7 @@ export default function AdsFbKpiComponent({ targets, employees, session, onAddTa
                           value={draft[l.emp.id]?.roi !== undefined ? draft[l.emp.id].roi! : roiRatioToPct(l.savedRoi)}
                           onChange={(e) => setRoi(l.emp.id, e.target.value)}
                           placeholder="0"
-                          title="VD: 150 nghĩa là ROI 150% — doanh thu gấp 2,5 lần chi tiêu."
+                          title="ROI = doanh thu ÷ chi phí. VD: 250 nghĩa là ROI 250% — doanh thu gấp 2,5 lần chi tiêu."
                           className={`w-24 px-3 py-2 text-sm font-bold text-right tabular-nums rounded-lg border outline-none focus:ring-1 focus:ring-[#D32027] focus:border-[#D32027] ${
                             l.roiValue !== l.savedRoi ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'
                           }`}
@@ -229,7 +237,7 @@ export default function AdsFbKpiComponent({ targets, employees, session, onAddTa
                     )}
                   </td>
                   <td className={`${CELL} text-right tabular-nums text-slate-500`}>
-                    {l.value > 0 ? fmtMoney(Math.round(l.value / 30)) + ' đ' : <span className="text-slate-300">—</span>}
+                    {l.value > 0 ? fmtMoney(Math.round(l.value / daysInPeriod(period))) + ' đ' : <span className="text-slate-300">—</span>}
                   </td>
                 </tr>
               ))}
