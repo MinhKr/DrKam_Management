@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { AdsFbTaskLog, AdsFbTarget, AdsFbFormType, Employee, UserSession } from '../types';
 import {
   inPeriod, weekdayVi, adsFbScore, fmtMoney, fmtNum, fmtPct, fmtScore,
+  fmtCriterionValue, AdsFbCriterion,
 } from '../lib/adsFacebook';
 import ConfirmDialog from './ConfirmDialog';
 import { MonthPicker } from './dashboardKit';
@@ -95,7 +96,9 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
             <span className="material-symbols-outlined text-[#D32027] text-2xl">ads_click</span>
             <span>Báo cáo ngày — Ads Facebook</span>
           </h1>
-          <p className="text-[11px] text-slate-400 mt-0.5">Nhập chỉ số quảng cáo mỗi ngày — ROAS/CPA và điểm 3 trục tự tính theo cấu hình.</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Nhập chỉ số quảng cáo mỗi ngày — ROI/CPA và điểm 5 chỉ tiêu (Doanh thu 40% · ROI 30% · CPA 10% · Tỷ lệ chốt 10% · Content mới 10%) tự tính.
+          </p>
         </div>
         <MonthPicker value={period} onChange={setPeriod} />
       </div>
@@ -207,7 +210,7 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
                         </DetailSection>
                         <DetailSection title="KPI tự tính" color="text-sky-600">
                           <Pair label="ROAS" value={fmtNum(sc.kpis.roas)} />
-                          <Pair label="ROI" value={fmtPct(sc.kpis.roi)} />
+                          <Pair label="ROI (DT/Chi)" value={fmtPct(sc.kpis.roi)} />
                           <Pair label="CPA" value={fmtMoney(sc.kpis.cpa) + ' đ'} />
                           <Pair label="Giá 1 data" value={fmtMoney(sc.kpis.cpData) + ' đ'} />
                           <Pair label="CTR" value={fmtPct(sc.kpis.ctr)} />
@@ -216,18 +219,17 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
                           <Pair label="Tỷ lệ ATC" value={fmtPct(sc.kpis.atcRate)} />
                           <Pair label="CP/tin nhắn" value={fmtMoney(sc.kpis.cpMessage) + ' đ'} />
                           <Pair label="Tỷ lệ chốt mess" value={fmtPct(sc.kpis.closeMessRate)} />
+                          <Pair label="Tỷ lệ chốt data→đơn" value={fmtPct(sc.kpis.closeDataRate)} />
                           <Pair label="AOV" value={fmtMoney(sc.kpis.aov) + ' đ'} />
                         </DetailSection>
-                        <DetailSection title="Điểm & xếp loại" color="text-[#D32027]">
-                          <Pair label="% đạt DT" value={fmtPct(sc.pct.revenue)} />
-                          <Pair label="% đạt đơn" value={fmtPct(sc.pct.orders)} />
-                          <Pair label="% ngân sách" value={fmtPct(sc.pct.budget)} />
-                          <Pair label="Trục A (ads)" value={fmtScore(sc.axisA)} />
-                          <Pair label="Trục B (tối ưu)" value={fmtScore(sc.axisB)} />
-                          <Pair label="Trục C (target)" value={fmtScore(sc.axisC)} />
-                          <Pair label="Điểm tổng" value={fmtScore(sc.total)} strong />
-                          <Pair label="Xếp loại" value={sc.rank.label} strong />
-                        </DetailSection>
+                        <div className="space-y-2.5">
+                          <div className="text-[13px] font-bold uppercase tracking-wide text-[#D32027]">Điểm &amp; xếp loại</div>
+                          <ScoreBreakdown criteria={sc.criteria} total={sc.total} rank={sc.rank} />
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-2.5">
+                            <Pair label="% đạt đơn (theo dõi)" value={fmtPct(sc.pct.orders)} />
+                            <Pair label="% ngân sách (theo dõi)" value={fmtPct(sc.pct.budget)} />
+                          </div>
+                        </div>
                         {l.note && (
                           <div className="text-xs text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2">
                             <span className="font-bold text-slate-500">Ghi chú tối ưu: </span>{l.note}
@@ -247,7 +249,7 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
         <AdsFbLogModal
           log={modal}
           personName={active.name}
-          hasTarget={!!targetFor(activeId, modal.date)}
+          targetOf={(dd) => targetFor(activeId, dd)}
           onClose={() => setModal(null)}
           onSubmit={(l) => {
             if (l.id) onUpdate(l.id, l);
@@ -316,6 +318,57 @@ function Pair({ label, value, strong }: { label: string; value: string; strong?:
   );
 }
 
+/* Bảng phân tích điểm 5 chỉ tiêu: thực tế · mốc · điểm mục · trọng số · quy đổi. */
+const scoreTone = (s: number) =>
+  s >= 100 ? 'text-emerald-600' : s >= 70 ? 'text-slate-700' : s > 0 ? 'text-amber-600' : 'text-rose-600';
+
+function ScoreBreakdown({ criteria, total, rank }: {
+  criteria: AdsFbCriterion[];
+  total: number;
+  rank: { label: string; color: string };
+}) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+      <table className="w-full text-xs min-w-[560px]">
+        <thead>
+          <tr className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            <th className="text-left px-3 py-2">Chỉ tiêu</th>
+            <th className="text-right px-3 py-2">Thực tế</th>
+            <th className="text-right px-3 py-2">Mốc 100đ</th>
+            <th className="text-right px-3 py-2">Điểm mục</th>
+            <th className="text-right px-3 py-2">Trọng số</th>
+            <th className="text-right px-3 py-2">Quy đổi</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {criteria.map((c) => (
+            <tr key={c.key}>
+              <td className="px-3 py-2 font-semibold text-slate-700">
+                {c.label}
+                {c.note && <span className="text-[10px] font-medium text-amber-600 ml-1">({c.note})</span>}
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtCriterionValue(c.key, c.value)}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-slate-400">{fmtCriterionValue(c.key, c.benchmark)}</td>
+              <td className={`px-3 py-2 text-right tabular-nums font-semibold ${scoreTone(c.score)}`}>{fmtScore(c.score)}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.weight}%</td>
+              <td className="px-3 py-2 text-right tabular-nums font-bold text-slate-800">{fmtNum(c.points, 1)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="bg-slate-50/70 border-t border-slate-200">
+            <td className="px-3 py-2 font-bold text-slate-700" colSpan={4}>Điểm tổng</td>
+            <td className="px-3 py-2 text-right">
+              <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${rank.color}`}>{rank.label}</span>
+            </td>
+            <td className="px-3 py-2 text-right text-base font-extrabold text-[#D32027] tabular-nums">{fmtScore(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 /* Nhóm chi tiết: tiêu đề màu + lưới cặp nhãn-giá trị đi xuống. */
 function DetailSection({ title, color, children }: { title: string; color?: string; children: React.ReactNode }) {
   return (
@@ -337,10 +390,10 @@ function blankLog(employeeId: string, employeeName: string, date: string): AdsFb
 }
 
 /* ── Popup nhập/sửa báo cáo ngày ── */
-function AdsFbLogModal({ log, personName, hasTarget, onClose, onSubmit }: {
+function AdsFbLogModal({ log, personName, targetOf, onClose, onSubmit }: {
   log: AdsFbTaskLog;
   personName: string;
-  hasTarget: boolean;
+  targetOf: (date: string) => AdsFbTarget | null;
   onClose: () => void;
   onSubmit: (l: AdsFbTaskLog) => void;
 }) {
@@ -348,8 +401,9 @@ function AdsFbLogModal({ log, personName, hasTarget, onClose, onSubmit }: {
   const set = (patch: Partial<AdsFbTaskLog>) => setF((p) => ({ ...p, ...patch }));
   const fromIso = (iso: string) => { const [y, m, d] = iso.split('-'); return d ? `${d}/${m}/${y}` : ''; };
 
-  // Xem trước điểm (không có target thì Trục C = 0).
-  const preview = adsFbScore(f, null);
+  // Xem trước điểm theo target tháng của chính ngày đang nhập (chưa đặt KPI → mục Doanh thu 0đ).
+  const target = targetOf(f.date);
+  const preview = adsFbScore(f, target);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -414,11 +468,11 @@ function AdsFbLogModal({ log, personName, hasTarget, onClose, onSubmit }: {
 
           {/* Tối ưu */}
           <fieldset className="border border-slate-200 rounded-xl p-4">
-            <legend className="text-[11px] font-bold text-slate-500 uppercase tracking-wide px-2">Tối ưu (Trục B)</legend>
+            <legend className="text-[11px] font-bold text-slate-500 uppercase tracking-wide px-2">Tối ưu &amp; content</legend>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <NumField label="Camp đang chạy" {...numOf('campsRunning')} />
               <NumField label="Camp test mới" {...numOf('campsTest')} />
-              <NumField label="Content test mới" {...numOf('contentTest')} />
+              <NumField label="Content mới" hint="(mốc ≥2/ngày)" {...numOf('contentTest')} />
               <NumField label="Số hành động tối ưu" {...numOf('optimizeActions')} />
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Đánh giá TP</span>
@@ -437,13 +491,15 @@ function AdsFbLogModal({ log, personName, hasTarget, onClose, onSubmit }: {
           </label>
 
           {/* Xem trước điểm */}
-          <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 flex flex-wrap items-center gap-4 text-xs">
-            <span className="font-bold text-slate-500 uppercase tracking-wide">Xem trước:</span>
-            <span>ROAS <b className="text-sky-700">{fmtNum(preview.kpis.roas)}</b></span>
-            <span>CPA <b>{fmtMoney(preview.kpis.cpa)}</b></span>
-            <span>Trục A <b>{fmtScore(preview.axisA)}</b></span>
-            <span>Trục B <b>{fmtScore(preview.axisB)}</b></span>
-            <span className="text-slate-400">Trục C {hasTarget ? '(có target)' : '= 0 (chưa có target tháng)'}</span>
+          <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-2.5">
+            <div className="flex flex-wrap items-center gap-4 text-xs">
+              <span className="font-bold text-slate-500 uppercase tracking-wide">Xem trước:</span>
+              <span>ROI <b className="text-sky-700">{fmtNum(preview.kpis.roi)}</b></span>
+              <span>CPA <b>{fmtMoney(preview.kpis.cpa)}</b></span>
+              <span>Chốt data→đơn <b>{fmtPct(preview.kpis.closeDataRate)}</b></span>
+              {!target && <span className="text-amber-600">Chưa đặt KPI tháng → mục Doanh thu (50%) tính 0 điểm</span>}
+            </div>
+            <ScoreBreakdown criteria={preview.criteria} total={preview.total} rank={preview.rank} />
           </div>
         </div>
 
