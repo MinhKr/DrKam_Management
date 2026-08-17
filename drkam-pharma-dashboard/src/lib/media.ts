@@ -181,13 +181,13 @@ export function revenueKind(e: MediaKpiEntry): RevenueKind | null {
 /**
  * Tính "Thực tế" cho chỉ số doanh thu (unit=currency) từ dữ liệu Content.
  * Trả null nếu chỉ số KHÔNG phải doanh thu tự-nối → giữ nguyên actualValue đang lưu.
- *   • 'mixed'  → TikTok÷2 + FB Ads
+ *   • 'mixed'  → (TikTok + FB Ads) ÷ 2  — chốt 17/08/2026, trước đây là TikTok÷2 + FB Ads
  *   • 'fbAds'  → FB Ads (đủ 100%)
  *   • 'tiktok' → TikTok (đủ 100%)
  */
 export function deriveRevenueActual(e: MediaKpiEntry, tiktok: number, fbAds: number): number | null {
   switch (revenueKind(e)) {
-    case 'mixed': return Math.round(tiktok / 2) + fbAds;
+    case 'mixed': return Math.round((tiktok + fbAds) / 2);
     case 'fbAds': return fbAds;
     case 'tiktok': return tiktok;
     default: return null;
