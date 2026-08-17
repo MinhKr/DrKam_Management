@@ -101,6 +101,7 @@ export function channelFromRow(r: ChannelRow): AffiliateChannel {
     auditId: r.audit_id ?? '',
     managerName: r.manager_name ?? '',
     managerAvatar: r.manager_avatar ?? '',
+    channelUrl: r.channel_url ?? '',
     status: r.status,
     tracking: { revenueActive: r.track_revenue, trafficActive: r.track_traffic },
   };
@@ -121,11 +122,41 @@ export function channelToInsert(
     manager_id: managerId,
     manager_name: c.managerName || null,
     manager_avatar: c.managerAvatar || null,
+    channel_url: c.channelUrl?.trim() || null,
     status: c.status,
     track_revenue: c.tracking.revenueActive,
     track_traffic: c.tracking.trafficActive,
     team_id: teamId,
   };
+}
+
+/**
+ * Patch kênh (UI) → cột DB. Chỉ map những trường CÓ trong patch để không ghi đè
+ * cột khác về null. `managerId` truyền riêng: đổi người phụ trách phải đổi cả
+ * manager_id (RLS của fb_pages/owns_channel dựa vào cột này, không dựa vào tên).
+ * Trường `name` KHÔNG map ở đây — đổi tên đi qua RPC rename_channel (migration
+ * 0018) để đồng bộ luôn channel_name trong báo cáo cũ.
+ */
+export function channelToUpdate(
+  p: Partial<AffiliateChannel>,
+  managerId?: string | null,
+): Database['public']['Tables']['channels']['Update'] {
+  const u: Database['public']['Tables']['channels']['Update'] = {};
+  if (p.brandCategory !== undefined) u.brand_category = p.brandCategory || null;
+  if (p.platform !== undefined) u.platform = p.platform;
+  if (p.channelType !== undefined) u.channel_type = p.channelType;
+  if (p.linkedShop !== undefined) u.linked_shop = linkedShopToDb(p.linkedShop);
+  if (p.auditId !== undefined) u.audit_id = p.auditId || null;
+  if (p.managerName !== undefined) u.manager_name = p.managerName || null;
+  if (p.managerAvatar !== undefined) u.manager_avatar = p.managerAvatar || null;
+  if (p.channelUrl !== undefined) u.channel_url = p.channelUrl.trim() || null;
+  if (p.status !== undefined) u.status = p.status;
+  if (p.tracking !== undefined) {
+    u.track_revenue = p.tracking.revenueActive;
+    u.track_traffic = p.tracking.trafficActive;
+  }
+  if (managerId !== undefined) u.manager_id = managerId;
+  return u;
 }
 
 // ── DAILY REPORTS ─────────────────────────────────────────────

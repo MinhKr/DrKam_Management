@@ -4,6 +4,7 @@ import ConfirmDialog from './ConfirmDialog';
 import BrandTrafficDashboard from './BrandTrafficDashboard';
 import KocCompetitionDashboard from './KocCompetitionDashboard';
 import { FacebookIcon } from './BrandIcons';
+import { isShopeeIdGroup } from '../lib/channels';
 
 type ConfirmState = { message: string; onConfirm: () => void } | null;
 
@@ -83,12 +84,7 @@ function KocInhouseView({
   onAddChannel,
 }: FacebookReportComponentProps) {
   // Mỗi "nhóm" = 1 ID Shopee KOC inhouse (1 thành viên)
-  const idGroups = channels.filter(
-    (c) =>
-      c.platform === 'Facebook' &&
-      (c.channelType === 'Real KOC' || c.channelType === 'AI KOC') &&
-      c.tracking.revenueActive,
-  );
+  const idGroups = channels.filter((c) => isShopeeIdGroup(c) && c.tracking.revenueActive);
 
   const isMine = (g: AffiliateChannel) => g.managerName === session.name;
   // Chính sách (đã chốt 12/06): mỗi người chỉ sửa nhóm ID của MÌNH; Admin toàn quyền.

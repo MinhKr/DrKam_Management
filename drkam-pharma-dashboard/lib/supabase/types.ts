@@ -55,6 +55,7 @@ export interface Database {
           manager_id: string | null;
           manager_name: string | null;
           manager_avatar: string | null;
+          channel_url: string | null;   // migration 0018
           status: 'Đã ra số' | 'Đang nuôi' | 'Bóp TT' | 'Đã khóa';
           track_revenue: boolean;
           track_traffic: boolean;
@@ -392,7 +393,13 @@ export interface Database {
       };
     };
     Views: { [_ in never]: never };
-    Functions: { [_ in never]: never };
+    Functions: {
+      // migration 0018 — đổi tên kênh + đồng bộ channel_name của báo cáo cũ.
+      rename_channel: {
+        Args: { c_id: string; new_name: string };
+        Returns: undefined;
+      };
+    };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
   };

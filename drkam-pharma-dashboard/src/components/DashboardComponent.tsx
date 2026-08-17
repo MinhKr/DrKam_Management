@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 import { dailySeries } from '../lib/analytics';
+import { managerOf } from '../lib/channels';
 import ContentChecklistComponent from './ContentChecklistComponent';
 import { FacebookIcon, TikTokIcon } from './BrandIcons';
 import { MonthPicker } from './dashboardKit';
@@ -11,7 +12,7 @@ import { MonthPicker } from './dashboardKit';
 // Chỉ tiêu KHÔNG còn hardcode ở đây: lấy theo tháng từ content_kpi_targets
 // (migration 0015), tháng chưa thiết lập thì rơi về số mặc định trong lib.
 import {
-  norm, BadgeKind, CONTENT_LINE_ITEMS as LINE_ITEMS, CONTENT_VIEW_REACH as VIEW_REACH,
+  BadgeKind, CONTENT_LINE_ITEMS as LINE_ITEMS, CONTENT_VIEW_REACH as VIEW_REACH,
   targetResolver,
 } from '../lib/contentKpi';
 
@@ -402,36 +403,9 @@ function DoanhSoNgay({ reports, channels }: { reports: DailyReport[]; channels: 
     return 5;
   };
 
-  // Gán người phụ trách cố định cho một số kênh (khi manager_name trong DB trống).
-  // Khớp theo tên đã chuẩn hoá (bỏ dấu tiếng Việt, viết thường, bỏ dấu cách/chấm/gạch) — sửa tự do ở đây.
-  const MANAGER_OVERRIDE: Record<string, string> = {
-    // TikTok Brand
-    'drkampharmaofficial': 'Nguyễn Công Hải',
-    'drkamvn': 'Hoàng Yến Nhi',
-    'drkamvnofficial': 'Đặng Kim Khánh',
-    // TikTok KOC
-    'happyydaily': 'Hoàng Yến Nhi',
-    'nhacuacamcam': 'Nguyễn Công Hải',
-    'giadinhminhhee': 'Nguyễn Công Hải',
-    'baochauday': 'Đặng Kim Khánh',
-    // TikTok AI
-    'koi928tramtram': 'Đặng Kim Khánh',
-    'doisongsuckhoe86': 'Đặng Kim Khánh',
-    'ngochuong259': 'Nguyễn Công Hải',
-    'haidang0136': 'Nguyễn Công Hải',
-    'minhquan8046': 'Lê Đắc Nhật Minh',
-    'quinchana82': 'Hoàng Yến Nhi',
-    'anhquan9684': 'Lê Đắc Nhật Minh',
-    // FB Brand (tên đầy đủ trong app)
-    'drkamsongkhoecungchuyengia': 'Đặng Kim Khánh',
-    'drkambacsirangmienghongcuamoigiadinh': 'Đặng Kim Khánh',
-    // FB AI
-    'duocsikhanh': 'Đặng Kim Khánh',
-    'conghaing': 'Nguyễn Công Hải',
-    'ynni1809': 'Hoàng Yến Nhi',
-    'leminh139148': 'Lê Đắc Nhật Minh',
-  };
-  const nguoiPT = (ch: AffiliateChannel) => MANAGER_OVERRIDE[norm(ch.name)] ?? ch.managerName ?? '—';
+  // Người phụ trách: lấy từ kênh (sửa ở tab "Quản lý kênh"); kênh seed chưa có
+  // manager_name thì rơi về bảng dự phòng MANAGER_OVERRIDE trong src/lib/channels.ts.
+  const nguoiPT = (ch: AffiliateChannel) => managerOf(ch) || '—';
 
   // Tất cả kênh = dòng CỐ ĐỊNH (Kênh · Loại · Người PT để sẵn); doanh số/video/view lấy từ báo cáo ngày.
   const reportOf = (name: string) => reports.find((r) => r.channelName === name && r.date === date);
