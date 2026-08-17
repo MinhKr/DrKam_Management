@@ -1300,6 +1300,8 @@ export default function App() {
           logs={mediaLogs}
           kpiEntries={mediaKpiWithActuals}
           employees={employees}
+          channels={channels}
+          reports={reports}
           session={session}
           onNavigateToTab={navigateToTab}
           onAddKpi={handleAddMediaKpi}
@@ -1400,6 +1402,8 @@ export default function App() {
             logs={mediaLogs}
             kpiEntries={mediaKpiWithActuals}
             employees={employees}
+            channels={channels}
+            reports={reports}
             session={session}
             onNavigateToTab={navigateToTab}
             onAddKpi={handleAddMediaKpi}
