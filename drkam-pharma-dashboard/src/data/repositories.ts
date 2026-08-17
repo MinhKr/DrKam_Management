@@ -24,6 +24,7 @@ import {
 import {
   channelFromRow,
   channelToInsert,
+  channelToUpdate,
   reportFromRow,
   reportToInsert,
   employeeFromRow,
@@ -90,6 +91,36 @@ export async function createChannel(
     .single();
   if (error) throw error;
   return channelFromRow(data);
+}
+
+/**
+ * Cập nhật kênh (không gồm TÊN — đổi tên dùng renameChannel bên dưới).
+ * managerId: truyền khi đổi người phụ trách để đồng bộ cột manager_id.
+ */
+export async function updateChannel(
+  id: string,
+  patch: Partial<AffiliateChannel>,
+  managerId?: string | null,
+): Promise<AffiliateChannel> {
+  const { data, error } = await db()
+    .from('channels')
+    .update(channelToUpdate(patch, managerId))
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return channelFromRow(data);
+}
+
+/**
+ * Đổi tên kênh — gọi RPC rename_channel (migration 0018) để đổi tên kênh VÀ
+ * channel_name của mọi báo cáo cũ trong cùng một giao dịch. Không update thẳng
+ * daily_reports từ đây: RLS chỉ cho chủ kênh sửa báo cáo kênh FB KOC cá nhân
+ * nên các dòng không có quyền sẽ bị bỏ qua âm thầm → báo cáo cũ mồ côi.
+ */
+export async function renameChannel(id: string, newName: string): Promise<void> {
+  const { error } = await db().rpc('rename_channel', { c_id: id, new_name: newName });
+  if (error) throw error;
 }
 
 export async function deleteChannel(id: string): Promise<void> {

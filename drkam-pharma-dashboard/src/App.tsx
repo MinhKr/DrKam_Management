@@ -53,6 +53,7 @@ import OrderMediaComponent from './components/OrderMediaComponent';
 import OrderAdsContentComponent from './components/OrderAdsContentComponent';
 import ContentKpiComponent from './components/ContentKpiComponent';
 import { countAlerts } from './lib/orders';
+import { isContentChannel } from './lib/channels';
 import { FacebookIcon, TikTokIcon } from './components/BrandIcons';
 
 import { isSupabaseConfigured } from '@/lib/supabase/client';
@@ -528,10 +529,48 @@ export default function App() {
     }
   };
 
-  // Cập nhật kênh (dùng để gắn Page ID Facebook cho kênh thương hiệu)
-  const handleUpdateChannel = (id: string, patch: Partial<AffiliateChannel>) => {
-    setChannels(prev => prev.map(c => (c.id === id ? { ...c, ...patch } : c)));
-    // (Chế độ DB: lưu lên Supabase sẽ bổ sung sau — hiện chạy demo localStorage.)
+  /**
+   * Cập nhật kênh — dùng ở tab "Quản lý kênh" và để gắn Page ID Facebook.
+   * ĐỔI TÊN đi đường riêng (repo.renameChannel → RPC): app nối báo cáo với kênh
+   * bằng TÊN, nên tên mới phải được ghi đồng thời vào channel_name của mọi báo
+   * cáo cũ, nếu không kênh sẽ mất sạch lịch sử doanh thu/traffic.
+   */
+  const handleUpdateChannel = async (id: string, patch: Partial<AffiliateChannel>) => {
+    const before = channels.find(c => c.id === id);
+    if (!before) return;
+    const newName = patch.name?.trim();
+    const renamed = !!newName && newName !== before.name;
+    const { name: _dropName, ...rest } = patch;
+    let saved: AffiliateChannel | null = null;
+
+    if (cloud) {
+      try {
+        if (renamed) await repo.renameChannel(id, newName!);
+        if (Object.keys(rest).length > 0) {
+          // Đổi người phụ trách → đồng bộ luôn manager_id (RLS fb_pages dựa vào cột này).
+          const managerId = rest.managerName !== undefined
+            ? (employees.find(e => e.name === rest.managerName)?.id ?? null)
+            : undefined;
+          saved = await repo.updateChannel(id, rest, managerId);
+        }
+      } catch (e) {
+        if (errCode(e) === '23505') {
+          alert(`Kênh "${newName ?? before.name}" đã tồn tại trên ${before.platform}. Vui lòng dùng tên khác.`);
+        } else {
+          alert('Cập nhật kênh thất bại: ' + errMsg(e));
+        }
+        return;
+      }
+    }
+
+    setChannels(prev => prev.map(c => (c.id === id ? (saved ?? { ...c, ...patch, ...(renamed ? { name: newName! } : {}) }) : c)));
+    if (renamed) {
+      // Báo cáo trong state cũng phải đổi theo, để không phải tải lại trang.
+      setReports(prev => prev.map(r => (r.channelName === before.name ? { ...r, channelName: newName! } : r)));
+      addAuditLog('Hệ thống', `Đổi tên kênh "${before.name}" → "${newName}" (đã cập nhật cả báo cáo cũ).`);
+    } else {
+      addAuditLog('Hệ thống', `Cập nhật thông tin kênh "${before.name}".`);
+    }
   };
 
   // Báo cáo traffic 1 NGÀY cho 1 kênh thương hiệu (modal): upsert theo (kênh + ngày).
@@ -637,7 +676,10 @@ export default function App() {
   const handleAddChannel = async (newChan: AffiliateChannel) => {
     if (cloud) {
       try {
-        const saved = await repo.createChannel(newChan, currentUserId);
+        // manager_id phải khớp người phụ trách được chọn (tab Quản lý kênh cho chọn
+        // người khác); không tìm thấy thì gán người đang đăng nhập như trước.
+        const managerId = employees.find(e => e.name === newChan.managerName)?.id ?? currentUserId;
+        const saved = await repo.createChannel(newChan, managerId);
         setChannels(prev => [saved, ...prev]);
         addAuditLog('Hệ thống', `Đăng ký kênh affiliate mới: "${saved.name}" phân loại [${saved.channelType}] do ${saved.managerName} phụ trách.`);
       } catch (e) {
@@ -662,11 +704,25 @@ export default function App() {
 
   const handleDeleteChannel = async (id: string) => {
     const target = channels.find(c => c.id === id);
+    // Kênh đã có báo cáo thì KHÔNG xóa (DB cũng chặn bằng FK on delete restrict) —
+    // xóa là mất lịch sử doanh thu. Muốn ngừng dùng thì đặt trạng thái "Đã khóa".
+    if (target) {
+      const used = reports.filter(r => r.channelName === target.name).length;
+      if (used > 0) {
+        alert(`Kênh "${target.name}" đang có ${used} báo cáo nên không xóa được (giữ lịch sử doanh thu).\n`
+          + 'Hãy chuyển trạng thái kênh sang "Đã khóa" nếu không dùng nữa.');
+        return;
+      }
+    }
     if (cloud) {
       try {
         await repo.deleteChannel(id);
       } catch (e) {
-        alert('Xóa kênh thất bại: ' + errMsg(e));
+        if (errCode(e) === '23503') {
+          alert(`Kênh "${target?.name ?? ''}" đang có báo cáo nên không xóa được. Hãy chuyển trạng thái sang "Đã khóa".`);
+        } else {
+          alert('Xóa kênh thất bại: ' + errMsg(e));
+        }
         return;
       }
       setChannels(prev => prev.filter(c => c.id !== id));
@@ -1095,6 +1151,8 @@ export default function App() {
   const ORDER_TABS = [ORDER_MEDIA_TAB, ORDER_CONTENT_TAB];
   // KPI tháng team Content — team Content đặt chỉ tiêu cho các kênh ở Tổng quan.
   const CONTENT_KPI_TAB = 'content-kpi';
+  // Quản lý kênh — nơi duy nhất CRUD danh sách kênh của team Content.
+  const CHANNELS_TAB = 'channels';
 
   // Role permissions checking helper
   const canAccessTab = (tab: string) => {
@@ -1106,7 +1164,7 @@ export default function App() {
 
     // TẠM KHOÁ mọi mục ngoài TikTok & Facebook cho MỌI vai trò (giữ nguyên code, chỉ chặn truy cập).
     // Mở lại sau: thêm tab vào ALLOWED_TABS hoặc bỏ chặn này.
-    const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'fb-ads', 'checklist', CONTENT_KPI_TAB, ...ORDER_TABS];
+    const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'fb-ads', 'checklist', CONTENT_KPI_TAB, CHANNELS_TAB, ...ORDER_TABS];
     // Admin xem thêm cả module Media + Ads Facebook.
     const allowed = isAdmin ? [...ALLOWED_TABS, ...MEDIA_TABS, ...ADS_FB_TABS, ...ADS_FB_ADMIN_TABS] : ALLOWED_TABS;
     if (!allowed.includes(tab)) return false;
@@ -1441,12 +1499,14 @@ export default function App() {
             onDelete={handleDeleteAdsContentOrder}
           />
         );
-      case 'channels':
+      case CHANNELS_TAB:
         return (
           <ChannelManagementComponent
             channels={channels}
-            employees={employees}
+            reports={reports}
+            session={session}
             onAddChannel={handleAddChannel}
+            onUpdateChannel={handleUpdateChannel}
             onDeleteChannel={handleDeleteChannel}
           />
         );
@@ -1782,6 +1842,24 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+              {/* Quản lý kênh — danh sách kênh team Content đang nuôi (CRUD). */}
+              <button
+                onClick={() => navigateToTab(CHANNELS_TAB)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                  activeTab === CHANNELS_TAB
+                    ? 'bg-rose-50 text-[#D32027]'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-lg flex items-center justify-center text-violet-600 bg-violet-50 flex-shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">hub</span>
+                  </span>
+                  <span>Quản lý kênh</span>
+                </div>
+                <span className="text-[10px] font-bold text-slate-400">{channels.filter(isContentChannel).length}</span>
+              </button>
 
               <button
                 onClick={() => navigateToTab('checklist')}

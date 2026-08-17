@@ -17,6 +17,7 @@ export interface AffiliateChannel {
   auditId: string;
   managerName: string;
   managerAvatar: string;
+  channelUrl?: string; // link kênh (migration 0018); rỗng = suy ra link TikTok từ tên
   status: 'Đã ra số' | 'Đang nuôi' | 'Bóp TT' | 'Đã khóa';
   tracking: {
     revenueActive: boolean;
