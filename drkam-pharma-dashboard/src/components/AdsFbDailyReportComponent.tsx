@@ -31,6 +31,15 @@ const toIso = (dd: string) => { const [d, m, y] = dd.split('/'); return d ? `${y
 const periodOf = (dd: string) => { const [d, m, y] = dd.split('/'); return d ? `${y}-${m}` : ''; };
 const monthLabel = (p: string) => `Tháng ${p.slice(5)}/${p.slice(0, 4)}`;
 
+/* ── Lọc theo KHOẢNG NGÀY ──────────────────────────────────────
+   Ngày lưu dạng dd/mm/yyyy nên quy về ISO yyyy-mm-dd rồi so sánh chuỗi. */
+type ViewMode = 'month' | 'range';
+const monthStartIso = (p: string) => `${p}-01`;
+const monthEndIso = (p: string) => {
+  const [y, m] = p.split('-').map(Number);
+  return `${p}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`; // ngày 0 tháng sau = ngày cuối tháng này
+};
+
 export default function AdsFbDailyReportComponent({ logs, targets, employees, session, onAdd, onUpdate, onDelete }: Props) {
   const staff = useMemo(() => employees
     .filter((e) => e.department === ADS_FB_DEPT && e.status === 'Hoạt động')
@@ -48,6 +57,32 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
     return ms[0] ?? isoToday().slice(0, 7);
   });
 
+  // Xem theo THÁNG (mặc định) hoặc theo KHOẢNG NGÀY tự chọn.
+  const [mode, setMode] = useState<ViewMode>('month');
+  const [rangeFrom, setRangeFrom] = useState(() => monthStartIso(period));
+  const [rangeTo, setRangeTo] = useState(isoToday);
+  // Chọn ngược (từ > đến) vẫn hiểu đúng — đảo lại khi lọc.
+  const [lo, hi] = rangeFrom <= rangeTo ? [rangeFrom, rangeTo] : [rangeTo, rangeFrom];
+
+  const switchMode = (m: ViewMode) => {
+    // Sang khoảng ngày: mặc định lấy trọn tháng đang xem, chặn ở hôm nay.
+    if (m === 'range' && mode === 'month') {
+      const today = isoToday();
+      setRangeFrom(monthStartIso(period));
+      setRangeTo(monthEndIso(period) > today ? today : monthEndIso(period));
+    }
+    setMode(m);
+  };
+
+  const inView = (dd: string) => {
+    if (mode === 'month') return inPeriod(dd, period);
+    const iso = toIso(dd);
+    return !!iso && iso >= lo && iso <= hi;
+  };
+  const viewLabel = mode === 'month'
+    ? monthLabel(period).toLowerCase()
+    : `khoảng ${toDdmmyyyy(lo)} – ${toDdmmyyyy(hi)}`;
+
   const [modal, setModal] = useState<AdsFbTaskLog | null>(null);
   const [dialog, setDialog] = useState<{ id: string; label: string } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -61,7 +96,11 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
   const targetFor = (empId: string, dd: string) =>
     targets.find((t) => t.employeeId === empId && t.period === periodOf(dd)) ?? null;
 
-  const personLogs = useMemo(() => logs.filter((l) => l.employeeId === activeId && inPeriod(l.date, period)), [logs, activeId, period]);
+  const personLogs = useMemo(
+    () => logs.filter((l) => l.employeeId === activeId && inView(l.date)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [logs, activeId, mode, period, lo, hi],
+  );
 
   const byDay = useMemo(() => {
     const map = new Map<string, AdsFbTaskLog[]>();
@@ -100,7 +139,28 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
             Nhập chỉ số quảng cáo mỗi ngày — ROI/CPA và điểm 5 chỉ tiêu (Doanh thu 40% · ROI 30% · CPA 10% · Tỷ lệ chốt 10% · Content mới 10%) tự tính.
           </p>
         </div>
-        <MonthPicker value={period} onChange={setPeriod} />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+            {([['month', 'Theo tháng'], ['range', 'Khoảng ngày']] as [ViewMode, string][]).map(([m, label]) => (
+              <button key={m} onClick={() => switchMode(m)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  mode === m ? 'bg-white text-[#D32027] soft-shadow' : 'text-slate-500 hover:text-slate-700'
+                }`}>{label}</button>
+            ))}
+          </div>
+          {mode === 'month' ? (
+            <MonthPicker value={period} onChange={setPeriod} />
+          ) : (
+            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1.5 soft-shadow">
+              <span className="material-symbols-outlined text-[18px] text-[#D32027]">date_range</span>
+              <input type="date" value={rangeFrom} max={isoToday()} onChange={(e) => setRangeFrom(e.target.value)}
+                className="text-sm font-semibold border-none outline-none bg-transparent text-slate-700" />
+              <span className="text-slate-400 font-bold">–</span>
+              <input type="date" value={rangeTo} max={isoToday()} onChange={(e) => setRangeTo(e.target.value)}
+                className="text-sm font-semibold border-none outline-none bg-transparent text-slate-700" />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tab người + nút thêm */}
@@ -133,7 +193,7 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
         <SumBox label="Tổng doanh thu" value={fmtMoney(sum.revenue)} unit="đ" accent="text-emerald-600" />
         <SumBox label="ROAS chung" value={fmtNum(sum.roas)} accent="text-sky-600" />
         <SumBox label="CPA chung" value={fmtMoney(sum.cpa)} unit="đ" accent="text-amber-600" />
-        <SumBox label="Điểm TB tháng" value={fmtScore(sum.avgScore)} accent="text-[#D32027]" />
+        <SumBox label={mode === 'month' ? 'Điểm TB tháng' : 'Điểm TB khoảng'} value={fmtScore(sum.avgScore)} accent="text-[#D32027]" />
       </div>
 
       {!canEdit && (
@@ -144,7 +204,7 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
       <div className="space-y-3">
         {byDay.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200/70 soft-shadow py-10 text-center text-slate-400">
-            Chưa có báo cáo trong {monthLabel(period).toLowerCase()}.
+            Chưa có báo cáo trong {viewLabel}.
           </div>
         ) : byDay.map(([day, items]) => (
           <div key={day} className="rounded-xl border border-slate-200/70 bg-white soft-shadow overflow-hidden">
@@ -159,26 +219,28 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
                 const open = expanded.has(l.id);
                 return (
                   <div key={l.id}>
-                    {/* Dòng tóm tắt */}
+                    {/* Dòng tóm tắt — MỌI khối hai bên đều cố định bề rộng để các ngày
+                        thẳng cột với nhau (badge hình thức, icon cảnh báo, điểm, xếp loại
+                        vốn dài ngắn khác nhau nên trước đây kéo lệch lưới chỉ số). */}
                     <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-rose-50/30 cursor-pointer" onClick={() => toggle(l.id)}>
-                      <span className={`material-symbols-outlined text-[18px] text-slate-300 transition-transform ${open ? 'rotate-90' : ''}`}>chevron_right</span>
-                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-lg border whitespace-nowrap ${formTypeStyle(l.formType)}`}>{l.formType}</span>
-                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs min-w-0">
+                      <span className={`material-symbols-outlined text-[18px] text-slate-300 transition-transform flex-shrink-0 ${open ? 'rotate-90' : ''}`}>chevron_right</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border whitespace-nowrap text-center w-[76px] flex-shrink-0 ${formTypeStyle(l.formType)}`}>{l.formType}</span>
+                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-1 text-xs min-w-0">
                         <Stat label="Chi tiêu" value={fmtMoney(l.spend)} />
                         <Stat label="Doanh thu" value={fmtMoney(l.revenue)} />
                         <Stat label="Đơn" value={String(l.orders)} />
+                        <Stat label="Số data" value={String(l.dataCount)} />
                         <Stat label="ROAS" value={fmtNum(sc.kpis.roas)} accent="text-sky-700" />
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {adsFbContentCheck(l).mismatch && (
-                          <span className="material-symbols-outlined text-[17px] text-amber-500"
-                            title={`Content mới khai ${l.contentTest} nhưng có ${adsFbContentCheck(l).count} link`}>link_off</span>
-                        )}
-                        <div className="text-center">
+                        {/* Luôn chừa chỗ cho icon lệch content — ẩn đi khi khớp, để khỏi xê dịch cột. */}
+                        <span className={`material-symbols-outlined text-[17px] text-amber-500 ${adsFbContentCheck(l).mismatch ? '' : 'invisible'}`}
+                          title={`Content mới khai ${l.contentTest} nhưng có ${adsFbContentCheck(l).count} link`}>link_off</span>
+                        <div className="text-center w-[46px]">
                           <div className="text-[10px] font-bold uppercase text-slate-400 leading-tight">Tổng</div>
                           <div className="text-lg font-extrabold text-[#D32027] tabular-nums leading-tight">{fmtScore(sc.total)}</div>
                         </div>
-                        <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${sc.rank.color}`}>{sc.rank.label}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap text-center w-[72px] ${sc.rank.color}`}>{sc.rank.label}</span>
                       </div>
                       {canEdit && (
                         <div className="flex-shrink-0 flex items-center" onClick={(e) => e.stopPropagation()}>
@@ -258,7 +320,16 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
           onClose={() => setModal(null)}
           onSubmit={(l) => {
             if (l.id) onUpdate(l.id, l);
-            else { onAdd({ ...l, id: 'afb_' + Date.now() }); setPeriod(periodOf(l.date) || period); }
+            else {
+              onAdd({ ...l, id: 'afb_' + Date.now() });
+              // Kéo bộ lọc về đúng ngày vừa nhập để báo cáo mới không bị ẩn.
+              if (mode === 'month') setPeriod(periodOf(l.date) || period);
+              else {
+                const iso = toIso(l.date);
+                if (iso && iso < lo) setRangeFrom(iso);
+                if (iso && iso > hi) setRangeTo(iso);
+              }
+            }
             setModal(null);
           }}
         />
