@@ -3,8 +3,14 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Legend,
 } from 'recharts';
-import { MediaTaskLog, MediaKpiEntry, Employee, UserSession, MEDIA_VIDEO_TYPES } from '../types';
-import { countVideos, videoTypeTotalsFromLogs, inPeriod, isVideoContent, kpiTotal, kpiRank, weekdayVi } from '../lib/media';
+import {
+  MediaTaskLog, MediaKpiEntry, Employee, UserSession, MEDIA_VIDEO_TYPES,
+  AffiliateChannel, DailyReport,
+} from '../types';
+import {
+  countVideos, videoTypeTotalsFromLogs, inPeriod, isVideoContent, kpiTotal, kpiRank, weekdayVi,
+  mediaTiktokRevenue, mediaFbAdsRevenue, mediaReach, isLeaderEntry, revenueKind,
+} from '../lib/media';
 import { KpiBox, ChartCard, Delta, MonthPicker, tooltipStyle, compact } from './dashboardKit';
 import MediaKpiComponent from './MediaKpiComponent';
 
@@ -12,6 +18,9 @@ interface Props {
   logs: MediaTaskLog[];
   kpiEntries: MediaKpiEntry[];
   employees: Employee[];
+  /** Kênh + báo cáo ngày của team Content — nguồn của doanh thu & reach ở khối thẻ. */
+  channels: AffiliateChannel[];
+  reports: DailyReport[];
   session: UserSession;
   onNavigateToTab: (tab: string) => void;
   onAddKpi: (entry: MediaKpiEntry) => void;
@@ -20,6 +29,19 @@ interface Props {
 }
 
 const fmtVnd = (v: number) => v >= 1_000_000 ? (v / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'tr đ' : v.toLocaleString('vi-VN') + ' đ';
+
+/** Dòng phụ của thẻ tổng quan: "Mục tiêu X · đạt Y%" (mục tiêu lấy từ KPI Leader). */
+function TargetNote({ target, pct }: { target: string; pct: number | null }) {
+  if (!target) return <span className="text-[11px] text-slate-400">Leader chưa đặt mục tiêu</span>;
+  const tone = pct === null ? 'text-slate-400'
+    : pct >= 100 ? 'text-green-700' : pct >= 60 ? 'text-amber-600' : 'text-rose-600';
+  return (
+    <span className="text-[11px] text-slate-400">
+      Mục tiêu {target}
+      {pct !== null && <> · <b className={`font-bold ${tone}`}>đạt {pct}%</b></>}
+    </span>
+  );
+}
 
 export default function MediaOverviewComponent(props: Props) {
   const { logs, kpiEntries, employees, session, onAddKpi, onUpdateKpi, onDeleteKpi } = props;
@@ -64,7 +86,7 @@ export default function MediaOverviewComponent(props: Props) {
 
 const nowMonthKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 
-function OverviewDashboard({ logs, kpiEntries, employees, onNavigateToTab }: Props) {
+function OverviewDashboard({ logs, kpiEntries, employees, channels, reports, onNavigateToTab }: Props) {
   // Ô chọn tháng dạng lịch (input type=month) — LUÔN mặc định tháng hiện tại; đổi tay để xem tháng khác.
   const [period, setPeriod] = useState(nowMonthKey());
 
@@ -73,13 +95,25 @@ function OverviewDashboard({ logs, kpiEntries, employees, onNavigateToTab }: Pro
 
   const totalVideo = countVideos(rows);
 
-  // Doanh thu + reach lấy từ KPI Leader của kỳ.
   const kpiPeriod = kpiEntries.filter((e) => e.period === period);
-  const findKpi = (kw: string) => kpiPeriod.find((e) => e.metric.toLowerCase().includes(kw.toLowerCase()));
-  const reachKpi = findKpi('reach');
-  const tiktokKpi = findKpi('TikTok Seller');
-  const adsKpi = findKpi('Facebook ADS');
-  const totalReach = reachKpi?.actualValue ?? 0;
+
+  /* ── Khối thẻ = SỐ CỦA CẢ TEAM, tức đúng bằng KPI của Leader (Khải) ──
+     • Thực tế  → tính thẳng từ báo cáo team Content, KHÔNG đọc actualValue của
+       dòng KPI nào cả: TikTok = 100% doanh thu kênh TikTok Brand + Real KOC,
+       FB Ads = 100% dòng "Facebook Ads", Reach = 5 kênh thương hiệu.
+     • Mục tiêu → lấy từ dòng KPI CỦA LEADER trong kỳ. Trước đây dò tên chỉ tiêu
+       trên toàn bộ nhân sự nên thẻ "DT TikTok Seller" ăn nhầm dòng của Sơn
+       ("TikTok Seller + ADS Facebook" — đã chia đôi TikTok và cộng cả FB Ads). */
+  const totalReach = useMemo(() => mediaReach(channels, reports, period), [channels, reports, period]);
+  const tiktokRevenue = useMemo(() => mediaTiktokRevenue(channels, reports, period), [channels, reports, period]);
+  const fbAdsRevenue = useMemo(() => mediaFbAdsRevenue(reports, period), [reports, period]);
+
+  const leaderKpi = kpiPeriod.filter(isLeaderEntry);
+  const reachTarget = leaderKpi.find((e) => e.metric.toLowerCase().includes('reach'))?.targetValue ?? 0;
+  const tiktokTarget = leaderKpi.find((e) => revenueKind(e) === 'tiktok')?.targetValue ?? 0;
+  const adsTarget = leaderKpi.find((e) => revenueKind(e) === 'fbAds')?.targetValue ?? 0;
+  // Mục tiêu chưa đặt (=0) thì không hiện % để khỏi chia cho 0.
+  const pctOf = (actual: number, target: number) => (target > 0 ? Math.round((actual / target) * 100) : null);
 
   const donut = videoTypeTotalsFromLogs(rows).filter((d) => d.value > 0);
 
@@ -114,13 +148,13 @@ function OverviewDashboard({ logs, kpiEntries, employees, onNavigateToTab }: Pro
           <Delta delta={12} />
         </KpiBox>
         <KpiBox label="Tổng Reach" value={totalReach ? compact(totalReach) : '—'} icon="visibility" accent="bg-sky-50 text-sky-600">
-          <span className="text-[11px] text-slate-400">Nguồn: KPI reach</span>
+          <TargetNote target={reachTarget ? compact(reachTarget) : ''} pct={pctOf(totalReach, reachTarget)} />
         </KpiBox>
-        <KpiBox label="DT TikTok Seller" value={tiktokKpi ? fmtVnd(tiktokKpi.actualValue) : '—'} icon="storefront" accent="bg-amber-50 text-amber-600">
-          <span className="text-[11px] text-slate-400">Mục tiêu {tiktokKpi ? fmtVnd(tiktokKpi.targetValue) : '—'}</span>
+        <KpiBox label="DT TikTok Seller" value={fmtVnd(tiktokRevenue)} icon="storefront" accent="bg-amber-50 text-amber-600">
+          <TargetNote target={tiktokTarget ? fmtVnd(tiktokTarget) : ''} pct={pctOf(tiktokRevenue, tiktokTarget)} />
         </KpiBox>
-        <KpiBox label="DT Facebook ADS" value={adsKpi ? fmtVnd(adsKpi.actualValue) : '—'} icon="ads_click" accent="bg-emerald-50 text-emerald-600">
-          {adsKpi && <span className="text-[11px] font-bold text-green-700">Đạt {Math.round(adsKpi.actualValue / adsKpi.targetValue * 100)}% KPI</span>}
+        <KpiBox label="DT Facebook ADS" value={fmtVnd(fbAdsRevenue)} icon="ads_click" accent="bg-emerald-50 text-emerald-600">
+          <TargetNote target={adsTarget ? fmtVnd(adsTarget) : ''} pct={pctOf(fbAdsRevenue, adsTarget)} />
         </KpiBox>
       </div>
 
