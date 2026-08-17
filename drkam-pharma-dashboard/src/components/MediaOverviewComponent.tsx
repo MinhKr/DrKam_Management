@@ -9,7 +9,7 @@ import {
 } from '../types';
 import {
   countVideos, videoTypeTotalsFromLogs, inPeriod, isVideoContent, kpiTotal, kpiRank, weekdayVi,
-  mediaTiktokRevenue, mediaFbAdsRevenue, mediaReach, isLeaderEntry, revenueKind, MEDIA_LEADER_NAME,
+  mediaTiktokRevenue, mediaFbAdsRevenue, mediaReach, isLeaderEntry, revenueKind,
 } from '../lib/media';
 import { KpiBox, ChartCard, Delta, MonthPicker, tooltipStyle, compact } from './dashboardKit';
 import MediaKpiComponent from './MediaKpiComponent';
@@ -139,12 +139,7 @@ function OverviewDashboard({ logs, kpiEntries, employees, channels, reports, onN
   return (
     <div className="space-y-5 text-slate-800">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <span className="text-sm font-bold text-slate-600">Sản xuất video · số video tự đếm từ báo cáo ngày</span>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            Doanh thu &amp; reach là số của CẢ TEAM (nguồn: báo cáo team Content) — khớp KPI của {MEDIA_LEADER_NAME}.
-          </p>
-        </div>
+        <span className="text-sm font-bold text-slate-600">Sản xuất video · số video tự đếm từ báo cáo ngày</span>
         <MonthPicker value={period} onChange={setPeriod} />
       </div>
 
