@@ -219,26 +219,28 @@ export default function AdsFbDailyReportComponent({ logs, targets, employees, se
                 const open = expanded.has(l.id);
                 return (
                   <div key={l.id}>
-                    {/* Dòng tóm tắt */}
+                    {/* Dòng tóm tắt — MỌI khối hai bên đều cố định bề rộng để các ngày
+                        thẳng cột với nhau (badge hình thức, icon cảnh báo, điểm, xếp loại
+                        vốn dài ngắn khác nhau nên trước đây kéo lệch lưới chỉ số). */}
                     <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-rose-50/30 cursor-pointer" onClick={() => toggle(l.id)}>
-                      <span className={`material-symbols-outlined text-[18px] text-slate-300 transition-transform ${open ? 'rotate-90' : ''}`}>chevron_right</span>
-                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-lg border whitespace-nowrap ${formTypeStyle(l.formType)}`}>{l.formType}</span>
-                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs min-w-0">
+                      <span className={`material-symbols-outlined text-[18px] text-slate-300 transition-transform flex-shrink-0 ${open ? 'rotate-90' : ''}`}>chevron_right</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border whitespace-nowrap text-center w-[76px] flex-shrink-0 ${formTypeStyle(l.formType)}`}>{l.formType}</span>
+                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-1 text-xs min-w-0">
                         <Stat label="Chi tiêu" value={fmtMoney(l.spend)} />
                         <Stat label="Doanh thu" value={fmtMoney(l.revenue)} />
                         <Stat label="Đơn" value={String(l.orders)} />
+                        <Stat label="Số data" value={String(l.dataCount)} />
                         <Stat label="ROAS" value={fmtNum(sc.kpis.roas)} accent="text-sky-700" />
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {adsFbContentCheck(l).mismatch && (
-                          <span className="material-symbols-outlined text-[17px] text-amber-500"
-                            title={`Content mới khai ${l.contentTest} nhưng có ${adsFbContentCheck(l).count} link`}>link_off</span>
-                        )}
-                        <div className="text-center">
+                        {/* Luôn chừa chỗ cho icon lệch content — ẩn đi khi khớp, để khỏi xê dịch cột. */}
+                        <span className={`material-symbols-outlined text-[17px] text-amber-500 ${adsFbContentCheck(l).mismatch ? '' : 'invisible'}`}
+                          title={`Content mới khai ${l.contentTest} nhưng có ${adsFbContentCheck(l).count} link`}>link_off</span>
+                        <div className="text-center w-[46px]">
                           <div className="text-[10px] font-bold uppercase text-slate-400 leading-tight">Tổng</div>
                           <div className="text-lg font-extrabold text-[#D32027] tabular-nums leading-tight">{fmtScore(sc.total)}</div>
                         </div>
-                        <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${sc.rank.color}`}>{sc.rank.label}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap text-center w-[72px] ${sc.rank.color}`}>{sc.rank.label}</span>
                       </div>
                       {canEdit && (
                         <div className="flex-shrink-0 flex items-center" onClick={(e) => e.stopPropagation()}>
