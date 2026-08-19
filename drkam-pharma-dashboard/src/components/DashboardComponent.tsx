@@ -17,7 +17,7 @@ import {
 } from '../lib/contentKpi';
 // KPI doanh thu THEO NGƯỜI (migration 0019) — thực hiện suy từ kênh phụ trách.
 import {
-  contentEmployeeRoster, employeeTargetResolver, revenueByEmployee, UNASSIGNED_KEY, UNASSIGNED_LABEL,
+  contentEmployeeRoster, employeeTargetsFromChannels, revenueByEmployee, UNASSIGNED_KEY, UNASSIGNED_LABEL,
 } from '../lib/contentEmployeeKpi';
 // BẢNG MỚI — chi tiết từng kênh (migration 0020); bảng cũ bên dưới giữ nguyên để đối chiếu.
 import {
@@ -282,7 +282,6 @@ function BaoCaoChung({ reports, channels, employees, kpiTargets, onGotoView }: {
         kpiTargets={kpiTargets}
         monthKey={monthKey}
         teamTotal={grandTotal}
-        teamTarget={grandTarget}
       />
 
       {/* Biểu đồ 1 — Thực hiện vs Mục tiêu (thanh tiến độ tự vẽ) */}
@@ -652,9 +651,10 @@ function KpiCard({ label, value, icon, iconNode, tone, sub, subTone = 'muted', t
 
    Đặt ngay dưới KPI chung để nhìn một màn là thấy cả team lẫn từng
    người. Nguồn số:
-     • Mục tiêu   — content_kpi_targets kind='employee', đặt ở màn
-                    "KPI tháng — Team Content" (chưa đặt → dòng vẫn
-                    hiện nhưng % để trống, không đoán bừa).
+     • Mục tiêu   — SUY RA từ bảng KPI mới theo kênh: cộng chỉ tiêu
+                    các kênh người đó phụ trách. Không nhập tay riêng
+                    (chốt với user), nên đặt KPI kênh xong là có ngay
+                    mục tiêu của từng người.
      • Thực hiện  — tổng doanh thu báo cáo ngày của các KÊNH người đó
                     phụ trách (channels.manager_name). Kênh chưa gán
                     người rơi vào dòng "Chưa gán" để tổng luôn khớp
@@ -664,22 +664,22 @@ function KpiCard({ label, value, icon, iconNode, tone, sub, subTone = 'muted', t
    đã trôi qua của tháng — thanh màu chưa tới vạch là đang chậm. Tháng
    đã qua thì vạch nằm ở 100%.
    ════════════════════════════════════════════════════════════════ */
-function EmployeeProgress({ reports, channels, employees, kpiTargets, monthKey, teamTotal, teamTarget }: {
+function EmployeeProgress({ reports, channels, employees, kpiTargets, monthKey, teamTotal }: {
   reports: DailyReport[];          // báo cáo ĐÃ lọc theo tháng đang xem
   channels: AffiliateChannel[];
   employees: Employee[];
   kpiTargets: ContentKpiTarget[];
   monthKey: string;
   teamTotal: number;
-  teamTarget: number;
 }) {
-  const targetOf = employeeTargetResolver(kpiTargets, monthKey);
+  // Mục tiêu của mỗi người = tổng chỉ tiêu các kênh họ phụ trách (bảng KPI mới).
+  const empTarget = employeeTargetsFromChannels(channels, channelTargetResolver(kpiTargets, monthKey));
   const actual = revenueByEmployee(reports, channels, (r) => weekIndex(Number(r.date.split('/')[0])));
 
-  const rows = contentEmployeeRoster(employees, channels, kpiTargets)
+  const rows = contentEmployeeRoster(employees, channels)
     .map((e) => {
       const got = actual.get(e.key);
-      return { ...e, target: targetOf(e.key), total: got?.total ?? 0, weeks: got?.weeks ?? [0, 0, 0, 0] };
+      return { ...e, target: empTarget.get(e.key) ?? 0, total: got?.total ?? 0, weeks: got?.weeks ?? [0, 0, 0, 0] };
     })
     // Người vừa không có chỉ tiêu vừa không có doanh thu thì không cần theo dõi.
     .filter((r) => r.target > 0 || r.total > 0)
@@ -690,6 +690,8 @@ function EmployeeProgress({ reports, channels, employees, kpiTargets, monthKey, 
     });
 
   const unassigned = actual.get(UNASSIGNED_KEY)?.total ?? 0;
+  // Chỉ tiêu của các kênh chưa gán người — phần KPI chưa về tay ai.
+  const unassignedTarget = empTarget.get(UNASSIGNED_KEY) ?? 0;
 
   // Nhịp tiến độ theo ngày — tháng đang chạy mới có "ngày còn lại".
   const days = lastDayOfMonth(monthKey);
@@ -711,7 +713,7 @@ function EmployeeProgress({ reports, channels, employees, kpiTargets, monthKey, 
             Tiến độ doanh thu theo nhân viên
           </h3>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            Thực hiện = doanh thu các kênh người đó phụ trách · Mục tiêu đặt ở màn “KPI tháng — Team Content”.
+            Thực hiện = doanh thu các kênh người đó phụ trách · Mục tiêu = tổng KPI các kênh đó (bảng KPI mới).
           </p>
         </div>
         {withTarget > 0 && (
@@ -763,7 +765,7 @@ function EmployeeProgress({ reports, channels, employees, kpiTargets, monthKey, 
 
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400">
                   {r.target === 0 ? (
-                    <span className="text-amber-600 font-semibold">Chưa đặt KPI tháng này</span>
+                    <span className="text-amber-600 font-semibold">Kênh phụ trách chưa có chỉ tiêu tháng này</span>
                   ) : gap > 0 ? (
                     <>
                       <span>Còn thiếu <b className="text-slate-600">{vndShort(gap)}</b></span>
@@ -797,13 +799,14 @@ function EmployeeProgress({ reports, channels, employees, kpiTargets, monthKey, 
         </div>
       )}
 
-      {/* Đối chiếu tổng: KPI đã giao cho người vs KPI cả team */}
+      {/* Đối chiếu tổng: KPI đã về tay người vs KPI của kênh chưa gán ai */}
       <div className="px-5 py-2.5 border-t border-slate-100 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-400">
-        <span>Tổng KPI đã giao cho nhân viên: <b className="text-slate-600 tabular-nums">{assignedTarget ? vndShort(assignedTarget) : '—'}</b></span>
-        <span>KPI cả team: <b className="text-slate-600 tabular-nums">{teamTarget ? vndShort(teamTarget) : '—'}</b></span>
+        <span>Tổng KPI đã về tay nhân viên: <b className="text-slate-600 tabular-nums">{assignedTarget ? vndShort(assignedTarget) : '—'}</b></span>
         <span>Team đã đạt: <b className="text-slate-600 tabular-nums">{vndShort(teamTotal)}</b></span>
-        {assignedTarget > 0 && teamTarget > 0 && assignedTarget < teamTarget && (
-          <span className="text-amber-600 font-semibold">Còn {vndShort(teamTarget - assignedTarget)} chỉ tiêu chưa giao cho ai</span>
+        {unassignedTarget > 0 && (
+          <span className="text-amber-600 font-semibold">
+            {vndShort(unassignedTarget)} chỉ tiêu thuộc kênh chưa gán người phụ trách
+          </span>
         )}
         <span className="ml-auto">Vạch xám trên thanh = nhịp kỳ vọng đến ngày {dayNow}/{days}</span>
       </div>

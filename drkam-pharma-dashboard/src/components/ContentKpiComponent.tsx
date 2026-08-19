@@ -5,12 +5,11 @@
  * Màn này đặt 2 loại chỉ tiêu của một tháng:
  *   1. THEO KÊNH      — 13 hạng mục doanh thu + 2 dòng view/reach (migration 0015),
  *                       đúng danh sách hiển thị ở Tổng quan > Báo cáo chung.
- *   2. THEO NHÂN VIÊN — chỉ tiêu doanh thu riêng của từng người (migration 0019),
- *                       theo bảng KPIs công ty (Content TikTok 240tr · Fanpage +
- *                       SEO 240tr · Marketing AI 80tr…). Thực hiện = tổng doanh
- *                       thu các kênh người đó phụ trách, tiến độ xem ở Tổng quan.
- * Danh mục kênh cố định trong src/lib/contentKpi.ts, danh sách nhân sự lấy từ
- * người phụ trách kênh (src/lib/contentEmployeeKpi.ts) nên không lệch nhau được.
+ *   2. THEO KÊNH (MỚI) — 1 dòng cho MỖI KÊNH đang quản lý (migration 0020),
+ *                       TikTok AI tách chi tiết từng kênh; lấy thẳng danh sách
+ *                       kênh nên thêm kênh mới là tự có dòng.
+ * Danh mục bảng cũ cố định trong src/lib/contentKpi.ts, bảng mới dựng từ danh
+ * sách kênh (src/lib/contentChannelKpi.ts) nên 2 màn không lệch nhau được.
  *
  * PHẠM VI: màn này CHỈ để đặt số (chốt với user) — không hiển thị thực hiện /
  * % đạt, vì phần theo dõi tiến trình đã có ở Tổng quan > Báo cáo chung.
@@ -26,11 +25,8 @@
  * giao lại từng tháng) nên để trống đến khi được đặt.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { UserSession, ContentKpiTarget, Employee, AffiliateChannel } from '../types';
+import { UserSession, ContentKpiTarget, AffiliateChannel } from '../types';
 import { CONTENT_KPI_ITEMS, targetResolver, hasSavedTargets, BadgeKind } from '../lib/contentKpi';
-import {
-  contentEmployeeRoster, employeeItemId, employeeTargetResolver, suggestEmployeeTargets,
-} from '../lib/contentEmployeeKpi';
 // Bảng KPI MỚI — chi tiết từng kênh (migration 0020), chạy song song bảng cũ.
 import {
   CHANNEL_GROUPS, ChannelKpiRow, channelKpiRows, channelTargetResolver,
@@ -39,7 +35,6 @@ import { MonthPicker, shiftMonthKey } from './dashboardKit';
 
 interface Props {
   targets: ContentKpiTarget[];
-  employees: Employee[];
   channels: AffiliateChannel[];
   session: UserSession;
   onSave: (period: string, rows: ContentKpiTarget[]) => void;
@@ -56,13 +51,13 @@ type Line = {
   id: string;                       // = item_id lưu xuống DB
   label: string;
   kind: ContentKpiTarget['kind'];
-  badge: BadgeKind | 'person';
+  badge: BadgeKind;
   saved: number;
   value: number;
   dirty: boolean;
 };
 
-export default function ContentKpiComponent({ targets, employees, channels, session, onSave }: Props) {
+export default function ContentKpiComponent({ targets, channels, session, onSave }: Props) {
   const [period, setPeriod] = useState(nowMonthKey);
   const [draft, setDraft] = useState<Record<string, string>>({});   // itemId → chuỗi số đang gõ
   const [notice, setNotice] = useState('');
@@ -75,12 +70,7 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
   useEffect(() => { setDraft({}); }, [period]);
 
   const savedFor = useMemo(() => targetResolver(targets, period), [targets, period]);
-  const empSavedFor = useMemo(() => employeeTargetResolver(targets, period), [targets, period]);
   const isSetup = useMemo(() => hasSavedTargets(targets, period), [targets, period]);
-  const roster = useMemo(
-    () => contentEmployeeRoster(employees, channels, targets),
-    [employees, channels, targets],
-  );
 
   /** Ghép số đã lưu + số đang gõ thành 1 dòng nhập. */
   const mkLine = (o: Omit<Line, 'value' | 'dirty'>): Line => {
@@ -92,10 +82,6 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
   const lines = CONTENT_KPI_ITEMS.map((item) => mkLine({
     id: item.id, label: item.label, kind: item.kind, badge: item.badge, saved: savedFor(item.id),
   }));
-  const empLines = roster.map((e) => mkLine({
-    id: employeeItemId(e.name), label: e.name, kind: 'employee', badge: 'person', saved: empSavedFor(e.key),
-  }));
-
   // BẢNG MỚI — mỗi kênh đang quản lý 1 dòng (TikTok AI tách chi tiết từng kênh).
   const chTargetOf = useMemo(() => channelTargetResolver(targets, period), [targets, period]);
   const chRows = useMemo(() => channelKpiRows(channels), [channels]);
@@ -106,7 +92,7 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
 
   const revLines = lines.filter((l) => l.kind === 'revenue');
   const vrLines = lines.filter((l) => l.kind === 'viewreach');
-  const allLines = [...lines, ...empLines, ...chLines.map((x) => x.line)];
+  const allLines = [...lines, ...chLines.map((x) => x.line)];
   const dirtyLines = allLines.filter((l) => l.dirty);
 
   const chTotal = chLines.reduce((s, x) => s + x.line.value, 0);
@@ -114,12 +100,6 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
 
   const totalTarget = revLines.reduce((s, l) => s + l.value, 0);
   const withTarget = revLines.filter((l) => l.value > 0).length;
-  const empTotal = empLines.reduce((s, l) => s + l.value, 0);
-  const empWithTarget = empLines.filter((l) => l.value > 0).length;
-  // Tổng KPI giao cho người nên khớp tổng KPI giao cho kênh — lệch là có người thiếu/thừa
-  // chỉ tiêu. Đối chiếu với BẢNG MỚI nếu tháng này đã đặt, chưa đặt thì lấy bảng cũ.
-  const baseTarget = chTotal > 0 ? chTotal : totalTarget;
-  const empGap = empTotal - baseTarget;
 
   const setValue = (itemId: string, raw: string) => setDraft((p) => ({ ...p, [itemId]: onlyDigits(raw) }));
 
@@ -140,7 +120,7 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
     }));
     onSave(period, rows);
     setDraft({});
-    flash(`Đã lưu KPI ${monthLabel(period)} — ${chLines.length} kênh (bảng mới) + ${empLines.length} nhân viên + ${lines.length} hạng mục bảng cũ.`);
+    flash(`Đã lưu KPI ${monthLabel(period)} — ${chLines.length} kênh (bảng mới) + ${lines.length} hạng mục bảng cũ.`);
   };
 
   /** Lấy KPI tháng trước làm nháp — vẫn phải bấm "Lưu KPI" mới ghi. */
@@ -151,26 +131,11 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
       return;
     }
     const prevOf = targetResolver(targets, prev);
-    const prevEmpOf = employeeTargetResolver(targets, prev);
     const prevChOf = channelTargetResolver(targets, prev);
     setDraft({
       ...Object.fromEntries(CONTENT_KPI_ITEMS.map((i) => [i.id, String(prevOf(i.id))])),
-      ...Object.fromEntries(roster.map((e) => [employeeItemId(e.name), String(prevEmpOf(e.key))])),
       ...Object.fromEntries(chRows.map((r) => [r.itemId, String(prevChOf(r.key))])),
     });
-  };
-
-  /** Chia chỉ tiêu kênh về từng người theo kênh họ đang phụ trách (số nháp). */
-  const suggestForEmployees = () => {
-    const suggested = suggestEmployeeTargets(channels, (id) => {
-      const typed = draft[id];
-      return typed !== undefined ? Number(typed || 0) : savedFor(id);
-    });
-    setDraft((p) => ({
-      ...p,
-      ...Object.fromEntries(roster.map((e) => [employeeItemId(e.name), String(suggested.get(e.key) ?? 0)])),
-    }));
-    flash('Đã chia chỉ tiêu theo kênh mỗi người đang phụ trách — kiểm tra lại rồi bấm "Lưu KPI".');
   };
 
   /** 1 dòng kênh của bảng mới — có thêm cột người phụ trách. */
@@ -178,7 +143,7 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
     <tr key={line.id} className="group transition-colors hover:bg-rose-50/50">
       <td className={NAME_CELL}>
         <div className="flex items-center gap-2">
-          <ItemBadge kind={line.badge} name={line.label} />
+          <ItemBadge kind={line.badge} />
           <span className="font-semibold text-slate-700 truncate" title={row.name}>{row.name}</span>
         </div>
       </td>
@@ -210,7 +175,7 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
     <tr key={l.id} className="group transition-colors hover:bg-rose-50/50">
       <td className={NAME_CELL}>
         <div className="flex items-center gap-2">
-          <ItemBadge kind={l.badge} name={l.label} />
+          <ItemBadge kind={l.badge} />
           <span className="font-semibold text-slate-700 truncate" title={l.label}>{l.label}</span>
         </div>
       </td>
@@ -264,8 +229,8 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
         </div>
       )}
 
-      {/* 3 thẻ tổng: bảng MỚI theo kênh · KPI giao cho người · bảng CŨ để đối chiếu */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {/* 2 thẻ tổng: bảng MỚI theo kênh · bảng CŨ để đối chiếu */}
+      <div className="grid sm:grid-cols-2 gap-3">
         <div className="bg-white rounded-2xl p-5 border-2 border-[#D32027]/20 soft-shadow">
           <p className="text-[11px] font-bold uppercase tracking-wider text-[#D32027]">
             Bảng mới · KPI theo kênh · {monthLabel(period)}
@@ -279,20 +244,6 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
             </p>
           )}
         </div>
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Tổng KPI giao cho nhân viên</p>
-          <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums mt-1">{fmt(empTotal)} đ</div>
-          <p className="text-[11px] text-slate-400 mt-1">{empWithTarget}/{empLines.length} nhân viên có chỉ tiêu</p>
-          {baseTarget > 0 && empTotal > 0 && empGap !== 0 && (
-            <p className={`text-[11px] mt-2 flex items-center gap-1 ${empGap < 0 ? 'text-amber-600' : 'text-blue-600'}`}>
-              <span className="material-symbols-outlined text-[14px]">{empGap < 0 ? 'warning' : 'trending_up'}</span>
-              {empGap < 0
-                ? `Thấp hơn tổng KPI theo kênh ${fmt(-empGap)} đ`
-                : `Cao hơn tổng KPI theo kênh ${fmt(empGap)} đ`}
-            </p>
-          )}
-        </div>
-
         <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Bảng cũ · KPI theo hạng mục</p>
           <div className="text-3xl font-extrabold text-slate-500 tracking-tight tabular-nums mt-1">{fmt(totalTarget)} đ</div>
@@ -354,49 +305,6 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
                   <td className={CELL} />
                   <td className={`${CELL} text-right tabular-nums text-slate-900`}>{fmt(chTotal)}</td>
                   <td className={`${CELL} text-right tabular-nums text-slate-400`}>{fmt(Math.round(chTotal / 4))}</td>
-                </tr>
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-
-      {/* Bảng KPI theo nhân viên */}
-      <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">
-        <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100">
-          <div>
-            <h3 className="text-sm font-bold text-slate-800 font-display">Chỉ tiêu doanh thu theo nhân viên</h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Thực hiện = doanh thu các kênh người đó phụ trách (gán ở tab Quản lý kênh) · tiến độ xem ở Tổng quan.
-            </p>
-          </div>
-          {canEdit && empLines.length > 0 && (
-            <button onClick={suggestForEmployees}
-              className="text-[11px] font-bold text-slate-500 hover:text-[#D32027] flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-slate-50">
-              <span className="material-symbols-outlined text-[15px]">call_split</span>Chia theo kênh phụ trách
-            </button>
-          )}
-        </div>
-        <div className="overflow-x-auto">
-          {empLines.length === 0 ? (
-            <p className="px-4 py-6 text-xs text-slate-400 text-center">
-              Chưa có nhân sự nào phụ trách kênh — gán người phụ trách ở tab <b>Quản lý kênh</b> rồi quay lại đặt KPI.
-            </p>
-          ) : (
-            <table className="w-full text-xs border-separate border-spacing-0 min-w-[560px]">
-              <thead>
-                <tr>
-                  <th className={TH_NAME}>Nhân viên</th>
-                  <th className={TH}>KPI tháng (đ)</th>
-                  <th className={TH}>≈ Mục tiêu tuần</th>
-                </tr>
-              </thead>
-              <tbody>
-                {empLines.map((l) => renderRow(l, 'đ'))}
-                <tr className="bg-slate-50 font-bold">
-                  <td className={`${NAME_BASE} bg-slate-50 text-slate-700`}>Tổng KPI nhân viên</td>
-                  <td className={`${CELL} text-right tabular-nums text-slate-900`}>{fmt(empTotal)}</td>
-                  <td className={`${CELL} text-right tabular-nums text-slate-400`}>{fmt(Math.round(empTotal / 4))}</td>
                 </tr>
               </tbody>
             </table>
@@ -494,19 +402,8 @@ const TH_BASE = 'text-[10px] font-bold uppercase tracking-wide text-slate-400 bo
 const TH = `px-3 py-2.5 text-right whitespace-nowrap bg-slate-50 ${TH_BASE}`;
 const TH_NAME = `${NAME_BASE} bg-slate-50 text-left ${TH_BASE}`;
 
-/** Chữ cái đầu của tên — dùng cho avatar chữ của dòng nhân viên. */
-const initialsOf = (name: string) =>
-  name.trim().split(/\s+/).slice(-2).map((w) => w[0] ?? '').join('').toUpperCase() || '?';
-
-/** Chấm màu nền tảng (hoặc avatar chữ với dòng nhân viên) — cùng ngôn ngữ hình ảnh với Tổng quan. */
-function ItemBadge({ kind, name }: { kind: BadgeKind | 'person'; name: string }) {
-  if (kind === 'person') {
-    return (
-      <span className="shrink-0 inline-flex items-center justify-center w-9 h-5 rounded-md text-[9px] font-extrabold text-white bg-[#D32027]">
-        {initialsOf(name)}
-      </span>
-    );
-  }
+/** Chấm màu nền tảng — cùng ngôn ngữ hình ảnh với bảng ở Tổng quan. */
+function ItemBadge({ kind }: { kind: BadgeKind }) {
   const map: Record<BadgeKind, { c: string; t: string }> = {
     tiktok: { c: 'bg-slate-900', t: 'TT' },
     koc: { c: 'bg-pink-500', t: 'KOC' },

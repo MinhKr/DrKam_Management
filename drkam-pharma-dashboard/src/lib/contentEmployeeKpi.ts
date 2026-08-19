@@ -1,10 +1,9 @@
 /**
- * KPI DOANH THU THEO NHÂN VIÊN — TEAM CONTENT (migration 0019).
+ * DOANH THU THEO NHÂN VIÊN — TEAM CONTENT.
  *
- * Ngoài chỉ tiêu theo KÊNH (src/lib/contentKpi.ts), mỗi nhân viên team Content
- * còn có chỉ tiêu DOANH THU RIÊNG theo bảng KPIs của công ty (Content TikTok
- * 240tr · Fanpage + SEO 240tr · Marketing AI 80tr…). Số này lưu CHUNG bảng
- * content_kpi_targets với kind = 'employee', item_id = 'emp:<tên chuẩn hoá>'.
+ * Không có bảng "KPI theo nhân viên" nhập tay nữa (chốt với user — bỏ khỏi màn
+ * KPI): chỉ tiêu của mỗi người SUY RA từ bảng KPI mới theo kênh — cộng chỉ tiêu
+ * các KÊNH người đó phụ trách. Đặt KPI 1 chỗ (theo kênh), tiến độ người tự có.
  *
  * KHỚP BẰNG TÊN — đúng quy ước toàn hệ thống (báo cáo ↔ kênh cũng khớp tên):
  * doanh thu thực hiện của một người = tổng doanh thu các KÊNH người đó phụ
@@ -17,18 +16,9 @@
  * File tách riêng khỏi contentKpi.ts vì cần dùng managerOf() của lib/channels
  * (channels.ts đã import contentKpi.norm — để chung sẽ thành import vòng).
  */
-import { AffiliateChannel, ContentKpiTarget, DailyReport, Employee } from '../types';
-import { norm, CONTENT_LINE_ITEMS } from './contentKpi';
+import { AffiliateChannel, DailyReport, Employee } from '../types';
+import { norm } from './contentKpi';
 import { managerOf } from './channels';
-
-/** Tiền tố id hạng mục KPI nhân viên — để tách khỏi hạng mục theo kênh. */
-export const EMP_ITEM_PREFIX = 'emp:';
-
-/** id hạng mục KPI của một nhân viên (khớp bằng TÊN đã chuẩn hoá). */
-export const employeeItemId = (name: string) => `${EMP_ITEM_PREFIX}${norm(name)}`;
-
-/** Dòng KPI này là chỉ tiêu của một nhân viên? */
-export const isEmployeeItem = (itemId: string) => itemId.startsWith(EMP_ITEM_PREFIX);
 
 /** Khoá của dòng doanh thu không xác định được người phụ trách. */
 export const UNASSIGNED_KEY = '';
@@ -39,15 +29,13 @@ export type ContentEmployee = { key: string; name: string };
 /**
  * Danh sách nhân sự có KPI doanh thu.
  *
- * Gộp 3 nguồn để không sót ai mà cũng không kéo cả công ty vào:
+ * Gộp 2 nguồn để không sót ai mà cũng không kéo cả công ty vào:
  *   1. Người đang phụ trách kênh — nguồn chuẩn của doanh thu thực hiện;
- *   2. Nhân sự có phòng ban chứa chữ "Content" — người chưa được giao kênh nào;
- *   3. Người đã từng được đặt KPI — giữ dòng cũ dù kênh đã chuyển cho người khác.
+ *   2. Nhân sự có phòng ban chứa chữ "Content" — người chưa được giao kênh nào.
  */
 export function contentEmployeeRoster(
   employees: Employee[],
   channels: AffiliateChannel[],
-  targets: ContentKpiTarget[] = [],
 ): ContentEmployee[] {
   const byKey = new Map<string, string>();
   const add = (name: string | undefined) => {
@@ -60,7 +48,6 @@ export function contentEmployeeRoster(
   employees
     .filter((e) => e.status !== 'Đã khóa' && norm(e.department).includes('content'))
     .forEach((e) => add(e.name));
-  targets.filter((t) => isEmployeeItem(t.itemId)).forEach((t) => add(t.itemLabel));
 
   return [...byKey.entries()]
     .map(([key, name]) => ({ key, name }))
@@ -96,44 +83,23 @@ export function revenueByEmployee(
 }
 
 /**
- * Gợi ý chỉ tiêu từng người = cộng chỉ tiêu các hạng mục KÊNH người đó phụ trách.
- * Hạng mục gộp nhiều kênh của nhiều người (vd "TikTok AI") được CHIA ĐỀU theo số
- * kênh mỗi người, nên tổng gợi ý ≈ tổng KPI theo kênh. Chỉ là số nháp — vẫn phải
- * bấm "Lưu KPI" mới ghi.
+ * Chỉ tiêu doanh thu của từng người, SUY RA TỪ BẢNG KPI MỚI THEO KÊNH:
+ * = tổng chỉ tiêu các kênh người đó phụ trách. Kênh chưa gán người cộng vào
+ * khoá '' (dòng "Chưa gán") nên tổng chỉ tiêu các dòng luôn bằng tổng KPI kênh.
+ *
+ * `chTargetOf` là hàm tra chỉ tiêu theo TÊN KÊNH đã chuẩn hoá — lấy từ
+ * channelTargetResolver() của src/lib/contentChannelKpi.ts.
  */
-export function suggestEmployeeTargets(
+export function employeeTargetsFromChannels(
   channels: AffiliateChannel[],
-  targetOf: (itemId: string) => number,
+  chTargetOf: (chKey: string) => number,
 ): Map<string, number> {
-  const sum = new Map<string, number>();
-  CONTENT_LINE_ITEMS.forEach((li) => {
-    const target = targetOf(li.id);
+  const out = new Map<string, number>();
+  channels.forEach((c) => {
+    const target = chTargetOf(norm(c.name));
     if (!target) return;
-    // Kênh thuộc hạng mục này — dùng báo cáo giả để tái dùng đúng luật match của hạng mục.
-    const owners = channels
-      .filter((c) => li.match(c, { channelName: c.name } as DailyReport))
-      .map((c) => norm(managerOf(c)))
-      .filter(Boolean);
-    if (owners.length === 0) return;
-    const share = target / owners.length;
-    owners.forEach((k) => sum.set(k, (sum.get(k) ?? 0) + share));
+    const key = norm(managerOf(c));
+    out.set(key, (out.get(key) ?? 0) + target);
   });
-  return new Map([...sum].map(([k, v]) => [k, Math.round(v)]));
-}
-
-/**
- * Chỉ tiêu đang áp dụng của một nhân viên trong tháng (0 = chưa đặt).
- * KHÔNG có số mặc định trong code: KPI theo người là số công ty giao từng tháng,
- * đoán bừa sẽ ra tiến độ sai — chưa đặt thì màn hình hiện "chưa thiết lập".
- */
-export function employeeTargetResolver(
-  targets: ContentKpiTarget[],
-  period: string,
-): (empKey: string) => number {
-  const saved = new Map(
-    targets
-      .filter((t) => t.period === period && isEmployeeItem(t.itemId))
-      .map((t) => [t.itemId.slice(EMP_ITEM_PREFIX.length), t.targetValue]),
-  );
-  return (empKey: string) => saved.get(empKey) ?? 0;
+  return out;
 }
