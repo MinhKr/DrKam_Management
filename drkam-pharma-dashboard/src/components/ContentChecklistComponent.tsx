@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { ChecklistItem, Employee, UserSession } from '../types';
+import { norm } from '../lib/contentKpi';
 import ConfirmDialog from './ConfirmDialog';
+
+// ── Phòng ban KHÔNG hiện ở checklist công việc ngày ──────────────────────────
+// Checklist là đầu việc sản xuất nội dung nên chỉ dành cho team Content: bỏ team
+// Media, team Ads Facebook và khối HR / Nhân sự - Hành chính (chốt với user).
+// So khớp trên tên phòng ban đã chuẩn hoá (bỏ dấu, viết thường) nên "Nhân sự",
+// "HR", "Hành chính - Nhân sự"… đều khớp.
+const NON_CONTENT_DEPT_KEYS = ['media', 'adsfacebook', 'hr', 'nhansu', 'hanhchinh'];
+const isContentDept = (dept: string) => {
+  const d = norm(dept);
+  return !NON_CONTENT_DEPT_KEYS.some((k) => d.includes(k));
+};
 
 interface ContentChecklistComponentProps {
   checklists: ChecklistItem[];
@@ -104,9 +116,10 @@ export default function ContentChecklistComponent({
   const isMine = (emp: Employee) =>
     currentUserId ? emp.id === currentUserId : emp.name === session.name;
 
-  // Nhân sự content đang hoạt động (bỏ Admin, team Media và team Ads Facebook). Xếp người của mình lên đầu.
+  // Nhân sự content đang hoạt động (bỏ Admin, team Media, team Ads Facebook và khối HR).
+  // Xếp người của mình lên đầu.
   const staff = [...employees]
-    .filter((e) => e.status === 'Hoạt động' && e.role !== 'Admin' && e.department !== 'Media' && e.department !== 'Ads Facebook')
+    .filter((e) => e.status === 'Hoạt động' && e.role !== 'Admin' && isContentDept(e.department))
     .sort((a, b) => {
       const mine = Number(isMine(b)) - Number(isMine(a));
       return mine !== 0 ? mine : a.name.localeCompare(b.name, 'vi');

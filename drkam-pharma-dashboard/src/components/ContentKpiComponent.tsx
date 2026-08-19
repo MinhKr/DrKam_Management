@@ -31,6 +31,10 @@ import { CONTENT_KPI_ITEMS, targetResolver, hasSavedTargets, BadgeKind } from '.
 import {
   contentEmployeeRoster, employeeItemId, employeeTargetResolver, suggestEmployeeTargets,
 } from '../lib/contentEmployeeKpi';
+// Bảng KPI MỚI — chi tiết từng kênh (migration 0020), chạy song song bảng cũ.
+import {
+  CHANNEL_GROUPS, ChannelKpiRow, channelKpiRows, channelTargetResolver,
+} from '../lib/contentChannelKpi';
 import { MonthPicker, shiftMonthKey } from './dashboardKit';
 
 interface Props {
@@ -92,16 +96,30 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
     id: employeeItemId(e.name), label: e.name, kind: 'employee', badge: 'person', saved: empSavedFor(e.key),
   }));
 
+  // BẢNG MỚI — mỗi kênh đang quản lý 1 dòng (TikTok AI tách chi tiết từng kênh).
+  const chTargetOf = useMemo(() => channelTargetResolver(targets, period), [targets, period]);
+  const chRows = useMemo(() => channelKpiRows(channels), [channels]);
+  const chLines = chRows.map((row) => ({
+    row,
+    line: mkLine({ id: row.itemId, label: row.name, kind: 'channel', badge: row.badge, saved: chTargetOf(row.key) }),
+  }));
+
   const revLines = lines.filter((l) => l.kind === 'revenue');
   const vrLines = lines.filter((l) => l.kind === 'viewreach');
-  const dirtyLines = [...lines, ...empLines].filter((l) => l.dirty);
+  const allLines = [...lines, ...empLines, ...chLines.map((x) => x.line)];
+  const dirtyLines = allLines.filter((l) => l.dirty);
+
+  const chTotal = chLines.reduce((s, x) => s + x.line.value, 0);
+  const chWithTarget = chLines.filter((x) => x.line.value > 0).length;
 
   const totalTarget = revLines.reduce((s, l) => s + l.value, 0);
   const withTarget = revLines.filter((l) => l.value > 0).length;
   const empTotal = empLines.reduce((s, l) => s + l.value, 0);
   const empWithTarget = empLines.filter((l) => l.value > 0).length;
-  // Tổng KPI giao cho người nên khớp tổng KPI giao cho kênh — lệch là có người thiếu/thừa chỉ tiêu.
-  const empGap = empTotal - totalTarget;
+  // Tổng KPI giao cho người nên khớp tổng KPI giao cho kênh — lệch là có người thiếu/thừa
+  // chỉ tiêu. Đối chiếu với BẢNG MỚI nếu tháng này đã đặt, chưa đặt thì lấy bảng cũ.
+  const baseTarget = chTotal > 0 ? chTotal : totalTarget;
+  const empGap = empTotal - baseTarget;
 
   const setValue = (itemId: string, raw: string) => setDraft((p) => ({ ...p, [itemId]: onlyDigits(raw) }));
 
@@ -112,7 +130,7 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
    * để tháng đó được chốt số đầy đủ, không còn phụ thuộc số mặc định trong code.
    */
   const save = () => {
-    const rows: ContentKpiTarget[] = [...lines, ...empLines].map((l) => ({
+    const rows: ContentKpiTarget[] = allLines.map((l) => ({
       id: `ckt_${period}_${l.id}`,
       period,
       itemId: l.id,
@@ -122,7 +140,7 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
     }));
     onSave(period, rows);
     setDraft({});
-    flash(`Đã lưu KPI ${monthLabel(period)} — ${lines.length} hạng mục kênh + ${empLines.length} nhân viên. Tổng quan sẽ chấm theo số này.`);
+    flash(`Đã lưu KPI ${monthLabel(period)} — ${chLines.length} kênh (bảng mới) + ${empLines.length} nhân viên + ${lines.length} hạng mục bảng cũ.`);
   };
 
   /** Lấy KPI tháng trước làm nháp — vẫn phải bấm "Lưu KPI" mới ghi. */
@@ -134,9 +152,11 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
     }
     const prevOf = targetResolver(targets, prev);
     const prevEmpOf = employeeTargetResolver(targets, prev);
+    const prevChOf = channelTargetResolver(targets, prev);
     setDraft({
       ...Object.fromEntries(CONTENT_KPI_ITEMS.map((i) => [i.id, String(prevOf(i.id))])),
       ...Object.fromEntries(roster.map((e) => [employeeItemId(e.name), String(prevEmpOf(e.key))])),
+      ...Object.fromEntries(chRows.map((r) => [r.itemId, String(prevChOf(r.key))])),
     });
   };
 
@@ -152,6 +172,39 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
     }));
     flash('Đã chia chỉ tiêu theo kênh mỗi người đang phụ trách — kiểm tra lại rồi bấm "Lưu KPI".');
   };
+
+  /** 1 dòng kênh của bảng mới — có thêm cột người phụ trách. */
+  const renderChannelRow = ({ row, line }: { row: ChannelKpiRow; line: Line }) => (
+    <tr key={line.id} className="group transition-colors hover:bg-rose-50/50">
+      <td className={NAME_CELL}>
+        <div className="flex items-center gap-2">
+          <ItemBadge kind={line.badge} name={line.label} />
+          <span className="font-semibold text-slate-700 truncate" title={row.name}>{row.name}</span>
+        </div>
+      </td>
+      <td className={`${CELL} text-left text-slate-500 whitespace-nowrap`}>
+        {row.manager || <span className="text-amber-600 font-semibold">Chưa gán</span>}
+      </td>
+      <td className={`${CELL} text-right`}>
+        {canEdit ? (
+          <input
+            type="text" inputMode="numeric"
+            value={groupDigits(draft[line.id] !== undefined ? draft[line.id] : (line.saved ? String(line.saved) : ''))}
+            onChange={(e) => setValue(line.id, e.target.value)}
+            placeholder="0"
+            className={`w-36 px-3 py-2 text-sm font-bold text-right tabular-nums rounded-lg border outline-none focus:ring-1 focus:ring-[#D32027] focus:border-[#D32027] ${
+              line.dirty ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'
+            }`}
+          />
+        ) : (
+          <span className="font-bold tabular-nums">{line.value > 0 ? fmt(line.value) : <span className="text-slate-300">—</span>}</span>
+        )}
+      </td>
+      <td className={`${CELL} text-right tabular-nums text-slate-400 whitespace-nowrap`}>
+        {line.value > 0 ? `${fmt(Math.round(line.value / 4))} đ` : <span className="text-slate-300">—</span>}
+      </td>
+    </tr>
+  );
 
   const renderRow = (l: Line, unit: string) => (
     <tr key={l.id} className="group transition-colors hover:bg-rose-50/50">
@@ -211,14 +264,14 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
         </div>
       )}
 
-      {/* 2 thẻ tổng: KPI theo kênh và KPI đã giao cho người — đối chiếu nhau */}
-      <div className="grid sm:grid-cols-2 gap-3">
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-            Tổng KPI doanh thu · {monthLabel(period)}
+      {/* 3 thẻ tổng: bảng MỚI theo kênh · KPI giao cho người · bảng CŨ để đối chiếu */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="bg-white rounded-2xl p-5 border-2 border-[#D32027]/20 soft-shadow">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-[#D32027]">
+            Bảng mới · KPI theo kênh · {monthLabel(period)}
           </p>
-          <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums mt-1">{fmt(totalTarget)} đ</div>
-          <p className="text-[11px] text-slate-400 mt-1">{withTarget}/{revLines.length} hạng mục kênh có chỉ tiêu</p>
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums mt-1">{fmt(chTotal)} đ</div>
+          <p className="text-[11px] text-slate-400 mt-1">{chWithTarget}/{chLines.length} kênh có chỉ tiêu</p>
           {dirtyLines.length > 0 && (
             <p className="text-[11px] text-amber-600 mt-2 flex items-center gap-1">
               <span className="material-symbols-outlined text-[14px]">edit</span>
@@ -230,13 +283,80 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Tổng KPI giao cho nhân viên</p>
           <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums mt-1">{fmt(empTotal)} đ</div>
           <p className="text-[11px] text-slate-400 mt-1">{empWithTarget}/{empLines.length} nhân viên có chỉ tiêu</p>
-          {totalTarget > 0 && empTotal > 0 && empGap !== 0 && (
+          {baseTarget > 0 && empTotal > 0 && empGap !== 0 && (
             <p className={`text-[11px] mt-2 flex items-center gap-1 ${empGap < 0 ? 'text-amber-600' : 'text-blue-600'}`}>
               <span className="material-symbols-outlined text-[14px]">{empGap < 0 ? 'warning' : 'trending_up'}</span>
               {empGap < 0
                 ? `Thấp hơn tổng KPI theo kênh ${fmt(-empGap)} đ`
                 : `Cao hơn tổng KPI theo kênh ${fmt(empGap)} đ`}
             </p>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Bảng cũ · KPI theo hạng mục</p>
+          <div className="text-3xl font-extrabold text-slate-500 tracking-tight tabular-nums mt-1">{fmt(totalTarget)} đ</div>
+          <p className="text-[11px] text-slate-400 mt-1">{withTarget}/{revLines.length} hạng mục có chỉ tiêu</p>
+          <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]">history</span>
+            Giữ nguyên để đối chiếu — không mất dữ liệu cũ.
+          </p>
+        </div>
+      </div>
+
+      {/* BẢNG MỚI — chỉ tiêu doanh thu chi tiết từng kênh */}
+      <div className="bg-white rounded-2xl border-2 border-[#D32027]/20 soft-shadow overflow-hidden">
+        <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 font-display flex items-center gap-2">
+              <span className="px-1.5 py-0.5 rounded bg-[#D32027] text-white text-[9px] font-extrabold uppercase tracking-wide">Bảng mới</span>
+              Chỉ tiêu doanh thu chi tiết theo từng kênh
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Lấy đúng danh sách kênh đang quản lý — TikTok AI tách riêng từng kênh. Thêm kênh mới là tự có dòng.
+            </p>
+          </div>
+          <span className="text-[11px] font-bold text-slate-400 tabular-nums">{chLines.length} kênh</span>
+        </div>
+        <div className="overflow-x-auto">
+          {chLines.length === 0 ? (
+            <p className="px-4 py-6 text-xs text-slate-400 text-center">
+              Chưa có kênh nào bật theo dõi doanh thu — bật ở tab <b>Quản lý kênh</b> rồi quay lại đặt KPI.
+            </p>
+          ) : (
+            <table className="w-full text-xs border-separate border-spacing-0 min-w-[680px]">
+              <thead>
+                <tr>
+                  <th className={TH_NAME}>Kênh</th>
+                  <th className={`${TH} text-left`}>Người phụ trách</th>
+                  <th className={TH}>KPI tháng (đ)</th>
+                  <th className={TH}>≈ Mục tiêu tuần</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CHANNEL_GROUPS.map((g) => {
+                  const items = chLines.filter((x) => x.row.group === g.key);
+                  if (items.length === 0) return null;
+                  const sub = items.reduce((acc, x) => acc + x.line.value, 0);
+                  return (
+                    <React.Fragment key={g.key}>
+                      <tr>
+                        <td colSpan={4} className="px-4 py-1.5 bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-100">
+                          {g.label} · {items.length} kênh · {fmt(sub)} đ
+                        </td>
+                      </tr>
+                      {items.map((x) => renderChannelRow(x))}
+                    </React.Fragment>
+                  );
+                })}
+                <tr className="bg-slate-50 font-bold">
+                  <td className={`${NAME_BASE} bg-slate-50 text-slate-700`}>Tổng KPI bảng mới</td>
+                  <td className={CELL} />
+                  <td className={`${CELL} text-right tabular-nums text-slate-900`}>{fmt(chTotal)}</td>
+                  <td className={`${CELL} text-right tabular-nums text-slate-400`}>{fmt(Math.round(chTotal / 4))}</td>
+                </tr>
+              </tbody>
+            </table>
           )}
         </div>
       </div>
@@ -288,8 +408,13 @@ export default function ContentKpiComponent({ targets, employees, channels, sess
       <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">
         <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100">
           <div>
-            <h3 className="text-sm font-bold text-slate-800 font-display">Chỉ tiêu doanh thu theo kênh</h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">Mục tiêu tuần = chỉ tiêu tháng ÷ 4 — đúng cách chia ở bảng kênh × tuần.</p>
+            <h3 className="text-sm font-bold text-slate-500 font-display flex items-center gap-2">
+              <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 text-[9px] font-extrabold uppercase tracking-wide">Bảng cũ</span>
+              Chỉ tiêu doanh thu theo hạng mục
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Giữ nguyên để đối chiếu với bảng mới — vẫn là số đang chấm ở bảng kênh × tuần của Tổng quan.
+            </p>
           </div>
           {canEdit && (
             <button onClick={copyPrevMonth}

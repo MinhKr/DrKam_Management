@@ -19,6 +19,10 @@ import {
 import {
   contentEmployeeRoster, employeeTargetResolver, revenueByEmployee, UNASSIGNED_KEY, UNASSIGNED_LABEL,
 } from '../lib/contentEmployeeKpi';
+// BẢNG MỚI — chi tiết từng kênh (migration 0020); bảng cũ bên dưới giữ nguyên để đối chiếu.
+import {
+  CHANNEL_GROUPS, channelKpiRows, channelTargetResolver, revenueByChannel,
+} from '../lib/contentChannelKpi';
 
 interface DashboardComponentProps {
   reports: DailyReport[];
@@ -311,10 +315,22 @@ function BaoCaoChung({ reports, channels, employees, kpiTargets, onGotoView }: {
           </div>
         </div>
 
-      {/* Bảng hạng mục × tuần */}
+      {/* BẢNG MỚI — doanh thu chi tiết theo từng kênh (KPI bảng mới) */}
+      <ChannelDetailReport
+        reports={monthReports}
+        channels={channels}
+        kpiTargets={kpiTargets}
+        monthKey={monthKey}
+        weekLabel={weekLabel}
+      />
+
+      {/* Bảng hạng mục × tuần (BẢNG CŨ — giữ để đối chiếu) */}
       <div className="bg-white rounded-2xl border border-slate-200/70 soft-shadow overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-800">Báo cáo chung theo hạng mục — tháng {m}/{y}</h3>
+          <h3 className="text-sm font-bold text-slate-500 flex items-center gap-2">
+            <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 text-[9px] font-extrabold uppercase tracking-wide">Bảng cũ</span>
+            Báo cáo chung theo hạng mục — tháng {m}/{y}
+          </h3>
           <span className="text-xs font-bold text-[#D32027]">Tổng: {vnd(grandTotal)}</span>
         </div>
         <div className="overflow-x-auto">
@@ -798,3 +814,118 @@ function EmployeeProgress({ reports, channels, employees, kpiTargets, monthKey, 
 /** Chữ cái đầu của tên (2 từ cuối) — avatar chữ cho dòng nhân viên. */
 const initialsOf = (name: string) =>
   name.trim().split(/\s+/).slice(-2).map((w) => w[0] ?? '').join('').toUpperCase() || '?';
+
+
+/* ════════════════════════════════════════════════════════════════
+   BẢNG MỚI — DOANH THU CHI TIẾT THEO TỪNG KÊNH (migration 0020)
+
+   Bảng cũ gộp mọi kênh TikTok AI vào 1 dòng nên không biết kênh nào
+   kéo số, kênh nào chết. Bảng này lấy thẳng danh sách kênh đang bật
+   theo dõi doanh thu (tab Quản lý kênh) — thêm kênh là tự có dòng.
+
+   Mục tiêu lấy từ KPI "bảng mới" (kind='channel', đặt ở màn KPI tháng);
+   kênh chưa đặt chỉ tiêu vẫn hiện số thực hiện, cột % để trống. Kênh đã
+   tắt doanh thu nhưng trong tháng vẫn có số thì vẫn hiện (nhóm "Khác")
+   để không nuốt mất doanh thu đã nhập.
+   ════════════════════════════════════════════════════════════════ */
+function ChannelDetailReport({ reports, channels, kpiTargets, monthKey, weekLabel }: {
+  reports: DailyReport[];          // báo cáo ĐÃ lọc theo tháng đang xem
+  channels: AffiliateChannel[];
+  kpiTargets: ContentKpiTarget[];
+  monthKey: string;
+  weekLabel: (i: number) => string;
+}) {
+  const targetOf = channelTargetResolver(kpiTargets, monthKey);
+  const actual = revenueByChannel(reports, (r) => weekIndex(Number(r.date.split('/')[0])));
+  const rows = channelKpiRows(channels, reports.filter((r) => r.revenue).map((r) => r.channelName))
+    .map((c) => {
+      const got = actual.get(c.key);
+      return { ...c, target: targetOf(c.key), total: got?.total ?? 0, weeks: got?.weeks ?? [0, 0, 0, 0] };
+    });
+
+  const grandTarget = rows.reduce((s, r) => s + r.target, 0);
+  const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+  const grandWeeks = [0, 1, 2, 3].map((i) => rows.reduce((s, r) => s + r.weeks[i], 0));
+  const grandPct = pct(grandTotal, grandTarget);
+  const notSet = rows.filter((r) => r.target === 0).length;
+
+  return (
+    <div className="bg-white rounded-2xl border-2 border-[#D32027]/20 soft-shadow overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+          <span className="px-1.5 py-0.5 rounded bg-[#D32027] text-white text-[9px] font-extrabold uppercase tracking-wide">Bảng mới</span>
+          Doanh thu chi tiết theo từng kênh
+        </h3>
+        <span className="text-xs font-bold text-[#D32027]">Tổng: {vnd(grandTotal)}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse min-w-[820px]">
+          <thead>
+            <tr className="text-[10px] text-slate-500 uppercase tracking-wider bg-slate-50">
+              <th className="sticky left-0 z-10 bg-slate-50 px-4 py-2.5 text-left font-bold border-b border-slate-200">Kênh</th>
+              <th className="px-3 py-2.5 text-left font-bold border-b border-slate-200 whitespace-nowrap">Người phụ trách</th>
+              <th className="px-3 py-2.5 text-right font-bold border-b border-slate-200 whitespace-nowrap">Mục tiêu</th>
+              <th className="px-3 py-2.5 text-right font-bold border-b border-slate-200 whitespace-nowrap">Thực hiện</th>
+              <th className="px-3 py-2.5 text-center font-bold border-b border-slate-200">%</th>
+              {[0, 1, 2, 3].map((i) => (
+                <th key={i} className="px-3 py-2.5 text-right font-bold border-b border-slate-200 whitespace-nowrap" title={weekLabel(i)}>T{i + 1}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {CHANNEL_GROUPS.map((g) => {
+              const items = rows.filter((r) => r.group === g.key);
+              if (items.length === 0) return null;
+              const sub = items.reduce((s, r) => s + r.total, 0);
+              const subTarget = items.reduce((s, r) => s + r.target, 0);
+              return (
+                <React.Fragment key={g.key}>
+                  <tr>
+                    <td colSpan={9} className="bg-slate-100/70 px-4 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                      {g.label} · {items.length} kênh · {vndShort(sub)}{subTarget ? ` / ${vndShort(subTarget)}` : ''}
+                    </td>
+                  </tr>
+                  {items.map((r) => {
+                    const rp = pct(r.total, r.target);
+                    return (
+                      <tr key={r.key} className="hover:bg-rose-50/30">
+                        <td className="sticky left-0 z-10 bg-white px-4 py-2 font-semibold text-slate-700 truncate max-w-[240px] border-b border-slate-50" title={r.name}>{r.name}</td>
+                        <td className="px-3 py-2 text-slate-500 border-b border-slate-50 whitespace-nowrap">
+                          {r.manager || <span className="text-amber-600 font-semibold">Chưa gán</span>}
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-400 border-b border-slate-50">{r.target ? vndShort(r.target) : '—'}</td>
+                        <td className="px-3 py-2 text-right font-bold text-slate-900 border-b border-slate-50">{r.total ? vndShort(r.total) : '—'}</td>
+                        <td className="px-3 py-2 text-center border-b border-slate-50">
+                          <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(rp)}`}>{rp == null ? '—' : rp + '%'}</span>
+                        </td>
+                        {r.weeks.map((w, i) => (
+                          <td key={i} className="px-3 py-2 text-right text-slate-500 font-mono border-b border-slate-50">{w ? vndShort(w) : '—'}</td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+            <tr className="text-[11px] bg-slate-100">
+              <td className="sticky left-0 z-10 bg-slate-100 px-4 py-2.5 font-extrabold text-slate-700 uppercase border-t-2 border-slate-200">Tổng cộng</td>
+              <td className="border-t-2 border-slate-200" />
+              <td className="px-3 py-2.5 text-right font-bold text-slate-600 border-t-2 border-slate-200">{grandTarget ? vndShort(grandTarget) : '—'}</td>
+              <td className="px-3 py-2.5 text-right font-extrabold text-[#D32027] border-t-2 border-slate-200">{vndShort(grandTotal)}</td>
+              <td className="px-3 py-2.5 text-center border-t-2 border-slate-200">
+                <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(grandPct)}`}>{grandPct == null ? '—' : grandPct + '%'}</span>
+              </td>
+              {grandWeeks.map((w, i) => (
+                <td key={i} className="px-3 py-2.5 text-right font-bold text-slate-700 border-t-2 border-slate-200">{w ? vndShort(w) : '—'}</td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="px-4 py-2 text-[10px] text-slate-400 border-t border-slate-100 flex flex-wrap gap-x-4 gap-y-1">
+        <span>Mục tiêu lấy từ bảng KPI mới (màn “KPI tháng — Team Content”) · doanh số cộng theo ngày.</span>
+        {notSet > 0 && <span className="text-amber-600 font-semibold">{notSet} kênh chưa đặt chỉ tiêu tháng này</span>}
+      </div>
+    </div>
+  );
+}
