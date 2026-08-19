@@ -1,18 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ChecklistItem, Employee, UserSession } from '../types';
-import { norm } from '../lib/contentKpi';
+// Checklist là đầu việc sản xuất nội dung nên chỉ hiện nhân sự team Content
+// (bỏ Media, Ads Facebook và khối HR / Nhân sự - Hành chính) — quy tắc dùng
+// chung ở src/lib/staff.ts.
+import { isContentDept } from '../lib/staff';
 import ConfirmDialog from './ConfirmDialog';
-
-// ── Phòng ban KHÔNG hiện ở checklist công việc ngày ──────────────────────────
-// Checklist là đầu việc sản xuất nội dung nên chỉ dành cho team Content: bỏ team
-// Media, team Ads Facebook và khối HR / Nhân sự - Hành chính (chốt với user).
-// So khớp trên tên phòng ban đã chuẩn hoá (bỏ dấu, viết thường) nên "Nhân sự",
-// "HR", "Hành chính - Nhân sự"… đều khớp.
-const NON_CONTENT_DEPT_KEYS = ['media', 'adsfacebook', 'hr', 'nhansu', 'hanhchinh'];
-const isContentDept = (dept: string) => {
-  const d = norm(dept);
-  return !NON_CONTENT_DEPT_KEYS.some((k) => d.includes(k));
-};
 
 interface ContentChecklistComponentProps {
   checklists: ChecklistItem[];

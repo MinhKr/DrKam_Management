@@ -4,11 +4,18 @@
 // ║  Nơi DUY NHẤT quản lý danh sách kênh nội dung: thêm · sửa · xóa.         ║
 // ║  Các tab TikTok/Facebook vẫn thêm nhanh được kênh vào đúng mục đang xem. ║
 // ║                                                                          ║
-// ║  BẢNG VÀ FORM DÙNG ĐÚNG MỘT BỘ TRƯỜNG (chốt 12/08/2026):                ║
+// ║  BẢNG VÀ FORM DÙNG ĐÚNG MỘT BỘ TRƯỜNG (cập nhật 19/08/2026):            ║
 // ║    tên kênh · nhãn mô tả · nền tảng · loại kênh (+ cờ DT/Traffic/gắn     ║
-// ║    shop) · ID kênh/affiliate · link kênh.                                ║
-// ║  Người phụ trách và trạng thái KHÔNG hiện ở màn này nên cũng không có    ║
-// ║  trong form — sửa kênh không đụng tới 2 trường đó trong DB.              ║
+// ║    shop) · NGƯỜI PHỤ TRÁCH · link kênh.                                  ║
+// ║  Bỏ cột "ID kênh": với TikTok thì ID chính là TÊN kênh (bấm vào tên là   ║
+// ║  mở thẳng kênh) nên nhập 2 lần là thừa. Cột audit_id trong DB vẫn giữ    ║
+// ║  nguyên — form không đụng tới, Page ID Facebook vẫn gắn ở mục Facebook.  ║
+// ║                                                                          ║
+// ║  NGƯỜI PHỤ TRÁCH (chốt 19/08/2026): chỉ Admin đổi được, sửa ngay trên    ║
+// ║  bảng. Đây là nguồn suy ra KPI và doanh thu của từng nhân viên: KPI của  ║
+// ║  một người = tổng chỉ tiêu các kênh họ cầm (đặt ở màn KPI tháng), thực   ║
+// ║  hiện = tổng doanh thu các kênh đó. Gán sai người là lệch KPI cả tháng.  ║
+// ║  Trạng thái kênh KHÔNG hiện ở màn này nên form cũng không đụng tới.      ║
 // ║                                                                          ║
 // ║  2 quy tắc dữ liệu (App.tsx thực thi, ở đây chỉ cảnh báo trước):         ║
 // ║   • ĐỔI TÊN kênh sẽ cập nhật luôn tên trong toàn bộ báo cáo cũ — vì app  ║
@@ -16,14 +23,16 @@
 // ║   • Kênh ĐÃ CÓ BÁO CÁO thì không xóa được (giữ lịch sử doanh thu).       ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 import React, { useMemo, useState } from 'react';
-import { AffiliateChannel, DailyReport, UserSession } from '../types';
+import { AffiliateChannel, DailyReport, Employee, UserSession } from '../types';
 import { FacebookIcon, TikTokIcon } from './BrandIcons';
-import { isContentChannel } from '../lib/channels';
+import { isContentChannel, managerOf } from '../lib/channels';
+import { contentStaff } from '../lib/staff';
 import ConfirmDialog from './ConfirmDialog';
 
 interface ChannelManagementProps {
   channels: AffiliateChannel[];
   reports: DailyReport[];
+  employees: Employee[];
   session: UserSession;
   onAddChannel: (newChannel: AffiliateChannel) => void;
   onUpdateChannel: (id: string, patch: Partial<AffiliateChannel>) => void;
@@ -42,10 +51,6 @@ const TYPE_LABEL: Record<ChannelType, string> = {
   'AI KOC': 'KOC AI',
 };
 
-// Nhãn ô ID đổi theo nền tảng — mỗi nơi đối chiếu doanh thu bằng một loại ID khác nhau.
-const idLabel = (p: Platform) =>
-  p === 'Facebook' ? 'ID affiliate / Page ID' : p === 'Shopee' ? 'ID Shopee' : 'ID kênh';
-
 // Link kênh: ưu tiên link người dùng nhập; kênh TikTok thì suy ra từ tên nếu chưa nhập.
 const channelLink = (c: AffiliateChannel) => {
   const url = c.channelUrl?.trim();
@@ -60,7 +65,7 @@ type FormState = {
   brandCategory: string;
   platform: Platform;
   channelType: ChannelType;
-  auditId: string;
+  managerName: string;
   channelUrl: string;
   linkedShop: boolean;
   revenueActive: boolean;
@@ -72,7 +77,7 @@ const EMPTY_FORM: FormState = {
   brandCategory: TYPE_LABEL['AI KOC'],
   platform: 'TikTok',
   channelType: 'AI KOC',
-  auditId: '',
+  managerName: '',
   channelUrl: '',
   linkedShop: false,
   revenueActive: true,
@@ -84,7 +89,7 @@ const formOf = (c: AffiliateChannel): FormState => ({
   brandCategory: c.brandCategory,
   platform: c.platform,
   channelType: c.channelType,
-  auditId: c.auditId,
+  managerName: managerOf(c),
   channelUrl: c.channelUrl ?? '',
   linkedShop: c.linkedShop === true,
   revenueActive: c.tracking.revenueActive,
@@ -92,8 +97,12 @@ const formOf = (c: AffiliateChannel): FormState => ({
 });
 
 export default function ChannelManagementComponent({
-  channels, reports, session, onAddChannel, onUpdateChannel, onDeleteChannel,
+  channels, reports, employees, session, onAddChannel, onUpdateChannel, onDeleteChannel,
 }: ChannelManagementProps) {
+  // Chỉ Admin được đổi người phụ trách (chốt với user) — người khác chỉ xem.
+  const canAssign = session.role === 'Admin';
+  // Nhân sự team Content để chọn làm người phụ trách (bỏ Media / Ads FB / HR).
+  const staff = useMemo(() => contentStaff(employees), [employees]);
   // ── Bộ lọc (chỉ lọc theo thứ bảng có hiển thị) ──
   const [platformFilter, setPlatformFilter] = useState('Tất cả');
   const [typeFilter, setTypeFilter] = useState('Tất cả');
@@ -127,7 +136,7 @@ export default function ChannelManagementComponent({
     total: managed.length,
     tiktok: managed.filter((c) => c.platform === 'TikTok').length,
     facebook: managed.filter((c) => c.platform === 'Facebook').length,
-    noId: managed.filter((c) => !c.auditId.trim()).length,
+    noManager: managed.filter((c) => !managerOf(c).trim()).length,
   }), [managed]);
 
   const filtered = useMemo(() => {
@@ -136,7 +145,7 @@ export default function ChannelManagementComponent({
       if (platformFilter !== 'Tất cả' && c.platform !== platformFilter) return false;
       if (typeFilter !== 'Tất cả' && c.channelType !== typeFilter) return false;
       if (q && !c.name.toLowerCase().includes(q)
-            && !c.auditId.toLowerCase().includes(q)
+            && !managerOf(c).toLowerCase().includes(q)
             && !c.brandCategory.toLowerCase().includes(q)) return false;
       return true;
     });
@@ -188,34 +197,56 @@ export default function ChannelManagementComponent({
       return;
     }
 
-    // Chỉ gồm các trường bảng hiển thị → sửa kênh không đụng người phụ trách / trạng thái.
+    // Chỉ gồm các trường bảng hiển thị → sửa kênh không đụng ID kênh / trạng thái.
     const fields = {
       name,
       brandCategory: form.brandCategory.trim() || TYPE_LABEL[form.channelType],
       platform: form.platform,
       channelType: form.channelType,
       linkedShop: form.linkedShop,
-      auditId: form.auditId.trim(),
       channelUrl: form.channelUrl.trim(),
       tracking: { revenueActive: form.revenueActive, trafficActive: form.trafficActive },
     };
 
+    // Người phụ trách chỉ đưa vào patch KHI THỰC SỰ ĐỔI: App đồng bộ manager_id
+    // theo tên, gửi kèm tên không đổi là thừa, gửi tên lạ sẽ xoá mất manager_id.
+    const assigned = form.managerName.trim();
+    const managerPatch = editing && assigned !== managerOf(editing)
+      ? { managerName: assigned, managerAvatar: staff.find((e) => e.name === assigned)?.avatar ?? '' }
+      : {};
+
     if (editing) {
-      onUpdateChannel(editing.id, fields);
+      onUpdateChannel(editing.id, { ...fields, ...managerPatch });
       notify(willRename ? `Đã đổi tên kênh thành "${name}" (báo cáo cũ cập nhật theo).` : `Đã cập nhật kênh "${name}".`);
     } else {
-      // Kênh mới vẫn cần chủ sở hữu + trạng thái trong DB (RLS dựa vào manager_id):
-      // gán mặc định cho người đang đăng nhập, không hỏi trong form.
+      // Kênh mới: người phụ trách lấy theo ô đã chọn, bỏ trống thì là người đang
+      // đăng nhập (DB cần manager_id cho RLS). audit_id để trống — với TikTok thì
+      // ID kênh chính là tên kênh nên không cần lưu thêm.
+      const owner = assigned || session.name;
       onAddChannel({
         id: 'ch_' + Date.now(),
         ...fields,
-        managerName: session.name,
-        managerAvatar: session.avatar,
+        auditId: '',
+        managerName: owner,
+        managerAvatar: staff.find((e) => e.name === owner)?.avatar ?? session.avatar,
         status: 'Đang nuôi',
       });
       notify(`Đã thêm kênh "${name}".`);
     }
     closeForm();
+  };
+
+  /** Admin đổi người phụ trách ngay trên bảng — ghi luôn, không cần mở form. */
+  const assignManager = (c: AffiliateChannel, name: string) => {
+    const current = managerOf(c);
+    if (name === current) return;
+    onUpdateChannel(c.id, {
+      managerName: name,
+      managerAvatar: staff.find((e) => e.name === name)?.avatar ?? '',
+    });
+    notify(name
+      ? `Kênh "${c.name}" đã giao cho ${name}.`
+      : `Đã bỏ người phụ trách kênh "${c.name}".`);
   };
 
   const deletingReports = deleting ? reportCountOf(deleting) : 0;
@@ -259,7 +290,7 @@ export default function ChannelManagementComponent({
           { label: 'Tổng số kênh', value: summary.total, icon: 'hub', accent: 'text-violet-600 bg-violet-50' },
           { label: 'TikTok', value: summary.tiktok, icon: 'music_note', accent: 'text-slate-900 bg-slate-100' },
           { label: 'Facebook', value: summary.facebook, icon: 'thumb_up', accent: 'text-blue-600 bg-blue-50' },
-          { label: 'Chưa có ID', value: summary.noId, icon: 'help', accent: 'text-amber-600 bg-amber-50' },
+          { label: 'Chưa gán người', value: summary.noManager, icon: 'person_off', accent: 'text-amber-600 bg-amber-50' },
         ].map((k) => (
           <div key={k.label} className="bg-white border border-slate-200/60 rounded-2xl p-4 soft-shadow flex items-center gap-3">
             <span className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${k.accent}`}>
@@ -279,7 +310,7 @@ export default function ChannelManagementComponent({
           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
           <input
             type="text"
-            placeholder="Tìm theo tên kênh, nhãn mô tả hoặc ID..."
+            placeholder="Tìm theo tên kênh, nhãn mô tả hoặc người phụ trách..."
             className="w-full bg-slate-50/50 border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#D32027]/20 focus:border-[#D32027] focus:bg-white transition-all"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -333,7 +364,7 @@ export default function ChannelManagementComponent({
                 <th className="py-4 px-6">Kênh</th>
                 <th className="py-4 px-4">Nền tảng</th>
                 <th className="py-4 px-4">Phân loại</th>
-                <th className="py-4 px-4">ID kênh / affiliate</th>
+                <th className="py-4 px-4">Người phụ trách</th>
                 <th className="py-4 px-6 text-right">Thao tác</th>
               </tr>
             </thead>
@@ -408,14 +439,28 @@ export default function ChannelManagementComponent({
                         </div>
                       </td>
 
-                      {/* ID */}
+                      {/* Người phụ trách — Admin đổi trực tiếp tại đây */}
                       <td className="py-4 px-4">
-                        {c.auditId ? (
-                          <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200/50">
-                            {c.auditId}
-                          </span>
+                        {canAssign ? (
+                          <select
+                            value={managerOf(c)}
+                            onChange={(e) => assignManager(c, e.target.value)}
+                            className={`w-full max-w-[190px] bg-white border rounded-lg py-1.5 px-2 text-xs font-semibold cursor-pointer outline-none focus:border-[#D32027] ${
+                              managerOf(c) ? 'border-slate-200 text-slate-700' : 'border-amber-300 text-amber-700 bg-amber-50'
+                            }`}
+                          >
+                            <option value="">— Chưa gán —</option>
+                            {/* Người đang phụ trách nhưng không còn trong danh sách nhân sự vẫn phải hiện,
+                                nếu không chọn ô này là vô tình xoá mất người phụ trách. */}
+                            {!!managerOf(c) && !staff.some((e) => e.name === managerOf(c)) && (
+                              <option value={managerOf(c)}>{managerOf(c)} (ngoài danh sách)</option>
+                            )}
+                            {staff.map((e) => <option key={e.id} value={e.name}>{e.name}</option>)}
+                          </select>
+                        ) : managerOf(c) ? (
+                          <span className="text-xs font-semibold text-slate-700">{managerOf(c)}</span>
                         ) : (
-                          <span className="text-[11px] text-slate-300 italic">chưa có</span>
+                          <span className="text-[11px] text-amber-600 font-semibold italic">chưa gán</span>
                         )}
                       </td>
 
@@ -561,22 +606,29 @@ export default function ChannelManagementComponent({
                 </label>
               </div>
 
-              {/* 4. ID kênh / affiliate */}
+              {/* 4. Người phụ trách — nguồn suy ra KPI & doanh thu của từng nhân viên */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">{idLabel(form.platform)}</label>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Người phụ trách</label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">
-                    {form.platform === 'Facebook' ? 'badge' : 'tag'}
-                  </span>
-                  <input
-                    type="text"
-                    placeholder={form.platform === 'Facebook' ? 'ID affiliate của KOC / Page ID...' : 'Nhập ID kênh...'}
-                    className="w-full pl-10 pr-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
-                    value={form.auditId}
-                    onChange={(e) => set('auditId', e.target.value)}
-                  />
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">person</span>
+                  <select
+                    disabled={!canAssign}
+                    className="w-full pl-10 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 disabled:bg-slate-50 disabled:text-slate-400"
+                    value={form.managerName}
+                    onChange={(e) => set('managerName', e.target.value)}
+                  >
+                    <option value="">— Chưa gán —</option>
+                    {!!form.managerName && !staff.some((e) => e.name === form.managerName) && (
+                      <option value={form.managerName}>{form.managerName} (ngoài danh sách)</option>
+                    )}
+                    {staff.map((e) => <option key={e.id} value={e.name}>{e.name}</option>)}
+                  </select>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1 italic">Dùng để đối chiếu doanh thu với sàn (TikTok Shop / Shopee Seller).</p>
+                <p className="text-[11px] text-slate-400 mt-1 italic">
+                  {canAssign
+                    ? 'KPI và doanh thu của nhân viên được cộng từ các kênh họ phụ trách.'
+                    : 'Chỉ Admin đổi được người phụ trách.'}
+                </p>
               </div>
 
               {/* 5. Link kênh — làm tên kênh trong bảng bấm được */}

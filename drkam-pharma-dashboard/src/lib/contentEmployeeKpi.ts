@@ -19,6 +19,7 @@
 import { AffiliateChannel, DailyReport, Employee } from '../types';
 import { norm } from './contentKpi';
 import { managerOf } from './channels';
+import { isContentDept } from './staff';
 
 /** Khoá của dòng doanh thu không xác định được người phụ trách. */
 export const UNASSIGNED_KEY = '';
@@ -31,7 +32,7 @@ export type ContentEmployee = { key: string; name: string };
  *
  * Gộp 2 nguồn để không sót ai mà cũng không kéo cả công ty vào:
  *   1. Người đang phụ trách kênh — nguồn chuẩn của doanh thu thực hiện;
- *   2. Nhân sự có phòng ban chứa chữ "Content" — người chưa được giao kênh nào.
+ *   2. Nhân sự team Content (theo src/lib/staff.ts) — người chưa được giao kênh nào.
  */
 export function contentEmployeeRoster(
   employees: Employee[],
@@ -46,7 +47,7 @@ export function contentEmployeeRoster(
 
   channels.forEach((c) => add(managerOf(c)));
   employees
-    .filter((e) => e.status !== 'Đã khóa' && norm(e.department).includes('content'))
+    .filter((e) => e.status === 'Hoạt động' && e.role !== 'Admin' && isContentDept(e.department))
     .forEach((e) => add(e.name));
 
   return [...byKey.entries()]

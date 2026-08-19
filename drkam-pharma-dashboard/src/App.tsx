@@ -1510,6 +1510,7 @@ export default function App() {
           <ChannelManagementComponent
             channels={channels}
             reports={reports}
+            employees={employees}
             session={session}
             onAddChannel={handleAddChannel}
             onUpdateChannel={handleUpdateChannel}
