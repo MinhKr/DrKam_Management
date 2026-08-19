@@ -19,7 +19,7 @@
 import { AffiliateChannel, DailyReport, Employee } from '../types';
 import { norm } from './contentKpi';
 import { managerOf } from './channels';
-import { isContentDept } from './staff';
+import { isContentStaff } from './staff';
 
 /** Khoá của dòng doanh thu không xác định được người phụ trách. */
 export const UNASSIGNED_KEY = '';
@@ -46,9 +46,7 @@ export function contentEmployeeRoster(
   };
 
   channels.forEach((c) => add(managerOf(c)));
-  employees
-    .filter((e) => e.status === 'Hoạt động' && e.role !== 'Admin' && isContentDept(e.department))
-    .forEach((e) => add(e.name));
+  employees.filter((e) => isContentStaff(e)).forEach((e) => add(e.name));
 
   return [...byKey.entries()]
     .map(([key, name]) => ({ key, name }))

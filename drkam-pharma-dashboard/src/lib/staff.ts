@@ -16,6 +16,14 @@ import { norm } from './contentKpi';
 /** Từ khoá phòng ban KHÔNG thuộc team Content. */
 export const NON_CONTENT_DEPT_KEYS = ['media', 'adsfacebook', 'hr', 'nhansu', 'hanhchinh'];
 
+/**
+ * Tài khoản CHỨC NĂNG, không phải người làm nội dung — lọc theo TÊN vì mấy tài
+ * khoản này thường để trống phòng ban (vd tài khoản "hr", "admin" dùng chung).
+ * So khớp CHÍNH XÁC cả tên đã chuẩn hoá, không so "chứa", để không loại nhầm
+ * người thật có tên gần giống.
+ */
+export const NON_CONTENT_ACCOUNT_NAMES = ['hr', 'admin', 'administrator', 'nhansu', 'hanhchinh', 'ketoan'];
+
 /** Phòng ban này có thuộc team Content không. */
 export const isContentDept = (dept: string) => {
   const d = norm(dept);
@@ -23,14 +31,20 @@ export const isContentDept = (dept: string) => {
 };
 
 /**
- * Nhân sự team Content đang hoạt động, xếp theo tên.
- * `includeAdmin` = false (mặc định) để bỏ tài khoản Admin hệ thống ra khỏi các
- * danh sách "người làm việc" (checklist, người phụ trách kênh).
+ * Nhân sự này có phải người của team Content không (dùng cho checklist, ô chọn
+ * người phụ trách kênh, tiến độ theo nhân viên).
+ * `includeAdmin` = false (mặc định): bỏ tài khoản Admin hệ thống.
  */
+export function isContentStaff(e: Employee, includeAdmin = false): boolean {
+  if (e.status !== 'Hoạt động') return false;
+  if (!includeAdmin && e.role === 'Admin') return false;
+  if (NON_CONTENT_ACCOUNT_NAMES.includes(norm(e.name))) return false;
+  return isContentDept(e.department);
+}
+
+/** Nhân sự team Content đang hoạt động, xếp theo tên. */
 export function contentStaff(employees: Employee[], includeAdmin = false): Employee[] {
   return employees
-    .filter((e) => e.status === 'Hoạt động'
-      && (includeAdmin || e.role !== 'Admin')
-      && isContentDept(e.department))
+    .filter((e) => isContentStaff(e, includeAdmin))
     .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 }
