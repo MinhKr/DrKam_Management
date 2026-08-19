@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { ChecklistItem, Employee, UserSession } from '../types';
+// Checklist là đầu việc sản xuất nội dung nên chỉ hiện nhân sự team Content —
+// bỏ Media, Ads Facebook, khối HR / Nhân sự - Hành chính và các tài khoản chức
+// năng ("hr", "admin"…). Quy tắc dùng chung ở src/lib/staff.ts.
+import { isContentStaff } from '../lib/staff';
 import ConfirmDialog from './ConfirmDialog';
 
 interface ContentChecklistComponentProps {
@@ -104,9 +108,10 @@ export default function ContentChecklistComponent({
   const isMine = (emp: Employee) =>
     currentUserId ? emp.id === currentUserId : emp.name === session.name;
 
-  // Nhân sự content đang hoạt động (bỏ Admin, team Media và team Ads Facebook). Xếp người của mình lên đầu.
+  // Nhân sự content đang hoạt động (bỏ Admin, team Media, team Ads Facebook và khối HR).
+  // Xếp người của mình lên đầu.
   const staff = [...employees]
-    .filter((e) => e.status === 'Hoạt động' && e.role !== 'Admin' && e.department !== 'Media' && e.department !== 'Ads Facebook')
+    .filter((e) => isContentStaff(e))
     .sort((a, b) => {
       const mine = Number(isMine(b)) - Number(isMine(a));
       return mine !== 0 ? mine : a.name.localeCompare(b.name, 'vi');

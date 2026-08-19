@@ -15,6 +15,14 @@ import {
   BadgeKind, CONTENT_LINE_ITEMS as LINE_ITEMS, CONTENT_VIEW_REACH as VIEW_REACH,
   targetResolver,
 } from '../lib/contentKpi';
+// KPI doanh thu THEO NGƯỜI (migration 0019) — thực hiện suy từ kênh phụ trách.
+import {
+  contentEmployeeRoster, employeeTargetsFromChannels, revenueByEmployee, UNASSIGNED_KEY, UNASSIGNED_LABEL,
+} from '../lib/contentEmployeeKpi';
+// BẢNG MỚI — chi tiết từng kênh (migration 0020); bảng cũ bên dưới giữ nguyên để đối chiếu.
+import {
+  CHANNEL_GROUPS, channelKpiRows, channelTargetResolver, revenueByChannel,
+} from '../lib/contentChannelKpi';
 
 interface DashboardComponentProps {
   reports: DailyReport[];
@@ -128,7 +136,15 @@ export default function DashboardComponent(props: DashboardComponentProps) {
         ))}
       </div>
 
-      {view === 'chung' && <BaoCaoChung reports={props.reports} channels={props.channels} kpiTargets={props.kpiTargets} onGotoView={setView} />}
+      {view === 'chung' && (
+        <BaoCaoChung
+          reports={props.reports}
+          channels={props.channels}
+          employees={props.employees}
+          kpiTargets={props.kpiTargets}
+          onGotoView={setView}
+        />
+      )}
       {view === 'doanhso' && <DoanhSoNgay reports={props.reports} channels={props.channels} />}
       {view === 'checklist' && (
         <ContentChecklistComponent
@@ -149,9 +165,10 @@ export default function DashboardComponent(props: DashboardComponentProps) {
 /* ════════════════════════════════════════════════════════════════
    TAB 1 — BÁO CÁO CHUNG (tháng: KPI + biểu đồ + bảng kênh × tuần)
    ════════════════════════════════════════════════════════════════ */
-function BaoCaoChung({ reports, channels, kpiTargets, onGotoView }: {
+function BaoCaoChung({ reports, channels, employees, kpiTargets, onGotoView }: {
   reports: DailyReport[];
   channels: AffiliateChannel[];
+  employees: Employee[];
   kpiTargets: ContentKpiTarget[];
   onGotoView: (v: 'doanhso') => void;
 }) {
@@ -257,6 +274,16 @@ function BaoCaoChung({ reports, channels, kpiTargets, onGotoView }: {
           sub={withTarget.length ? 'Số hạng mục ≥ 100% chỉ tiêu' : 'Chưa đặt chỉ tiêu'} subTone="muted" />
       </div>
 
+      {/* Tiến độ doanh thu theo NHÂN VIÊN — song song với tiến độ chung ở trên */}
+      <EmployeeProgress
+        reports={monthReports}
+        channels={channels}
+        employees={employees}
+        kpiTargets={kpiTargets}
+        monthKey={monthKey}
+        teamTotal={grandTotal}
+      />
+
       {/* Biểu đồ 1 — Thực hiện vs Mục tiêu (thanh tiến độ tự vẽ) */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
         <h3 className="text-base font-bold text-slate-800 mb-4">Thực hiện vs Mục tiêu theo hạng mục</h3>
@@ -287,10 +314,22 @@ function BaoCaoChung({ reports, channels, kpiTargets, onGotoView }: {
           </div>
         </div>
 
-      {/* Bảng hạng mục × tuần */}
+      {/* BẢNG MỚI — doanh thu chi tiết theo từng kênh (KPI bảng mới) */}
+      <ChannelDetailReport
+        reports={monthReports}
+        channels={channels}
+        kpiTargets={kpiTargets}
+        monthKey={monthKey}
+        weekLabel={weekLabel}
+      />
+
+      {/* Bảng hạng mục × tuần (BẢNG CŨ — giữ để đối chiếu) */}
       <div className="bg-white rounded-2xl border border-slate-200/70 soft-shadow overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-800">Báo cáo chung theo hạng mục — tháng {m}/{y}</h3>
+          <h3 className="text-sm font-bold text-slate-500 flex items-center gap-2">
+            <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 text-[9px] font-extrabold uppercase tracking-wide">Bảng cũ</span>
+            Báo cáo chung theo hạng mục — tháng {m}/{y}
+          </h3>
           <span className="text-xs font-bold text-[#D32027]">Tổng: {vnd(grandTotal)}</span>
         </div>
         <div className="overflow-x-auto">
@@ -603,6 +642,293 @@ function KpiCard({ label, value, icon, iconNode, tone, sub, subTone = 'muted', t
         </>
       )}
       {sub && <div className={`text-[11px] font-semibold ${subCls}`}>{sub}</div>}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TIẾN ĐỘ DOANH THU THEO NHÂN VIÊN (KPI người — migration 0019)
+
+   Đặt ngay dưới KPI chung để nhìn một màn là thấy cả team lẫn từng
+   người. Nguồn số:
+     • Mục tiêu   — SUY RA từ bảng KPI mới theo kênh: cộng chỉ tiêu
+                    các kênh người đó phụ trách. Không nhập tay riêng
+                    (chốt với user), nên đặt KPI kênh xong là có ngay
+                    mục tiêu của từng người.
+     • Thực hiện  — tổng doanh thu báo cáo ngày của các KÊNH người đó
+                    phụ trách (channels.manager_name). Kênh chưa gán
+                    người rơi vào dòng "Chưa gán" để tổng luôn khớp
+                    tổng doanh thu team.
+
+   VẠCH NHỊP (mốc xám trên thanh) = tiến độ kỳ vọng tính theo số ngày
+   đã trôi qua của tháng — thanh màu chưa tới vạch là đang chậm. Tháng
+   đã qua thì vạch nằm ở 100%.
+   ════════════════════════════════════════════════════════════════ */
+function EmployeeProgress({ reports, channels, employees, kpiTargets, monthKey, teamTotal }: {
+  reports: DailyReport[];          // báo cáo ĐÃ lọc theo tháng đang xem
+  channels: AffiliateChannel[];
+  employees: Employee[];
+  kpiTargets: ContentKpiTarget[];
+  monthKey: string;
+  teamTotal: number;
+}) {
+  // Mục tiêu của mỗi người = tổng chỉ tiêu các kênh họ phụ trách (bảng KPI mới).
+  const empTarget = employeeTargetsFromChannels(channels, channelTargetResolver(kpiTargets, monthKey));
+  const actual = revenueByEmployee(reports, channels, (r) => weekIndex(Number(r.date.split('/')[0])));
+
+  const rows = contentEmployeeRoster(employees, channels)
+    .map((e) => {
+      const got = actual.get(e.key);
+      return { ...e, target: empTarget.get(e.key) ?? 0, total: got?.total ?? 0, weeks: got?.weeks ?? [0, 0, 0, 0] };
+    })
+    // Người vừa không có chỉ tiêu vừa không có doanh thu thì không cần theo dõi.
+    .filter((r) => r.target > 0 || r.total > 0)
+    .sort((a, b) => {
+      const pa = a.target > 0 ? a.total / a.target : -1;
+      const pb = b.target > 0 ? b.total / b.target : -1;
+      return pb - pa || b.total - a.total;
+    });
+
+  const unassigned = actual.get(UNASSIGNED_KEY)?.total ?? 0;
+  // Chỉ tiêu của các kênh chưa gán người — phần KPI chưa về tay ai.
+  const unassignedTarget = empTarget.get(UNASSIGNED_KEY) ?? 0;
+
+  // Nhịp tiến độ theo ngày — tháng đang chạy mới có "ngày còn lại".
+  const days = lastDayOfMonth(monthKey);
+  const isCurrentMonth = monthKey === nowMonthKey();
+  const dayNow = isCurrentMonth ? Math.min(new Date().getDate(), days) : days;
+  const paceRatio = dayNow / days;
+  const daysLeft = Math.max(days - dayNow, 0);
+
+  const assignedTarget = rows.reduce((s, r) => s + r.target, 0);
+  const onTrack = rows.filter((r) => r.target > 0 && r.total >= r.target * paceRatio).length;
+  const withTarget = rows.filter((r) => r.target > 0).length;
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/70 soft-shadow overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[#D32027] text-[20px]">groups</span>
+            Tiến độ doanh thu theo nhân viên
+          </h3>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Thực hiện = doanh thu các kênh người đó phụ trách · Mục tiêu = tổng KPI các kênh đó (bảng KPI mới).
+          </p>
+        </div>
+        {withTarget > 0 && (
+          <span className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
+            onTrack === withTarget ? 'text-green-700 bg-green-50' : 'text-amber-700 bg-amber-50'
+          }`}>
+            {onTrack}/{withTarget} người bám nhịp
+          </span>
+        )}
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="px-5 py-6 text-xs text-slate-400 text-center">
+          Chưa có nhân viên nào có chỉ tiêu hoặc doanh thu trong tháng này — đặt KPI ở màn <b>KPI tháng — Team Content</b>.
+        </p>
+      ) : (
+        <div className="px-5 py-2 divide-y divide-slate-50">
+          {rows.map((r) => {
+            const p = pct(r.total, r.target);
+            const st = completionStyle(p);
+            const gap = r.target - r.total;
+            const perDay = daysLeft > 0 && gap > 0 ? gap / daysLeft : 0;
+            const behind = r.target > 0 && r.total < r.target * paceRatio;
+            return (
+              <div key={r.key} className="py-3 flex flex-col gap-1.5">
+                <div className="flex items-center gap-3">
+                  <span className="w-7 h-7 shrink-0 rounded-full bg-slate-800 text-white text-[10px] font-extrabold flex items-center justify-center">
+                    {initialsOf(r.name)}
+                  </span>
+                  <span className="text-xs font-bold text-slate-700 truncate flex-1 min-w-0" title={r.name}>{r.name}</span>
+                  <span className="text-[11px] font-semibold text-slate-500 tabular-nums whitespace-nowrap">
+                    {vndShort(r.total)} <span className="text-slate-300">/</span> {r.target ? vndShort(r.target) : '—'}
+                  </span>
+                  <span className="w-16 text-right text-sm font-extrabold tabular-nums" style={{ color: st.text }}>
+                    {p == null ? '—' : p + '%'}
+                  </span>
+                </div>
+
+                {/* Thanh tiến độ + vạch nhịp kỳ vọng theo ngày */}
+                <div className="relative h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(p ?? 0, 100)}%`, background: st.bar }} />
+                  {r.target > 0 && (
+                    <div className="absolute top-0 bottom-0 w-[2px] bg-slate-400/70"
+                      style={{ left: `${Math.min(paceRatio * 100, 100)}%` }}
+                      title={`Nhịp kỳ vọng đến ngày ${dayNow}/${days}: ${vndShort(r.target * paceRatio)}`} />
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400">
+                  {r.target === 0 ? (
+                    <span className="text-amber-600 font-semibold">Kênh phụ trách chưa có chỉ tiêu tháng này</span>
+                  ) : gap > 0 ? (
+                    <>
+                      <span>Còn thiếu <b className="text-slate-600">{vndShort(gap)}</b></span>
+                      {daysLeft > 0 && <span>Cần <b className="text-slate-600">{vndShort(perDay)}</b>/ngày · còn {daysLeft} ngày</span>}
+                      <span className={behind ? 'text-rose-600 font-semibold' : 'text-green-700 font-semibold'}>
+                        {behind ? 'Chậm hơn nhịp' : 'Bám nhịp'}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-green-700 font-semibold">Đã vượt chỉ tiêu {vndShort(-gap)}</span>
+                  )}
+                  <span className="ml-auto tabular-nums">
+                    {r.weeks.map((w, i) => `T${i + 1} ${w ? vndShort(w) : '—'}`).join(' · ')}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Doanh thu chưa gán người phụ trách — để tổng các dòng khớp tổng team */}
+          {unassigned > 0 && (
+            <div className="py-3 flex items-center gap-3">
+              <span className="w-7 h-7 shrink-0 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[16px]">help</span>
+              </span>
+              <span className="text-xs font-bold text-slate-500 flex-1 min-w-0">{UNASSIGNED_LABEL}</span>
+              <span className="text-[11px] font-semibold text-slate-500 tabular-nums">{vndShort(unassigned)}</span>
+              <span className="w-16 text-right text-[10px] text-amber-600 font-semibold">Gán ở Quản lý kênh</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Đối chiếu tổng: KPI đã về tay người vs KPI của kênh chưa gán ai */}
+      <div className="px-5 py-2.5 border-t border-slate-100 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-400">
+        <span>Tổng KPI đã về tay nhân viên: <b className="text-slate-600 tabular-nums">{assignedTarget ? vndShort(assignedTarget) : '—'}</b></span>
+        <span>Team đã đạt: <b className="text-slate-600 tabular-nums">{vndShort(teamTotal)}</b></span>
+        {unassignedTarget > 0 && (
+          <span className="text-amber-600 font-semibold">
+            {vndShort(unassignedTarget)} chỉ tiêu thuộc kênh chưa gán người phụ trách
+          </span>
+        )}
+        <span className="ml-auto">Vạch xám trên thanh = nhịp kỳ vọng đến ngày {dayNow}/{days}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Chữ cái đầu của tên (2 từ cuối) — avatar chữ cho dòng nhân viên. */
+const initialsOf = (name: string) =>
+  name.trim().split(/\s+/).slice(-2).map((w) => w[0] ?? '').join('').toUpperCase() || '?';
+
+
+/* ════════════════════════════════════════════════════════════════
+   BẢNG MỚI — DOANH THU CHI TIẾT THEO TỪNG KÊNH (migration 0020)
+
+   Bảng cũ gộp mọi kênh TikTok AI vào 1 dòng nên không biết kênh nào
+   kéo số, kênh nào chết. Bảng này lấy thẳng danh sách kênh đang bật
+   theo dõi doanh thu (tab Quản lý kênh) — thêm kênh là tự có dòng.
+
+   Mục tiêu lấy từ KPI "bảng mới" (kind='channel', đặt ở màn KPI tháng);
+   kênh chưa đặt chỉ tiêu vẫn hiện số thực hiện, cột % để trống. Kênh đã
+   tắt doanh thu nhưng trong tháng vẫn có số thì vẫn hiện (nhóm "Khác")
+   để không nuốt mất doanh thu đã nhập.
+   ════════════════════════════════════════════════════════════════ */
+function ChannelDetailReport({ reports, channels, kpiTargets, monthKey, weekLabel }: {
+  reports: DailyReport[];          // báo cáo ĐÃ lọc theo tháng đang xem
+  channels: AffiliateChannel[];
+  kpiTargets: ContentKpiTarget[];
+  monthKey: string;
+  weekLabel: (i: number) => string;
+}) {
+  const targetOf = channelTargetResolver(kpiTargets, monthKey);
+  const actual = revenueByChannel(reports, (r) => weekIndex(Number(r.date.split('/')[0])));
+  const rows = channelKpiRows(channels, reports.filter((r) => r.revenue).map((r) => r.channelName))
+    .map((c) => {
+      const got = actual.get(c.key);
+      return { ...c, target: targetOf(c.key), total: got?.total ?? 0, weeks: got?.weeks ?? [0, 0, 0, 0] };
+    });
+
+  const grandTarget = rows.reduce((s, r) => s + r.target, 0);
+  const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+  const grandWeeks = [0, 1, 2, 3].map((i) => rows.reduce((s, r) => s + r.weeks[i], 0));
+  const grandPct = pct(grandTotal, grandTarget);
+  const notSet = rows.filter((r) => r.target === 0).length;
+
+  return (
+    <div className="bg-white rounded-2xl border-2 border-[#D32027]/20 soft-shadow overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+          <span className="px-1.5 py-0.5 rounded bg-[#D32027] text-white text-[9px] font-extrabold uppercase tracking-wide">Bảng mới</span>
+          Doanh thu chi tiết theo từng kênh
+        </h3>
+        <span className="text-xs font-bold text-[#D32027]">Tổng: {vnd(grandTotal)}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse min-w-[820px]">
+          <thead>
+            <tr className="text-[10px] text-slate-500 uppercase tracking-wider bg-slate-50">
+              <th className="sticky left-0 z-10 bg-slate-50 px-4 py-2.5 text-left font-bold border-b border-slate-200">Kênh</th>
+              <th className="px-3 py-2.5 text-left font-bold border-b border-slate-200 whitespace-nowrap">Người phụ trách</th>
+              <th className="px-3 py-2.5 text-right font-bold border-b border-slate-200 whitespace-nowrap">Mục tiêu</th>
+              <th className="px-3 py-2.5 text-right font-bold border-b border-slate-200 whitespace-nowrap">Thực hiện</th>
+              <th className="px-3 py-2.5 text-center font-bold border-b border-slate-200">%</th>
+              {[0, 1, 2, 3].map((i) => (
+                <th key={i} className="px-3 py-2.5 text-right font-bold border-b border-slate-200 whitespace-nowrap" title={weekLabel(i)}>T{i + 1}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {CHANNEL_GROUPS.map((g) => {
+              const items = rows.filter((r) => r.group === g.key);
+              if (items.length === 0) return null;
+              const sub = items.reduce((s, r) => s + r.total, 0);
+              const subTarget = items.reduce((s, r) => s + r.target, 0);
+              return (
+                <React.Fragment key={g.key}>
+                  <tr>
+                    <td colSpan={9} className="bg-slate-100/70 px-4 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                      {g.label} · {items.length} kênh · {vndShort(sub)}{subTarget ? ` / ${vndShort(subTarget)}` : ''}
+                    </td>
+                  </tr>
+                  {items.map((r) => {
+                    const rp = pct(r.total, r.target);
+                    return (
+                      <tr key={r.key} className="hover:bg-rose-50/30">
+                        <td className="sticky left-0 z-10 bg-white px-4 py-2 font-semibold text-slate-700 truncate max-w-[240px] border-b border-slate-50" title={r.name}>{r.name}</td>
+                        <td className="px-3 py-2 text-slate-500 border-b border-slate-50 whitespace-nowrap">
+                          {r.manager || <span className="text-amber-600 font-semibold">Chưa gán</span>}
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-400 border-b border-slate-50">{r.target ? vndShort(r.target) : '—'}</td>
+                        <td className="px-3 py-2 text-right font-bold text-slate-900 border-b border-slate-50">{r.total ? vndShort(r.total) : '—'}</td>
+                        <td className="px-3 py-2 text-center border-b border-slate-50">
+                          <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(rp)}`}>{rp == null ? '—' : rp + '%'}</span>
+                        </td>
+                        {r.weeks.map((w, i) => (
+                          <td key={i} className="px-3 py-2 text-right text-slate-500 font-mono border-b border-slate-50">{w ? vndShort(w) : '—'}</td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+            <tr className="text-[11px] bg-slate-100">
+              <td className="sticky left-0 z-10 bg-slate-100 px-4 py-2.5 font-extrabold text-slate-700 uppercase border-t-2 border-slate-200">Tổng cộng</td>
+              <td className="border-t-2 border-slate-200" />
+              <td className="px-3 py-2.5 text-right font-bold text-slate-600 border-t-2 border-slate-200">{grandTarget ? vndShort(grandTarget) : '—'}</td>
+              <td className="px-3 py-2.5 text-right font-extrabold text-[#D32027] border-t-2 border-slate-200">{vndShort(grandTotal)}</td>
+              <td className="px-3 py-2.5 text-center border-t-2 border-slate-200">
+                <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(grandPct)}`}>{grandPct == null ? '—' : grandPct + '%'}</span>
+              </td>
+              {grandWeeks.map((w, i) => (
+                <td key={i} className="px-3 py-2.5 text-right font-bold text-slate-700 border-t-2 border-slate-200">{w ? vndShort(w) : '—'}</td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="px-4 py-2 text-[10px] text-slate-400 border-t border-slate-100 flex flex-wrap gap-x-4 gap-y-1">
+        <span>Mục tiêu lấy từ bảng KPI mới (màn “KPI tháng — Team Content”) · doanh số cộng theo ngày.</span>
+        {notSet > 0 && <span className="text-amber-600 font-semibold">{notSet} kênh chưa đặt chỉ tiêu tháng này</span>}
+      </div>
     </div>
   );
 }

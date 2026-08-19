@@ -1131,7 +1131,8 @@ export default function App() {
     }
     setContentKpiTargets(prev => [...prev.filter(t => t.period !== period), ...saved]);
     const total = rows.filter(r => r.kind === 'revenue').reduce((s, r) => s + r.targetValue, 0);
-    addAuditLog('KPI Content', `Đặt KPI tháng ${period.slice(5)}/${period.slice(0, 4)} — tổng doanh thu ${total.toLocaleString('vi-VN')} đ.`);
+    const emp = rows.filter(r => r.kind === 'employee' && r.targetValue > 0).length;
+    addAuditLog('KPI Content', `Đặt KPI tháng ${period.slice(5)}/${period.slice(0, 4)} — tổng doanh thu ${total.toLocaleString('vi-VN')} đ · ${emp} nhân viên có chỉ tiêu.`);
   };
 
   // Cờ phân quyền hiển thị Media.
@@ -1475,6 +1476,7 @@ export default function App() {
         return (
           <ContentKpiComponent
             targets={contentKpiTargets}
+            channels={channels}
             session={session}
             onSave={handleSaveContentKpi}
           />
@@ -1508,6 +1510,7 @@ export default function App() {
           <ChannelManagementComponent
             channels={channels}
             reports={reports}
+            employees={employees}
             session={session}
             onAddChannel={handleAddChannel}
             onUpdateChannel={handleUpdateChannel}

@@ -807,7 +807,7 @@ export function contentKpiTargetFromRow(r: ContentKpiTargetRow): ContentKpiTarge
     period: r.period,
     itemId: r.item_id,
     itemLabel: r.item_label ?? '',
-    kind: (r.kind === 'viewreach' ? 'viewreach' : 'revenue'),
+    kind: (r.kind === 'viewreach' || r.kind === 'employee' || r.kind === 'channel' ? r.kind : 'revenue'),
     targetValue: r.target_value ?? 0,
     note: r.note ?? undefined,
   };

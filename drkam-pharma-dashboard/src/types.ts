@@ -240,7 +240,11 @@ export interface ContentKpiTarget {
   period: string;        // 'yyyy-mm'
   itemId: string;        // khớp id hạng mục trong CONTENT_KPI_ITEMS
   itemLabel: string;     // nhãn tại thời điểm lưu (denormalize, để đối chiếu)
-  kind: 'revenue' | 'viewreach';
+  // 'employee' = chỉ tiêu doanh thu của MỘT NHÂN VIÊN (migration 0019),
+  //              itemId dạng 'emp:<tên chuẩn hoá>' — src/lib/contentEmployeeKpi.ts.
+  // 'channel'  = chỉ tiêu của MỘT KÊNH ở bảng KPI mới (migration 0020),
+  //              itemId dạng 'ch:<tên kênh chuẩn hoá>' — src/lib/contentChannelKpi.ts.
+  kind: 'revenue' | 'viewreach' | 'employee' | 'channel';
   targetValue: number;   // chỉ tiêu tháng — đ với doanh thu, lượt với view/reach
   note?: string;
 }
