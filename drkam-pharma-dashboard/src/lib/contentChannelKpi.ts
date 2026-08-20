@@ -60,13 +60,28 @@ export type ChannelKpiRow = {
   badge: BadgeKind;
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+//  FACEBOOK ADS — MỘT DÒNG KPI GỘP (chốt lại với user 20/08/2026)
+//
+//  Doanh thu Facebook Ads nhập 1 số/ngày ở mục Facebook > Facebook Ads và KPI
+//  cũng để GỘP một dòng, KHÔNG chia cho từng thành viên: KPI của mỗi nhân viên
+//  chỉ tính từ các KÊNH họ phụ trách. Vì kênh gộp này không thuộc về ai nên ở
+//  màn "Theo nhân viên" nó nằm tại dòng "Chưa gán người phụ trách".
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Khoá kênh gộp Facebook Ads (= norm('Facebook Ads')). */
+export const FB_ADS_KEY = 'facebookads';
+
 /**
  * Danh sách kênh có KPI doanh thu, xếp theo nhóm rồi theo tên.
  * `extraNames` là tên kênh xuất hiện trong báo cáo nhưng không còn bật doanh thu
  * (hoặc đã xoá khỏi danh sách kênh) — truyền vào để Tổng quan vẫn hiện dòng đó,
  * không "nuốt" doanh thu đã nhập.
  */
-export function channelKpiRows(channels: AffiliateChannel[], extraNames: string[] = []): ChannelKpiRow[] {
+export function channelKpiRows(
+  channels: AffiliateChannel[],
+  extraNames: string[] = [],
+): ChannelKpiRow[] {
   const rows = new Map<string, ChannelKpiRow>();
   const push = (c: AffiliateChannel) => {
     const key = norm(c.name);
@@ -114,6 +129,16 @@ export function channelTargetResolver(
       .map((t) => [t.itemId.slice(CH_ITEM_PREFIX.length), t.targetValue]),
   );
   return (chKey: string) => saved.get(chKey) ?? 0;
+}
+
+/**
+ * KPI Facebook Ads của một tháng ở BẢNG MỚI (dòng gộp 'ch:facebookads').
+ * Dùng cho màn Facebook > Facebook Ads để đối chiếu đúng con số đang giao;
+ * 0 = tháng đó chưa đặt ở bảng mới.
+ */
+export function fbAdsTotalTarget(targets: ContentKpiTarget[], period: string): number {
+  const itemId = `${CH_ITEM_PREFIX}${FB_ADS_KEY}`;
+  return targets.find((t) => t.period === period && t.itemId === itemId)?.targetValue ?? 0;
 }
 
 /** Bảng mới của tháng này đã được thiết lập chưa. */

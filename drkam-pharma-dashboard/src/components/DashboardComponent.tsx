@@ -16,9 +16,7 @@ import {
   targetResolver,
 } from '../lib/contentKpi';
 // KPI doanh thu THEO NGƯỜI (migration 0019) — thực hiện suy từ kênh phụ trách.
-import {
-  contentEmployeeRoster, employeeTargetsFromChannels, revenueByEmployee, UNASSIGNED_KEY, UNASSIGNED_LABEL,
-} from '../lib/contentEmployeeKpi';
+import { employeeBreakdown, EmployeeRow } from '../lib/contentEmployeeKpi';
 // BẢNG MỚI — chi tiết từng kênh (migration 0020); bảng cũ bên dưới giữ nguyên để đối chiếu.
 import {
   CHANNEL_GROUPS, channelKpiRows, channelTargetResolver, revenueByChannel,
@@ -90,6 +88,31 @@ const toDdmmyyyy = (iso: string) => { const [y, m, d] = iso.split('-'); return `
 const WEEK_BOUNDS = [7, 14, 21, 99];
 const weekIndex = (dayOfMonth: number) => WEEK_BOUNDS.findIndex((b) => dayOfMonth <= b);
 
+/** Báo cáo của đúng tháng đang xem — dùng chung cho cả 3 tab số liệu. */
+const monthReportsOf = (reports: DailyReport[], monthKey: string) =>
+  reports.filter((r) => {
+    const [dd, mm, yy] = r.date.split('/');
+    return `${yy}-${mm}` === monthKey && !!dd;
+  });
+
+/** Báo cáo này thuộc tuần nào (0–3) của tháng. */
+const weekOfReport = (r: DailyReport) => weekIndex(Number(r.date.split('/')[0]));
+
+/** Nhãn tuần đầy đủ, vd "Tuần 2 (8–14/8)". */
+const weekLabelOf = (monthKey: string, i: number) => {
+  const m = Number(monthKey.split('-')[1]);
+  const last = lastDayOfMonth(monthKey);
+  return `Tuần ${i + 1} (${[1, 8, 15, 22][i]}–${[7, 14, 21, last][i]}/${m})`;
+};
+
+/** Nhịp tiến độ theo ngày của tháng đang xem (tháng đã qua → coi như hết tháng). */
+function paceOf(monthKey: string) {
+  const days = lastDayOfMonth(monthKey);
+  const isCurrent = monthKey === nowMonthKey();
+  const dayNow = isCurrent ? Math.min(new Date().getDate(), days) : days;
+  return { days, dayNow, ratio: dayNow / days, daysLeft: Math.max(days - dayNow, 0) };
+}
+
 // Loại kênh (nền tảng + Brand/KOC/AI) theo meta kênh.
 function catKeyOf(r: DailyReport, chMeta: Map<string, AffiliateChannel>): CatKey {
   const ch = chMeta.get(r.channelName);
@@ -106,9 +129,13 @@ function catKeyOf(r: DailyReport, chMeta: Map<string, AffiliateChannel>): CatKey
    CONTAINER — Tổng quan có 3 tab con
    ════════════════════════════════════════════════════════════════ */
 export default function DashboardComponent(props: DashboardComponentProps) {
-  const [view, setView] = useState<'chung' | 'doanhso' | 'checklist'>('chung');
+  const [view, setView] = useState<'chung' | 'nhanvien' | 'kenh' | 'doanhso' | 'checklist'>('chung');
+  // Tháng để Ở ĐÂY (không nằm trong từng tab) — đổi tab vẫn giữ nguyên tháng đang xem.
+  const [monthKey, setMonthKey] = useState(nowMonthKey);
   const TABS: { key: typeof view; label: string; icon: string }[] = [
     { key: 'chung', label: 'Báo cáo chung', icon: 'monitoring' },
+    { key: 'nhanvien', label: 'Theo nhân viên', icon: 'groups' },
+    { key: 'kenh', label: 'Theo kênh', icon: 'table_chart' },
     { key: 'doanhso', label: 'Doanh số', icon: 'storefront' },
     { key: 'checklist', label: 'Checklist', icon: 'checklist' },
   ];
@@ -140,9 +167,29 @@ export default function DashboardComponent(props: DashboardComponentProps) {
         <BaoCaoChung
           reports={props.reports}
           channels={props.channels}
+          kpiTargets={props.kpiTargets}
+          monthKey={monthKey}
+          onMonthChange={setMonthKey}
+          onGotoView={setView}
+        />
+      )}
+      {view === 'nhanvien' && (
+        <TheoNhanVien
+          reports={props.reports}
+          channels={props.channels}
           employees={props.employees}
           kpiTargets={props.kpiTargets}
-          onGotoView={setView}
+          monthKey={monthKey}
+          onMonthChange={setMonthKey}
+        />
+      )}
+      {view === 'kenh' && (
+        <TheoKenh
+          reports={props.reports}
+          channels={props.channels}
+          kpiTargets={props.kpiTargets}
+          monthKey={monthKey}
+          onMonthChange={setMonthKey}
         />
       )}
       {view === 'doanhso' && <DoanhSoNgay reports={props.reports} channels={props.channels} />}
@@ -165,14 +212,14 @@ export default function DashboardComponent(props: DashboardComponentProps) {
 /* ════════════════════════════════════════════════════════════════
    TAB 1 — BÁO CÁO CHUNG (tháng: KPI + biểu đồ + bảng kênh × tuần)
    ════════════════════════════════════════════════════════════════ */
-function BaoCaoChung({ reports, channels, employees, kpiTargets, onGotoView }: {
+function BaoCaoChung({ reports, channels, kpiTargets, monthKey, onMonthChange, onGotoView }: {
   reports: DailyReport[];
   channels: AffiliateChannel[];
-  employees: Employee[];
   kpiTargets: ContentKpiTarget[];
-  onGotoView: (v: 'doanhso') => void;
+  monthKey: string;
+  onMonthChange: (v: string) => void;
+  onGotoView: (v: 'doanhso' | 'nhanvien' | 'kenh') => void;
 }) {
-  const [monthKey, setMonthKey] = useState(nowMonthKey);
   // Chỉ tiêu của ĐÚNG tháng đang xem (chưa thiết lập → số mặc định trong lib).
   const targetOf = targetResolver(kpiTargets, monthKey);
   const [y, m] = monthKey.split('-').map(Number);
@@ -239,7 +286,7 @@ function BaoCaoChung({ reports, channels, employees, kpiTargets, onGotoView }: {
       {/* Chọn tháng */}
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold text-slate-600">Doanh số tháng {m}/{y}</span>
-        <MonthPicker value={monthKey} onChange={setMonthKey} />
+        <MonthPicker value={monthKey} onChange={onMonthChange} />
       </div>
 
       {/* Tổng doanh thu hiện tại vs KPI — realtime theo báo cáo ngày */}
@@ -274,16 +321,6 @@ function BaoCaoChung({ reports, channels, employees, kpiTargets, onGotoView }: {
           sub={withTarget.length ? 'Số hạng mục ≥ 100% chỉ tiêu' : 'Chưa đặt chỉ tiêu'} subTone="muted" />
       </div>
 
-      {/* Tiến độ doanh thu theo NHÂN VIÊN — song song với tiến độ chung ở trên */}
-      <EmployeeProgress
-        reports={monthReports}
-        channels={channels}
-        employees={employees}
-        kpiTargets={kpiTargets}
-        monthKey={monthKey}
-        teamTotal={grandTotal}
-      />
-
       {/* Biểu đồ 1 — Thực hiện vs Mục tiêu (thanh tiến độ tự vẽ) */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
         <h3 className="text-base font-bold text-slate-800 mb-4">Thực hiện vs Mục tiêu theo hạng mục</h3>
@@ -313,15 +350,6 @@ function BaoCaoChung({ reports, channels, employees, kpiTargets, onGotoView }: {
             </ResponsiveContainer>
           </div>
         </div>
-
-      {/* BẢNG MỚI — doanh thu chi tiết theo từng kênh (KPI bảng mới) */}
-      <ChannelDetailReport
-        reports={monthReports}
-        channels={channels}
-        kpiTargets={kpiTargets}
-        monthKey={monthKey}
-        weekLabel={weekLabel}
-      />
 
       {/* Bảng hạng mục × tuần (BẢNG CŨ — giữ để đối chiếu) */}
       <div className="bg-white rounded-2xl border border-slate-200/70 soft-shadow overflow-hidden">
@@ -412,8 +440,11 @@ function BaoCaoChung({ reports, channels, employees, kpiTargets, onGotoView }: {
         </div>
         <div className="px-4 py-2 flex items-center gap-4 text-[10px] text-slate-400 border-t border-slate-100">
           <span>T1 (1–7) · T2 (8–14) · T3 (15–21) · T4 (22–cuối tháng) · Doanh số cộng theo ngày · View/Reach cộng theo tuần</span>
-          <button onClick={() => onGotoView('doanhso')} className="ml-auto text-[#D32027] font-bold hover:underline flex items-center gap-1">
-            Xem doanh số chi tiết <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+          <button onClick={() => onGotoView('kenh')} className="ml-auto text-[#D32027] font-bold hover:underline flex items-center gap-1">
+            Xem chi tiết theo kênh <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+          </button>
+          <button onClick={() => onGotoView('nhanvien')} className="text-[#D32027] font-bold hover:underline flex items-center gap-1">
+            Xem theo nhân viên <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
           </button>
         </div>
       </div>
@@ -647,168 +678,79 @@ function KpiCard({ label, value, icon, iconNode, tone, sub, subTone = 'muted', t
 }
 
 /* ════════════════════════════════════════════════════════════════
-   TIẾN ĐỘ DOANH THU THEO NHÂN VIÊN (KPI người — migration 0019)
-
-   Đặt ngay dưới KPI chung để nhìn một màn là thấy cả team lẫn từng
-   người. Nguồn số:
-     • Mục tiêu   — SUY RA từ bảng KPI mới theo kênh: cộng chỉ tiêu
-                    các kênh người đó phụ trách. Không nhập tay riêng
-                    (chốt với user), nên đặt KPI kênh xong là có ngay
-                    mục tiêu của từng người.
-     • Thực hiện  — tổng doanh thu báo cáo ngày của các KÊNH người đó
-                    phụ trách (channels.manager_name). Kênh chưa gán
-                    người rơi vào dòng "Chưa gán" để tổng luôn khớp
-                    tổng doanh thu team.
-
-   VẠCH NHỊP (mốc xám trên thanh) = tiến độ kỳ vọng tính theo số ngày
-   đã trôi qua của tháng — thanh màu chưa tới vạch là đang chậm. Tháng
-   đã qua thì vạch nằm ở 100%.
+   TAB — THEO NHÂN VIÊN
+   Mỗi người 1 dòng: TỔNG KPI · thực hiện · % · thanh tiến độ, bấm
+   vào mở ra CHI TIẾT TỪNG KÊNH họ cầm (kèm phần chia Facebook Ads).
+   Toàn bộ số lấy từ employeeBreakdown() nên không thể lệch với tab
+   "Theo kênh".
    ════════════════════════════════════════════════════════════════ */
-function EmployeeProgress({ reports, channels, employees, kpiTargets, monthKey, teamTotal }: {
-  reports: DailyReport[];          // báo cáo ĐÃ lọc theo tháng đang xem
+function TheoNhanVien({ reports, channels, employees, kpiTargets, monthKey, onMonthChange }: {
+  reports: DailyReport[];
   channels: AffiliateChannel[];
   employees: Employee[];
   kpiTargets: ContentKpiTarget[];
   monthKey: string;
-  teamTotal: number;
+  onMonthChange: (v: string) => void;
 }) {
-  // Mục tiêu của mỗi người = tổng chỉ tiêu các kênh họ phụ trách (bảng KPI mới).
-  const empTarget = employeeTargetsFromChannels(channels, channelTargetResolver(kpiTargets, monthKey));
-  const actual = revenueByEmployee(reports, channels, (r) => weekIndex(Number(r.date.split('/')[0])));
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const monthReports = monthReportsOf(reports, monthKey);
+  const { rows, unassigned } = employeeBreakdown(
+    employees, channels, monthReports, weekOfReport, channelTargetResolver(kpiTargets, monthKey),
+  );
 
-  const rows = contentEmployeeRoster(employees, channels)
-    .map((e) => {
-      const got = actual.get(e.key);
-      return { ...e, target: empTarget.get(e.key) ?? 0, total: got?.total ?? 0, weeks: got?.weeks ?? [0, 0, 0, 0] };
-    })
-    // Người vừa không có chỉ tiêu vừa không có doanh thu thì không cần theo dõi.
-    .filter((r) => r.target > 0 || r.total > 0)
-    .sort((a, b) => {
-      const pa = a.target > 0 ? a.total / a.target : -1;
-      const pb = b.target > 0 ? b.total / b.target : -1;
-      return pb - pa || b.total - a.total;
-    });
+  const { days, dayNow, ratio, daysLeft } = paceOf(monthKey);
+  const teamTarget = rows.reduce((s, r) => s + r.target, 0) + unassigned.target;
+  const teamTotal = rows.reduce((s, r) => s + r.total, 0) + unassigned.total;
+  const withTarget = rows.filter((r) => r.target > 0);
+  const onTrack = withTarget.filter((r) => r.total >= r.target * ratio).length;
+  const [y, m] = monthKey.split('-').map(Number);
 
-  const unassigned = actual.get(UNASSIGNED_KEY)?.total ?? 0;
-  // Chỉ tiêu của các kênh chưa gán người — phần KPI chưa về tay ai.
-  const unassignedTarget = empTarget.get(UNASSIGNED_KEY) ?? 0;
-
-  // Nhịp tiến độ theo ngày — tháng đang chạy mới có "ngày còn lại".
-  const days = lastDayOfMonth(monthKey);
-  const isCurrentMonth = monthKey === nowMonthKey();
-  const dayNow = isCurrentMonth ? Math.min(new Date().getDate(), days) : days;
-  const paceRatio = dayNow / days;
-  const daysLeft = Math.max(days - dayNow, 0);
-
-  const assignedTarget = rows.reduce((s, r) => s + r.target, 0);
-  const onTrack = rows.filter((r) => r.target > 0 && r.total >= r.target * paceRatio).length;
-  const withTarget = rows.filter((r) => r.target > 0).length;
+  const toggle = (key: string) => setOpenKey((k) => (k === key ? null : key));
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/70 soft-shadow overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#D32027] text-[20px]">groups</span>
-            Tiến độ doanh thu theo nhân viên
-          </h3>
+          <span className="text-sm font-bold text-slate-600">KPI &amp; tiến độ từng nhân viên · tháng {m}/{y}</span>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            Thực hiện = doanh thu các kênh người đó phụ trách · Mục tiêu = tổng KPI các kênh đó (bảng KPI mới).
+            KPI của một người = tổng chỉ tiêu các kênh họ phụ trách · bấm vào dòng để xem chi tiết từng kênh.
           </p>
         </div>
-        {withTarget > 0 && (
-          <span className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
-            onTrack === withTarget ? 'text-green-700 bg-green-50' : 'text-amber-700 bg-amber-50'
-          }`}>
-            {onTrack}/{withTarget} người bám nhịp
-          </span>
-        )}
+        <MonthPicker value={monthKey} onChange={onMonthChange} />
       </div>
 
-      {rows.length === 0 ? (
-        <p className="px-5 py-6 text-xs text-slate-400 text-center">
-          Chưa có nhân viên nào có chỉ tiêu hoặc doanh thu trong tháng này — đặt KPI ở màn <b>KPI tháng — Team Content</b>.
-        </p>
-      ) : (
-        <div className="px-5 py-2 divide-y divide-slate-50">
-          {rows.map((r) => {
-            const p = pct(r.total, r.target);
-            const st = completionStyle(p);
-            const gap = r.target - r.total;
-            const perDay = daysLeft > 0 && gap > 0 ? gap / daysLeft : 0;
-            const behind = r.target > 0 && r.total < r.target * paceRatio;
-            return (
-              <div key={r.key} className="py-3 flex flex-col gap-1.5">
-                <div className="flex items-center gap-3">
-                  <span className="w-7 h-7 shrink-0 rounded-full bg-slate-800 text-white text-[10px] font-extrabold flex items-center justify-center">
-                    {initialsOf(r.name)}
-                  </span>
-                  <span className="text-xs font-bold text-slate-700 truncate flex-1 min-w-0" title={r.name}>{r.name}</span>
-                  <span className="text-[11px] font-semibold text-slate-500 tabular-nums whitespace-nowrap">
-                    {vndShort(r.total)} <span className="text-slate-300">/</span> {r.target ? vndShort(r.target) : '—'}
-                  </span>
-                  <span className="w-16 text-right text-sm font-extrabold tabular-nums" style={{ color: st.text }}>
-                    {p == null ? '—' : p + '%'}
-                  </span>
-                </div>
+      {/* 3 thẻ tóm tắt */}
+      <div className="grid grid-cols-3 gap-3">
+        <KpiCard label="Tổng KPI đã giao" value={teamTarget ? vnd(teamTarget) : '—'} icon="flag" tone="rose"
+          sub={`${withTarget.length} nhân viên có chỉ tiêu`} />
+        <KpiCard label="Team đã đạt" value={vnd(teamTotal)} icon="payments" tone="green"
+          target={teamTarget} pctVal={pct(teamTotal, teamTarget)} />
+        <KpiCard label="Bám nhịp tháng" value={`${onTrack}/${withTarget.length}`} icon="speed" tone="blue"
+          sub={`Đến ngày ${dayNow}/${days} cần đạt ${Math.round(ratio * 100)}% KPI`} />
+      </div>
 
-                {/* Thanh tiến độ + vạch nhịp kỳ vọng theo ngày */}
-                <div className="relative h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                  <div className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(p ?? 0, 100)}%`, background: st.bar }} />
-                  {r.target > 0 && (
-                    <div className="absolute top-0 bottom-0 w-[2px] bg-slate-400/70"
-                      style={{ left: `${Math.min(paceRatio * 100, 100)}%` }}
-                      title={`Nhịp kỳ vọng đến ngày ${dayNow}/${days}: ${vndShort(r.target * paceRatio)}`} />
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400">
-                  {r.target === 0 ? (
-                    <span className="text-amber-600 font-semibold">Kênh phụ trách chưa có chỉ tiêu tháng này</span>
-                  ) : gap > 0 ? (
-                    <>
-                      <span>Còn thiếu <b className="text-slate-600">{vndShort(gap)}</b></span>
-                      {daysLeft > 0 && <span>Cần <b className="text-slate-600">{vndShort(perDay)}</b>/ngày · còn {daysLeft} ngày</span>}
-                      <span className={behind ? 'text-rose-600 font-semibold' : 'text-green-700 font-semibold'}>
-                        {behind ? 'Chậm hơn nhịp' : 'Bám nhịp'}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-green-700 font-semibold">Đã vượt chỉ tiêu {vndShort(-gap)}</span>
-                  )}
-                  <span className="ml-auto tabular-nums">
-                    {r.weeks.map((w, i) => `T${i + 1} ${w ? vndShort(w) : '—'}`).join(' · ')}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Doanh thu chưa gán người phụ trách — để tổng các dòng khớp tổng team */}
-          {unassigned > 0 && (
-            <div className="py-3 flex items-center gap-3">
-              <span className="w-7 h-7 shrink-0 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center">
-                <span className="material-symbols-outlined text-[16px]">help</span>
-              </span>
-              <span className="text-xs font-bold text-slate-500 flex-1 min-w-0">{UNASSIGNED_LABEL}</span>
-              <span className="text-[11px] font-semibold text-slate-500 tabular-nums">{vndShort(unassigned)}</span>
-              <span className="w-16 text-right text-[10px] text-amber-600 font-semibold">Gán ở Quản lý kênh</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Đối chiếu tổng: KPI đã về tay người vs KPI của kênh chưa gán ai */}
-      <div className="px-5 py-2.5 border-t border-slate-100 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-400">
-        <span>Tổng KPI đã về tay nhân viên: <b className="text-slate-600 tabular-nums">{assignedTarget ? vndShort(assignedTarget) : '—'}</b></span>
-        <span>Team đã đạt: <b className="text-slate-600 tabular-nums">{vndShort(teamTotal)}</b></span>
-        {unassignedTarget > 0 && (
-          <span className="text-amber-600 font-semibold">
-            {vndShort(unassignedTarget)} chỉ tiêu thuộc kênh chưa gán người phụ trách
-          </span>
+      <div className="bg-white rounded-2xl border border-slate-200/70 soft-shadow overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="px-5 py-8 text-xs text-slate-400 text-center">
+            Chưa có nhân viên nào có chỉ tiêu hoặc doanh thu trong tháng này — đặt KPI ở màn <b>KPI tháng — Team Content</b>.
+          </p>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {rows.map((r) => (
+              <EmployeeRowCard key={r.key} row={r} open={openKey === r.key} onToggle={() => toggle(r.key)}
+                ratio={ratio} daysLeft={daysLeft} monthKey={monthKey} />
+            ))}
+            {(unassigned.total > 0 || unassigned.target > 0) && (
+              <EmployeeRowCard row={unassigned} open={openKey === unassigned.key} onToggle={() => toggle(unassigned.key)}
+                ratio={ratio} daysLeft={daysLeft} monthKey={monthKey} muted />
+            )}
+          </div>
         )}
-        <span className="ml-auto">Vạch xám trên thanh = nhịp kỳ vọng đến ngày {dayNow}/{days}</span>
+        <div className="px-5 py-2.5 border-t border-slate-100 text-[10px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+          <span>Vạch xám trên thanh = nhịp kỳ vọng đến ngày {dayNow}/{days}.</span>
+          <span>Facebook Ads là kênh gộp của cả team nên nằm ở dòng “Chưa gán người phụ trách”.</span>
+          <span>Gán người phụ trách kênh ở tab <b>Quản lý kênh</b>; đặt KPI ở màn <b>KPI tháng — Team Content</b>.</span>
+        </div>
       </div>
     </div>
   );
@@ -818,6 +760,165 @@ function EmployeeProgress({ reports, channels, employees, kpiTargets, monthKey, 
 const initialsOf = (name: string) =>
   name.trim().split(/\s+/).slice(-2).map((w) => w[0] ?? '').join('').toUpperCase() || '?';
 
+/** 1 nhân viên: dòng tổng + (mở rộng) bảng chi tiết từng kênh. */
+function EmployeeRowCard({ row, open, onToggle, ratio, daysLeft, monthKey, muted = false }: {
+  row: EmployeeRow;
+  open: boolean;
+  onToggle: () => void;
+  ratio: number;
+  daysLeft: number;
+  monthKey: string;
+  muted?: boolean;
+}) {
+  const p = pct(row.total, row.target);
+  const st = completionStyle(p);
+  const gap = row.target - row.total;
+  const behind = row.target > 0 && row.total < row.target * ratio;
+
+  return (
+    <div className={muted ? 'bg-slate-50/40' : ''}>
+      <button onClick={onToggle} className="w-full text-left px-5 py-3 hover:bg-rose-50/30 transition-colors">
+        <div className="flex items-center gap-3">
+          <span className={`w-8 h-8 shrink-0 rounded-full text-[10px] font-extrabold flex items-center justify-center ${
+            muted ? 'bg-slate-200 text-slate-500' : 'bg-slate-800 text-white'
+          }`}>
+            {muted ? <span className="material-symbols-outlined text-[16px]">help</span> : initialsOf(row.name)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-slate-800 truncate" title={row.name}>{row.name}</span>
+              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{row.lines.length} kênh</span>
+            </div>
+            <span className="text-[11px] text-slate-500 tabular-nums">
+              {vnd(row.total)} <span className="text-slate-300">/</span> {row.target ? vnd(row.target) : 'chưa có KPI'}
+            </span>
+          </div>
+          <span className="text-lg font-extrabold tabular-nums w-20 text-right" style={{ color: st.text }}>
+            {p == null ? '—' : p + '%'}
+          </span>
+          <span className={`material-symbols-outlined text-[20px] text-slate-300 transition-transform ${open ? 'rotate-180' : ''}`}>
+            expand_more
+          </span>
+        </div>
+
+        {/* Thanh tiến độ + vạch nhịp kỳ vọng */}
+        <div className="relative h-2.5 rounded-full bg-slate-100 overflow-hidden mt-2">
+          <div className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${Math.min(p ?? 0, 100)}%`, background: st.bar }} />
+          {row.target > 0 && (
+            <div className="absolute top-0 bottom-0 w-[2px] bg-slate-400/70" style={{ left: `${Math.min(ratio * 100, 100)}%` }} />
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400 mt-1.5">
+          {row.target === 0 ? (
+            <span className="text-amber-600 font-semibold">Kênh phụ trách chưa có chỉ tiêu tháng này</span>
+          ) : gap > 0 ? (
+            <>
+              <span>Còn thiếu <b className="text-slate-600">{vndShort(gap)}</b></span>
+              {daysLeft > 0 && <span>Cần <b className="text-slate-600">{vndShort(gap / daysLeft)}</b>/ngày · còn {daysLeft} ngày</span>}
+              <span className={behind ? 'text-rose-600 font-semibold' : 'text-green-700 font-semibold'}>
+                {behind ? 'Chậm hơn nhịp' : 'Bám nhịp'}
+              </span>
+            </>
+          ) : (
+            <span className="text-green-700 font-semibold">Đã vượt chỉ tiêu {vndShort(-gap)}</span>
+          )}
+          <span className="ml-auto tabular-nums">
+            {row.weeks.map((w, i) => `T${i + 1} ${w ? vndShort(w) : '—'}`).join(' · ')}
+          </span>
+        </div>
+      </button>
+
+      {/* Chi tiết từng kênh của người này */}
+      {open && (
+        <div className="px-5 pb-4 -mt-1">
+          <div className="overflow-x-auto rounded-xl border border-slate-200/70">
+            <table className="w-full text-xs border-collapse min-w-[620px]">
+              <thead>
+                <tr className="text-[10px] text-slate-500 uppercase tracking-wider bg-slate-50">
+                  <th className="px-3 py-2 text-left font-bold">Kênh</th>
+                  <th className="px-3 py-2 text-right font-bold">Mục tiêu</th>
+                  <th className="px-3 py-2 text-right font-bold">Thực hiện</th>
+                  <th className="px-3 py-2 text-center font-bold">%</th>
+                  {[0, 1, 2, 3].map((i) => (
+                    <th key={i} className="px-3 py-2 text-right font-bold" title={weekLabelOf(monthKey, i)}>T{i + 1}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {row.lines.map((l) => {
+                  const lp = pct(l.total, l.target);
+                  return (
+                    <tr key={l.key} className="border-t border-slate-100 hover:bg-rose-50/20">
+                      <td className="px-3 py-2 font-semibold text-slate-700 truncate max-w-[220px]" title={l.name}>
+                        <span className="inline-flex items-center gap-1.5">
+                          {l.kind === 'fbads' && <FacebookIcon className="w-3.5 h-3.5 text-[#1877F2] shrink-0" />}
+                          {l.name}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right text-slate-400">{l.target ? vndShort(l.target) : '—'}</td>
+                      <td className="px-3 py-2 text-right font-bold text-slate-800">{l.total ? vndShort(l.total) : '—'}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(lp)}`}>{lp == null ? '—' : lp + '%'}</span>
+                      </td>
+                      {l.weeks.map((w, i) => (
+                        <td key={i} className="px-3 py-2 text-right text-slate-500 font-mono">{w ? vndShort(w) : '—'}</td>
+                      ))}
+                    </tr>
+                  );
+                })}
+                <tr className="bg-slate-50 font-bold border-t border-slate-200">
+                  <td className="px-3 py-2 text-slate-700">Tổng của {row.name}</td>
+                  <td className="px-3 py-2 text-right text-slate-600">{row.target ? vndShort(row.target) : '—'}</td>
+                  <td className="px-3 py-2 text-right text-[#D32027]">{vndShort(row.total)}</td>
+                  <td className="px-3 py-2 text-center">
+                    <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(p)}`}>{p == null ? '—' : p + '%'}</span>
+                  </td>
+                  {row.weeks.map((w, i) => (
+                    <td key={i} className="px-3 py-2 text-right text-slate-600">{w ? vndShort(w) : '—'}</td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TAB — THEO KÊNH (bảng KPI mới, chi tiết từng kênh)
+   ════════════════════════════════════════════════════════════════ */
+function TheoKenh({ reports, channels, kpiTargets, monthKey, onMonthChange }: {
+  reports: DailyReport[];
+  channels: AffiliateChannel[];
+  kpiTargets: ContentKpiTarget[];
+  monthKey: string;
+  onMonthChange: (v: string) => void;
+}) {
+  const [y, m] = monthKey.split('-').map(Number);
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <span className="text-sm font-bold text-slate-600">Doanh thu &amp; KPI từng kênh · tháng {m}/{y}</span>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Mục tiêu lấy từ bảng KPI mới · cột người phụ trách gán ở tab Quản lý kênh.
+          </p>
+        </div>
+        <MonthPicker value={monthKey} onChange={onMonthChange} />
+      </div>
+      <ChannelDetailReport
+        reports={monthReportsOf(reports, monthKey)}
+        channels={channels}
+        kpiTargets={kpiTargets}
+        monthKey={monthKey}
+      />
+    </div>
+  );
+}
 
 /* ════════════════════════════════════════════════════════════════
    BẢNG MỚI — DOANH THU CHI TIẾT THEO TỪNG KÊNH (migration 0020)
@@ -831,13 +932,13 @@ const initialsOf = (name: string) =>
    tắt doanh thu nhưng trong tháng vẫn có số thì vẫn hiện (nhóm "Khác")
    để không nuốt mất doanh thu đã nhập.
    ════════════════════════════════════════════════════════════════ */
-function ChannelDetailReport({ reports, channels, kpiTargets, monthKey, weekLabel }: {
+function ChannelDetailReport({ reports, channels, kpiTargets, monthKey }: {
   reports: DailyReport[];          // báo cáo ĐÃ lọc theo tháng đang xem
   channels: AffiliateChannel[];
   kpiTargets: ContentKpiTarget[];
   monthKey: string;
-  weekLabel: (i: number) => string;
 }) {
+  const weekLabel = (i: number) => weekLabelOf(monthKey, i);
   const targetOf = channelTargetResolver(kpiTargets, monthKey);
   const actual = revenueByChannel(reports, (r) => weekIndex(Number(r.date.split('/')[0])));
   const rows = channelKpiRows(channels, reports.filter((r) => r.revenue).map((r) => r.channelName))

@@ -19,6 +19,7 @@
 import { AffiliateChannel, DailyReport, Employee } from '../types';
 import { norm } from './contentKpi';
 import { managerOf } from './channels';
+import { revenueByChannel } from './contentChannelKpi';
 import { isContentStaff } from './staff';
 
 /** Khoá của dòng doanh thu không xác định được người phụ trách. */
@@ -97,8 +98,110 @@ export function employeeTargetsFromChannels(
   channels.forEach((c) => {
     const target = chTargetOf(norm(c.name));
     if (!target) return;
+    // Kênh chưa gán ai (kể cả kênh gộp Facebook Ads) rơi vào khoá '' — "Chưa gán".
     const key = norm(managerOf(c));
     out.set(key, (out.get(key) ?? 0) + target);
   });
   return out;
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  BẢNG PHÂN RÃ THEO NHÂN VIÊN — nguồn của tab "Theo nhân viên" ở Tổng quan
+//
+//  Một hàm duy nhất trả về: mỗi người · tổng KPI · tổng thực hiện · và CHI TIẾT
+//  TỪNG KÊNH họ cầm (kèm phần chia Facebook Ads). Nhờ vậy màn hình chỉ việc vẽ,
+//  không phải tự cộng lại — và số ở tab "Theo kênh" với tab "Theo nhân viên"
+//  không thể lệch nhau.
+//
+//  Quy tắc số (chốt với user):
+//    • KPI của người   = tổng KPI các KÊNH họ phụ trách
+//    • Thực hiện       = tổng doanh thu các kênh đó
+//    • Facebook Ads là kênh GỘP, không thuộc về ai → nằm ở dòng "Chưa gán"
+//  Mọi kênh chưa gán người đều gom vào dòng "Chưa gán" nên tổng các dòng luôn
+//  bằng tổng doanh thu team.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** 1 dòng chi tiết trong phần của một nhân viên. */
+export type EmployeeLine = {
+  key: string;
+  name: string;
+  target: number;
+  total: number;
+  weeks: number[];
+  kind: 'channel' | 'fbads' | 'other';
+};
+
+/** 1 nhân viên: tổng KPI · tổng thực hiện · chi tiết từng kênh. */
+export type EmployeeRow = {
+  key: string;
+  name: string;
+  target: number;
+  total: number;
+  weeks: number[];
+  lines: EmployeeLine[];
+};
+
+export function employeeBreakdown(
+  employees: Employee[],
+  channels: AffiliateChannel[],
+  monthReports: DailyReport[],
+  weekOf: (r: DailyReport) => number,
+  chTargetOf: (chKey: string) => number,
+): { rows: EmployeeRow[]; unassigned: EmployeeRow } {
+  const actual = revenueByChannel(monthReports, weekOf);
+  const rowMap = new Map<string, EmployeeRow>();
+  const blank = (key: string, name: string): EmployeeRow =>
+    ({ key, name, target: 0, total: 0, weeks: [0, 0, 0, 0], lines: [] });
+
+  const rowOf = (name: string) => {
+    const key = norm(name);
+    const cur = rowMap.get(key) ?? blank(key, name);
+    rowMap.set(key, cur);
+    return cur;
+  };
+  const unassigned = blank(UNASSIGNED_KEY, UNASSIGNED_LABEL);
+  const bucketOf = (name: string) => (norm(name) ? rowOf(name) : unassigned);
+
+  // Có mặt sẵn mọi nhân sự để người chưa có kênh nào vẫn hiện (KPI 0).
+  contentEmployeeRoster(employees, channels).forEach((e) => rowOf(e.name));
+
+  // ── Từng kênh (kênh gộp Facebook Ads cũng chỉ là một kênh chưa gán ai) ──
+  const seen = new Set<string>();
+  channels.forEach((c) => {
+    const key = norm(c.name);
+    seen.add(key);
+    const got = actual.get(key);
+    const target = chTargetOf(key);
+    if (!target && !got) return;                    // không KPI, không doanh thu → bỏ cho gọn
+    bucketOf(managerOf(c)).lines.push({
+      key, name: c.name, target,
+      total: got?.total ?? 0, weeks: got?.weeks ?? [0, 0, 0, 0], kind: 'channel',
+    });
+  });
+
+  // ── Doanh thu của kênh không còn trong danh sách kênh → không được rơi mất ──
+  actual.forEach((v, key) => {
+    if (seen.has(key)) return;
+    unassigned.lines.push({ key, name: key, target: 0, total: v.total, weeks: v.weeks, kind: 'other' });
+  });
+
+  const finish = (r: EmployeeRow) => {
+    r.target = r.lines.reduce((s, l) => s + l.target, 0);
+    r.total = r.lines.reduce((s, l) => s + l.total, 0);
+    r.weeks = [0, 1, 2, 3].map((i) => r.lines.reduce((s, l) => s + (l.weeks[i] ?? 0), 0));
+    r.lines.sort((a, b) => b.target - a.target || b.total - a.total);
+    return r;
+  };
+
+  const rows = [...rowMap.values()]
+    .map(finish)
+    .filter((r) => r.target > 0 || r.total > 0)
+    .sort((a, b) => {
+      const pa = a.target > 0 ? a.total / a.target : -1;
+      const pb = b.target > 0 ? b.total / b.target : -1;
+      return pb - pa || b.total - a.total;
+    });
+
+  return { rows, unassigned: finish(unassigned) };
 }
