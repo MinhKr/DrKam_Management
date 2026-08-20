@@ -58,15 +58,69 @@ export type ChannelKpiRow = {
   manager: string;      // người phụ trách (có thể rỗng)
   group: ChannelGroupKey;
   badge: BadgeKind;
+  /** Dòng này là 1 PHẦN CHIA của kênh gộp (hiện chỉ có Facebook Ads). */
+  poolKey?: string;
 };
+
+// ════════════════════════════════════════════════════════════════════════════
+//  FACEBOOK ADS — KÊNH GỘP, CHIA CHO NHIỀU NGƯỜI (chốt với user 20/08/2026)
+//
+//  "Facebook Ads" không phải kênh của một người: doanh thu nhập 1 số/ngày ở mục
+//  Facebook > Facebook Ads, còn KPI thì chia cho từng thành viên (vd tổng chia 3
+//  cho Khánh · Nhi · Hải, ai không chạy thì đặt 0).
+//
+//  Cách làm: bảng KPI mới KHÔNG hiện dòng "Facebook Ads" gộp nữa mà hiện MỖI
+//  NGƯỜI MỘT DÒNG, item_id = 'ch:facebookads:<tên chuẩn hoá>'.
+//  DOANH THU THỰC HIỆN cũng chia theo ĐÚNG TỈ TRỌNG KPI đó (3 người KPI bằng
+//  nhau ⇒ mỗi người 1/3 doanh thu; ai KPI 0 ⇒ không nhận đồng nào). Chưa ai có
+//  KPI Facebook Ads thì cả cục nằm ở dòng "chưa chia", không gán bừa cho ai.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Khoá kênh gộp Facebook Ads (= norm('Facebook Ads')). */
+export const FB_ADS_KEY = 'facebookads';
+
+/** Khoá phần chia Facebook Ads của một người. */
+export const fbAdsShareKey = (name: string) => `${FB_ADS_KEY}:${norm(name)}`;
+
+/** Trọng số chia Facebook Ads = KPI Facebook Ads của từng người (khoá: tên chuẩn hoá). */
+export function fbAdsWeights(
+  staffNames: string[],
+  targetOf: (chKey: string) => number,
+): Map<string, number> {
+  return new Map(staffNames.map((n) => [norm(n), targetOf(fbAdsShareKey(n))]));
+}
+
+/**
+ * Chia một số tiền theo trọng số, KHÔNG để rơi rớt đồng nào: phần dư do làm
+ * tròn dồn vào người có trọng số lớn nhất nên tổng các phần luôn bằng `amount`.
+ * Tổng trọng số = 0 → trả về mảng 0 (nơi gọi tự lo phần "chưa chia").
+ */
+export function allocateByWeights(amount: number, weights: number[]): number[] {
+  const totalW = weights.reduce((s, w) => s + Math.max(w, 0), 0);
+  if (totalW <= 0 || !amount) return weights.map(() => 0);
+  const parts = weights.map((w) => Math.floor((amount * Math.max(w, 0)) / totalW));
+  const rest = amount - parts.reduce((s, v) => s + v, 0);
+  if (rest !== 0) {
+    let big = 0;
+    weights.forEach((w, i) => { if (w > weights[big]) big = i; });
+    parts[big] += rest;
+  }
+  return parts;
+}
 
 /**
  * Danh sách kênh có KPI doanh thu, xếp theo nhóm rồi theo tên.
  * `extraNames` là tên kênh xuất hiện trong báo cáo nhưng không còn bật doanh thu
  * (hoặc đã xoá khỏi danh sách kênh) — truyền vào để Tổng quan vẫn hiện dòng đó,
  * không "nuốt" doanh thu đã nhập.
+ * `staffNames` là nhân sự team Content — kênh gộp "Facebook Ads" được thay bằng
+ * MỖI NGƯỜI MỘT DÒNG để đặt KPI riêng (xem khối FACEBOOK ADS ở trên).
  */
-export function channelKpiRows(channels: AffiliateChannel[], extraNames: string[] = []): ChannelKpiRow[] {
+export function channelKpiRows(
+  channels: AffiliateChannel[],
+  extraNames: string[] = [],
+  staffNames: string[] = [],
+): ChannelKpiRow[] {
   const rows = new Map<string, ChannelKpiRow>();
   const push = (c: AffiliateChannel) => {
     const key = norm(c.name);
@@ -82,12 +136,32 @@ export function channelKpiRows(channels: AffiliateChannel[], extraNames: string[
     });
   };
 
-  channels.filter((c) => c.tracking.revenueActive).forEach(push);
+  // Kênh gộp Facebook Ads: bỏ dòng gộp, thay bằng từng người (khi biết nhân sự).
+  const splitFbAds = staffNames.length > 0
+    && channels.some((c) => isRevenueBucket(c) && c.tracking.revenueActive);
+  channels
+    .filter((c) => c.tracking.revenueActive && !(splitFbAds && isRevenueBucket(c)))
+    .forEach(push);
+  if (splitFbAds) {
+    [...staffNames].sort((a, b) => a.localeCompare(b, 'vi')).forEach((n) => {
+      const key = fbAdsShareKey(n);
+      rows.set(key, {
+        key,
+        itemId: CH_ITEM_PREFIX + key,
+        name: `Facebook Ads — ${n}`,
+        manager: n,
+        group: 'fb-ads',
+        badge: 'fb',
+        poolKey: FB_ADS_KEY,
+      });
+    });
+  }
   // Kênh đã tắt doanh thu nhưng tháng đang xem vẫn có số → vẫn phải hiện.
   const known = new Set(rows.keys());
   extraNames.forEach((n) => {
     const key = norm(n);
     if (!key || known.has(key) || rows.has(key)) return;
+    if (splitFbAds && key === FB_ADS_KEY) return;   // cục này đã chia cho từng người
     const c = channels.find((x) => norm(x.name) === key);
     if (c) { push(c); return; }
     rows.set(key, { key, itemId: channelItemId(n), name: n, manager: '', group: 'other', badge: 'other' });
@@ -114,6 +188,18 @@ export function channelTargetResolver(
       .map((t) => [t.itemId.slice(CH_ITEM_PREFIX.length), t.targetValue]),
   );
   return (chKey: string) => saved.get(chKey) ?? 0;
+}
+
+/**
+ * Tổng KPI Facebook Ads của một tháng ở BẢNG MỚI = cộng phần chia của mọi người.
+ * Dùng cho màn Facebook > Facebook Ads (nơi nhập doanh thu cả cục) để đối chiếu
+ * với đúng con số đang giao cho team; 0 = tháng đó chưa chia cho ai.
+ */
+export function fbAdsTotalTarget(targets: ContentKpiTarget[], period: string): number {
+  const prefix = `${CH_ITEM_PREFIX}${FB_ADS_KEY}:`;
+  return targets
+    .filter((t) => t.period === period && t.itemId.startsWith(prefix))
+    .reduce((sum, t) => sum + t.targetValue, 0);
 }
 
 /** Bảng mới của tháng này đã được thiết lập chưa. */

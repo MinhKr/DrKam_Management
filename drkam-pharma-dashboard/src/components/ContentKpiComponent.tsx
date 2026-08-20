@@ -25,17 +25,19 @@
  * giao lại từng tháng) nên để trống đến khi được đặt.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { UserSession, ContentKpiTarget, AffiliateChannel } from '../types';
+import { UserSession, ContentKpiTarget, AffiliateChannel, Employee } from '../types';
 import { CONTENT_KPI_ITEMS, targetResolver, hasSavedTargets, BadgeKind } from '../lib/contentKpi';
 // Bảng KPI MỚI — chi tiết từng kênh (migration 0020), chạy song song bảng cũ.
 import {
   CHANNEL_GROUPS, ChannelKpiRow, channelKpiRows, channelTargetResolver,
 } from '../lib/contentChannelKpi';
+import { contentStaff } from '../lib/staff';
 import { MonthPicker, shiftMonthKey } from './dashboardKit';
 
 interface Props {
   targets: ContentKpiTarget[];
   channels: AffiliateChannel[];
+  employees: Employee[];
   session: UserSession;
   onSave: (period: string, rows: ContentKpiTarget[]) => void;
 }
@@ -57,7 +59,7 @@ type Line = {
   dirty: boolean;
 };
 
-export default function ContentKpiComponent({ targets, channels, session, onSave }: Props) {
+export default function ContentKpiComponent({ targets, channels, employees, session, onSave }: Props) {
   const [period, setPeriod] = useState(nowMonthKey);
   const [draft, setDraft] = useState<Record<string, string>>({});   // itemId → chuỗi số đang gõ
   const [notice, setNotice] = useState('');
@@ -84,7 +86,9 @@ export default function ContentKpiComponent({ targets, channels, session, onSave
   }));
   // BẢNG MỚI — mỗi kênh đang quản lý 1 dòng (TikTok AI tách chi tiết từng kênh).
   const chTargetOf = useMemo(() => channelTargetResolver(targets, period), [targets, period]);
-  const chRows = useMemo(() => channelKpiRows(channels), [channels]);
+  // Nhân sự team Content — kênh gộp Facebook Ads tách thành mỗi người một dòng.
+  const staffNames = useMemo(() => contentStaff(employees).map((e) => e.name), [employees]);
+  const chRows = useMemo(() => channelKpiRows(channels, [], staffNames), [channels, staffNames]);
   const chLines = chRows.map((row) => ({
     row,
     line: mkLine({ id: row.itemId, label: row.name, kind: 'channel', badge: row.badge, saved: chTargetOf(row.key) }),
@@ -264,7 +268,7 @@ export default function ContentKpiComponent({ targets, channels, session, onSave
               Chỉ tiêu doanh thu chi tiết theo từng kênh
             </h3>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              Lấy đúng danh sách kênh đang quản lý — TikTok AI tách riêng từng kênh. Thêm kênh mới là tự có dòng.
+              Lấy đúng danh sách kênh đang quản lý — TikTok AI tách riêng từng kênh, Facebook Ads tách theo từng người. Thêm kênh mới là tự có dòng.
             </p>
           </div>
           <span className="text-[11px] font-bold text-slate-400 tabular-nums">{chLines.length} kênh</span>
@@ -293,7 +297,12 @@ export default function ContentKpiComponent({ targets, channels, session, onSave
                     <React.Fragment key={g.key}>
                       <tr>
                         <td colSpan={4} className="px-4 py-1.5 bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-100">
-                          {g.label} · {items.length} kênh · {fmt(sub)} đ
+                          {g.label} · {items.length} {g.key === 'fb-ads' ? 'người' : 'kênh'} · {fmt(sub)} đ
+                          {g.key === 'fb-ads' && (
+                            <span className="ml-2 normal-case font-semibold text-slate-400 tracking-normal">
+                              — doanh thu Facebook Ads chia cho từng người theo đúng tỉ lệ KPI này; ai không chạy thì để 0.
+                            </span>
+                          )}
                         </td>
                       </tr>
                       {items.map((x) => renderChannelRow(x))}

@@ -18,7 +18,8 @@
  */
 import { AffiliateChannel, DailyReport, Employee } from '../types';
 import { norm } from './contentKpi';
-import { managerOf } from './channels';
+import { isRevenueBucket, managerOf } from './channels';
+import { allocateByWeights, fbAdsShareKey } from './contentChannelKpi';
 import { isContentStaff } from './staff';
 
 /** Khoá của dòng doanh thu không xác định được người phụ trách. */
@@ -65,19 +66,50 @@ export function revenueByEmployee(
   reports: DailyReport[],
   channels: AffiliateChannel[],
   weekOf: (r: DailyReport) => number,
+  /**
+   * Trọng số chia doanh thu kênh gộp Facebook Ads — khoá = tên người đã chuẩn
+   * hoá, giá trị = KPI Facebook Ads của họ (lấy từ fbAdsWeights() trong
+   * contentChannelKpi). Không truyền, hoặc chưa ai có KPI Facebook Ads → cả cục
+   * nằm ở dòng "Chưa gán", không gán bừa cho ai.
+   */
+  fbAdsShares?: Map<string, number>,
 ): Map<string, { total: number; weeks: number[] }> {
   const chByName = new Map(channels.map((c) => [c.name, c]));
   const out = new Map<string, { total: number; weeks: number[] }>();
+  /** Ô số của một người (tạo mới nếu chưa có). */
+  const cell = (key: string) => {
+    const c = out.get(key) ?? { total: 0, weeks: [0, 0, 0, 0] };
+    out.set(key, c);
+    return c;
+  };
+
+  // Doanh thu Facebook Ads gom riêng thành 1 cục để chia theo tỉ trọng KPI.
+  const fbPool = { total: 0, weeks: [0, 0, 0, 0] };
+
   reports.forEach((r) => {
     if (!r.revenue) return;
     const ch = chByName.get(r.channelName);
-    const key = ch ? norm(managerOf(ch)) : UNASSIGNED_KEY;
-    const cur = out.get(key) ?? { total: 0, weeks: [0, 0, 0, 0] };
-    cur.total += r.revenue;
     const wi = weekOf(r);
-    if (wi >= 0 && wi < 4) cur.weeks[wi] += r.revenue;
-    out.set(key, cur);
+    const box = ch && isRevenueBucket(ch) ? fbPool : cell(ch ? norm(managerOf(ch)) : UNASSIGNED_KEY);
+    box.total += r.revenue;
+    if (wi >= 0 && wi < 4) box.weeks[wi] += r.revenue;
   });
+
+  if (fbPool.total) {
+    const keys = [...(fbAdsShares?.keys() ?? [])];
+    const weights = keys.map((k) => fbAdsShares!.get(k) ?? 0);
+    if (weights.some((w) => w > 0)) {
+      // Chia tổng và chia từng tuần theo cùng tỉ trọng để cột T1–T4 khớp tổng.
+      allocateByWeights(fbPool.total, weights).forEach((v, i) => { cell(keys[i]).total += v; });
+      fbPool.weeks.forEach((w, wi) => {
+        allocateByWeights(w, weights).forEach((v, i) => { cell(keys[i]).weeks[wi] += v; });
+      });
+    } else {
+      const box = cell(UNASSIGNED_KEY);
+      box.total += fbPool.total;
+      fbPool.weeks.forEach((w, wi) => { box.weeks[wi] += w; });
+    }
+  }
   return out;
 }
 
@@ -92,13 +124,20 @@ export function revenueByEmployee(
 export function employeeTargetsFromChannels(
   channels: AffiliateChannel[],
   chTargetOf: (chKey: string) => number,
+  /** Nhân sự team Content — để cộng thêm phần KPI Facebook Ads chia riêng cho họ. */
+  staffNames: string[] = [],
 ): Map<string, number> {
   const out = new Map<string, number>();
-  channels.forEach((c) => {
-    const target = chTargetOf(norm(c.name));
+  const add = (key: string, target: number) => {
     if (!target) return;
-    const key = norm(managerOf(c));
     out.set(key, (out.get(key) ?? 0) + target);
+  };
+  // Kênh thường: chỉ tiêu về tay người phụ trách kênh.
+  channels.forEach((c) => {
+    if (isRevenueBucket(c)) return;                 // Facebook Ads tính riêng bên dưới
+    add(norm(managerOf(c)), chTargetOf(norm(c.name)));
   });
+  // Facebook Ads: mỗi người một phần KPI riêng (dòng 'facebookads:<tên>').
+  staffNames.forEach((n) => add(norm(n), chTargetOf(fbAdsShareKey(n))));
   return out;
 }

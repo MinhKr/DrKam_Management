@@ -4,6 +4,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { FacebookIcon } from './BrandIcons';
 import { MonthPicker } from './dashboardKit';
 import { targetResolver } from '../lib/contentKpi';
+import { fbAdsTotalTarget } from '../lib/contentChannelKpi';
 
 /**
  * Mục Facebook → Facebook Ads.
@@ -11,9 +12,10 @@ import { targetResolver } from '../lib/contentKpi';
  * nhập lại cùng ngày sẽ ghi đè (cloud upsert theo channel_id + ngày).
  * Doanh thu ở đây cộng vào dòng "Facebook Ads" tại Tổng quan.
  *
- * KPI tháng KHÔNG hardcode: lấy đúng hạng mục 'fbads' của tháng đang xem từ
- * màn "KPI team Content" (content_kpi_targets), tháng chưa thiết lập thì rơi
- * về số mặc định trong src/lib/contentKpi.ts.
+ * KPI tháng KHÔNG hardcode: ưu tiên BẢNG KPI MỚI — Facebook Ads ở đó chia cho
+ * từng người nên KPI của màn này = tổng các phần chia. Tháng chưa chia cho ai
+ * thì rơi về hạng mục 'fbads' của bảng cũ (hoặc số mặc định trong
+ * src/lib/contentKpi.ts) để báo cáo cũ không tụt về 0.
  */
 
 const CHANNEL_NAME = 'Facebook Ads';
@@ -67,7 +69,8 @@ export default function FacebookAdsComponent({ reports, session, kpiTargets, onA
 
   const monthTotal = adsReports.reduce((s, r) => s + r.revenue, 0);
   // KPI của ĐÚNG tháng đang xem — đổi ở màn "KPI team Content" là đây đổi theo.
-  const monthlyTarget = targetResolver(kpiTargets, monthKey)(KPI_ITEM_ID);
+  const fbAdsNewTarget = fbAdsTotalTarget(kpiTargets, monthKey);
+  const monthlyTarget = fbAdsNewTarget > 0 ? fbAdsNewTarget : targetResolver(kpiTargets, monthKey)(KPI_ITEM_ID);
   const pct = monthlyTarget > 0 ? Math.round((monthTotal / monthlyTarget) * 1000) / 10 : 0;
 
   const handleSave = () => {
