@@ -32,6 +32,7 @@ import {
   CHANNEL_GROUPS, ChannelKpiRow, channelKpiRows, channelTargetResolver,
 } from '../lib/contentChannelKpi';
 import { contentStaff } from '../lib/staff';
+import { contentEmployeeRoster, employeeTargetsFromChannels, UNASSIGNED_LABEL } from '../lib/contentEmployeeKpi';
 import { MonthPicker, shiftMonthKey } from './dashboardKit';
 
 interface Props {
@@ -93,6 +94,17 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
     row,
     line: mkLine({ id: row.itemId, label: row.name, kind: 'channel', badge: row.badge, saved: chTargetOf(row.key) }),
   }));
+
+  // TỔNG KPI THEO NGƯỜI — cộng ngay từ số ĐANG GÕ ở bảng trên (kể cả phần
+  // Facebook Ads), để vừa nhập là thấy chỉ tiêu tháng của từng nhân viên.
+  const chValueOf = (chKey: string) =>
+    chLines.find((x) => x.row.key === chKey)?.line.value ?? 0;
+  const empKpi = employeeTargetsFromChannels(channels, chValueOf, staffNames);
+  const empRows = contentEmployeeRoster(employees, channels)
+    .map((e) => ({ ...e, target: empKpi.get(e.key) ?? 0 }))
+    .sort((a, b) => b.target - a.target || a.name.localeCompare(b.name, 'vi'));
+  const empUnassigned = empKpi.get('') ?? 0;
+  const empSum = empRows.reduce((s2, r) => s2 + r.target, 0);
 
   const revLines = lines.filter((l) => l.kind === 'revenue');
   const vrLines = lines.filter((l) => l.kind === 'viewreach');
@@ -233,8 +245,8 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
         </div>
       )}
 
-      {/* 2 thẻ tổng: bảng MỚI theo kênh · bảng CŨ để đối chiếu */}
-      <div className="grid sm:grid-cols-2 gap-3">
+      {/* 3 thẻ tổng: bảng MỚI theo kênh · KPI đã về tay người · bảng CŨ để đối chiếu */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="bg-white rounded-2xl p-5 border-2 border-[#D32027]/20 soft-shadow">
           <p className="text-[11px] font-bold uppercase tracking-wider text-[#D32027]">
             Bảng mới · KPI theo kênh · {monthLabel(period)}
@@ -248,6 +260,20 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
             </p>
           )}
         </div>
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">KPI đã về tay nhân viên</p>
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums mt-1">{fmt(empSum)} đ</div>
+          <p className="text-[11px] text-slate-400 mt-1">
+            {empRows.filter((e) => e.target > 0).length}/{empRows.length} nhân viên có chỉ tiêu
+          </p>
+          {empUnassigned > 0 && (
+            <p className="text-[11px] text-amber-600 mt-2 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px]">warning</span>
+              Còn {fmt(empUnassigned)} đ ở kênh chưa gán người
+            </p>
+          )}
+        </div>
+
         <div className="bg-white rounded-2xl p-5 border border-slate-200/70 soft-shadow">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Bảng cũ · KPI theo hạng mục</p>
           <div className="text-3xl font-extrabold text-slate-500 tracking-tight tabular-nums mt-1">{fmt(totalTarget)} đ</div>
@@ -318,6 +344,67 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
               </tbody>
             </table>
           )}
+        </div>
+      </div>
+
+      {/* TỔNG KPI THEO NHÂN VIÊN — chỉ để xem, tự cộng từ bảng kênh phía trên */}
+      <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 font-display flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#D32027] text-[18px]">groups</span>
+              Tổng KPI doanh thu theo nhân viên
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Tự cộng từ bảng trên: các kênh người đó phụ trách + phần Facebook Ads của họ. Không nhập ở đây.
+            </p>
+          </div>
+          <span className="text-[11px] font-bold text-slate-400 tabular-nums">{fmt(empSum)} đ</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-separate border-spacing-0 min-w-[560px]">
+            <thead>
+              <tr>
+                <th className={TH_NAME}>Nhân viên</th>
+                <th className={TH}>KPI tháng (đ)</th>
+                <th className={TH}>≈ Mục tiêu tuần</th>
+              </tr>
+            </thead>
+            <tbody>
+              {empRows.map((e) => (
+                <tr key={e.key} className="group transition-colors hover:bg-rose-50/50">
+                  <td className={NAME_CELL}>
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0 inline-flex items-center justify-center w-9 h-5 rounded-md text-[9px] font-extrabold text-white bg-slate-800">
+                        {initialsOf(e.name)}
+                      </span>
+                      <span className="font-semibold text-slate-700 truncate" title={e.name}>{e.name}</span>
+                    </div>
+                  </td>
+                  <td className={`${CELL} text-right font-bold tabular-nums ${e.target ? 'text-slate-900' : 'text-slate-300'}`}>
+                    {e.target ? fmt(e.target) : '—'}
+                  </td>
+                  <td className={`${CELL} text-right tabular-nums text-slate-400 whitespace-nowrap`}>
+                    {e.target ? `${fmt(Math.round(e.target / 4))} đ` : <span className="text-slate-300">—</span>}
+                  </td>
+                </tr>
+              ))}
+              {empUnassigned > 0 && (
+                <tr className="bg-amber-50/60">
+                  <td className={`${NAME_BASE} bg-amber-50/60`}>
+                    <span className="text-amber-700 font-semibold">{UNASSIGNED_LABEL}</span>
+                  </td>
+                  <td className={`${CELL} text-right font-bold tabular-nums text-amber-700`}>{fmt(empUnassigned)}</td>
+                  <td className={`${CELL} text-right text-[10px] text-amber-600`}>Gán ở tab Quản lý kênh</td>
+                </tr>
+              )}
+              <tr className="bg-slate-50 font-bold">
+                <td className={`${NAME_BASE} bg-slate-50 text-slate-700`}>Tổng đã giao cho người</td>
+                <td className={`${CELL} text-right tabular-nums text-slate-900`}>{fmt(empSum)}</td>
+                <td className={`${CELL} text-right tabular-nums text-slate-400`}>{fmt(Math.round(empSum / 4))}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -410,6 +497,10 @@ const NAME_CELL = `${NAME_BASE} bg-white group-hover:bg-rose-50/50 max-w-[300px]
 const TH_BASE = 'text-[10px] font-bold uppercase tracking-wide text-slate-400 border-b border-slate-200';
 const TH = `px-3 py-2.5 text-right whitespace-nowrap bg-slate-50 ${TH_BASE}`;
 const TH_NAME = `${NAME_BASE} bg-slate-50 text-left ${TH_BASE}`;
+
+/** Chữ cái đầu của tên (2 từ cuối) — avatar chữ ở bảng tổng KPI theo nhân viên. */
+const initialsOf = (name: string) =>
+  name.trim().split(/\s+/).slice(-2).map((w) => w[0] ?? '').join('').toUpperCase() || '?';
 
 /** Chấm màu nền tảng — cùng ngôn ngữ hình ảnh với bảng ở Tổng quan. */
 function ItemBadge({ kind }: { kind: BadgeKind }) {
