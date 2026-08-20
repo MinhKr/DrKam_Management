@@ -7,10 +7,14 @@
 import React from 'react';
 import { Employee } from '../types';
 import { OrderDeadlineInfo, priorityStyle, statusStyle } from '../lib/orders';
+import { isContentStaff as isContentTeam } from '../lib/staff';
 
-/** Team Content = nhân sự KHÔNG thuộc Media / Ads Facebook (đúng quy ước Checklist Content). */
-export const isContentStaff = (e: Employee) =>
-  e.status === 'Hoạt động' && e.department !== 'Media' && e.department !== 'Ads Facebook';
+/**
+ * Team Content — dùng đúng quy tắc chung ở src/lib/staff.ts (bỏ Media, Ads
+ * Facebook, khối HR / Nhân sự - Hành chính và các tài khoản chức năng như
+ * "hr", "admin"). Giữ tài khoản role Admin vì order vẫn có thể giao cho họ.
+ */
+export const isContentStaff = (e: Employee) => isContentTeam(e, true);
 export const isMediaStaff = (e: Employee) => e.status === 'Hoạt động' && e.department === 'Media';
 export const isAdsStaff = (e: Employee) => e.status === 'Hoạt động' && e.department === 'Ads Facebook';
 
