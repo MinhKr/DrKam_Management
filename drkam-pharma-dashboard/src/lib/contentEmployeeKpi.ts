@@ -18,9 +18,8 @@
  */
 import { AffiliateChannel, DailyReport, Employee } from '../types';
 import { norm } from './contentKpi';
-import { isRevenueBucket, managerOf } from './channels';
-import { allocateByWeights, fbAdsShareKey, FB_ADS_KEY, revenueByChannel } from './contentChannelKpi';
-import { contentStaff } from './staff';
+import { managerOf } from './channels';
+import { revenueByChannel } from './contentChannelKpi';
 import { isContentStaff } from './staff';
 
 /** Khoá của dòng doanh thu không xác định được người phụ trách. */
@@ -67,50 +66,19 @@ export function revenueByEmployee(
   reports: DailyReport[],
   channels: AffiliateChannel[],
   weekOf: (r: DailyReport) => number,
-  /**
-   * Trọng số chia doanh thu kênh gộp Facebook Ads — khoá = tên người đã chuẩn
-   * hoá, giá trị = KPI Facebook Ads của họ (lấy từ fbAdsWeights() trong
-   * contentChannelKpi). Không truyền, hoặc chưa ai có KPI Facebook Ads → cả cục
-   * nằm ở dòng "Chưa gán", không gán bừa cho ai.
-   */
-  fbAdsShares?: Map<string, number>,
 ): Map<string, { total: number; weeks: number[] }> {
   const chByName = new Map(channels.map((c) => [c.name, c]));
   const out = new Map<string, { total: number; weeks: number[] }>();
-  /** Ô số của một người (tạo mới nếu chưa có). */
-  const cell = (key: string) => {
-    const c = out.get(key) ?? { total: 0, weeks: [0, 0, 0, 0] };
-    out.set(key, c);
-    return c;
-  };
-
-  // Doanh thu Facebook Ads gom riêng thành 1 cục để chia theo tỉ trọng KPI.
-  const fbPool = { total: 0, weeks: [0, 0, 0, 0] };
-
   reports.forEach((r) => {
     if (!r.revenue) return;
     const ch = chByName.get(r.channelName);
+    const key = ch ? norm(managerOf(ch)) : UNASSIGNED_KEY;
+    const cur = out.get(key) ?? { total: 0, weeks: [0, 0, 0, 0] };
+    cur.total += r.revenue;
     const wi = weekOf(r);
-    const box = ch && isRevenueBucket(ch) ? fbPool : cell(ch ? norm(managerOf(ch)) : UNASSIGNED_KEY);
-    box.total += r.revenue;
-    if (wi >= 0 && wi < 4) box.weeks[wi] += r.revenue;
+    if (wi >= 0 && wi < 4) cur.weeks[wi] += r.revenue;
+    out.set(key, cur);
   });
-
-  if (fbPool.total) {
-    const keys = [...(fbAdsShares?.keys() ?? [])];
-    const weights = keys.map((k) => fbAdsShares!.get(k) ?? 0);
-    if (weights.some((w) => w > 0)) {
-      // Chia tổng và chia từng tuần theo cùng tỉ trọng để cột T1–T4 khớp tổng.
-      allocateByWeights(fbPool.total, weights).forEach((v, i) => { cell(keys[i]).total += v; });
-      fbPool.weeks.forEach((w, wi) => {
-        allocateByWeights(w, weights).forEach((v, i) => { cell(keys[i]).weeks[wi] += v; });
-      });
-    } else {
-      const box = cell(UNASSIGNED_KEY);
-      box.total += fbPool.total;
-      fbPool.weeks.forEach((w, wi) => { box.weeks[wi] += w; });
-    }
-  }
   return out;
 }
 
@@ -125,21 +93,15 @@ export function revenueByEmployee(
 export function employeeTargetsFromChannels(
   channels: AffiliateChannel[],
   chTargetOf: (chKey: string) => number,
-  /** Nhân sự team Content — để cộng thêm phần KPI Facebook Ads chia riêng cho họ. */
-  staffNames: string[] = [],
 ): Map<string, number> {
   const out = new Map<string, number>();
-  const add = (key: string, target: number) => {
-    if (!target) return;
-    out.set(key, (out.get(key) ?? 0) + target);
-  };
-  // Kênh thường: chỉ tiêu về tay người phụ trách kênh.
   channels.forEach((c) => {
-    if (isRevenueBucket(c)) return;                 // Facebook Ads tính riêng bên dưới
-    add(norm(managerOf(c)), chTargetOf(norm(c.name)));
+    const target = chTargetOf(norm(c.name));
+    if (!target) return;
+    // Kênh chưa gán ai (kể cả kênh gộp Facebook Ads) rơi vào khoá '' — "Chưa gán".
+    const key = norm(managerOf(c));
+    out.set(key, (out.get(key) ?? 0) + target);
   });
-  // Facebook Ads: mỗi người một phần KPI riêng (dòng 'facebookads:<tên>').
-  staffNames.forEach((n) => add(norm(n), chTargetOf(fbAdsShareKey(n))));
   return out;
 }
 
@@ -153,11 +115,11 @@ export function employeeTargetsFromChannels(
 //  không thể lệch nhau.
 //
 //  Quy tắc số (chốt với user):
-//    • KPI của người   = tổng KPI các kênh họ phụ trách + phần Facebook Ads của họ
-//    • Thực hiện       = tổng doanh thu các kênh đó + phần Facebook Ads được chia
-//    • Facebook Ads    = 1 cục doanh thu chung, chia theo ĐÚNG tỉ lệ KPI mỗi người
-//  Kênh chưa gán người / doanh thu chưa chia được gom vào dòng "Chưa gán" để
-//  tổng các dòng luôn bằng tổng doanh thu team.
+//    • KPI của người   = tổng KPI các KÊNH họ phụ trách
+//    • Thực hiện       = tổng doanh thu các kênh đó
+//    • Facebook Ads là kênh GỘP, không thuộc về ai → nằm ở dòng "Chưa gán"
+//  Mọi kênh chưa gán người đều gom vào dòng "Chưa gán" nên tổng các dòng luôn
+//  bằng tổng doanh thu team.
 // ════════════════════════════════════════════════════════════════════════════
 
 /** 1 dòng chi tiết trong phần của một nhân viên. */
@@ -204,10 +166,9 @@ export function employeeBreakdown(
   // Có mặt sẵn mọi nhân sự để người chưa có kênh nào vẫn hiện (KPI 0).
   contentEmployeeRoster(employees, channels).forEach((e) => rowOf(e.name));
 
-  // ── Kênh thường ──
-  const seen = new Set<string>([FB_ADS_KEY]);
+  // ── Từng kênh (kênh gộp Facebook Ads cũng chỉ là một kênh chưa gán ai) ──
+  const seen = new Set<string>();
   channels.forEach((c) => {
-    if (isRevenueBucket(c)) return;                 // Facebook Ads xử lý riêng bên dưới
     const key = norm(c.name);
     seen.add(key);
     const got = actual.get(key);
@@ -218,27 +179,6 @@ export function employeeBreakdown(
       total: got?.total ?? 0, weeks: got?.weeks ?? [0, 0, 0, 0], kind: 'channel',
     });
   });
-
-  // ── Facebook Ads: chia cục doanh thu chung theo tỉ lệ KPI từng người ──
-  const pool = actual.get(FB_ADS_KEY) ?? { total: 0, weeks: [0, 0, 0, 0] };
-  const staffNames = contentStaff(employees).map((e) => e.name);
-  const weights = staffNames.map((n) => chTargetOf(fbAdsShareKey(n)));
-  const shareTotals = allocateByWeights(pool.total, weights);
-  const shareWeeks = pool.weeks.map((w) => allocateByWeights(w, weights));
-  staffNames.forEach((n, i) => {
-    if (!weights[i] && !shareTotals[i]) return;
-    rowOf(n).lines.push({
-      key: fbAdsShareKey(n), name: 'Facebook Ads (phần chia)', target: weights[i],
-      total: shareTotals[i], weeks: shareWeeks.map((w) => w[i]), kind: 'fbads',
-    });
-  });
-  const leftover = pool.total - shareTotals.reduce((s, v) => s + v, 0);
-  if (leftover > 0) {
-    unassigned.lines.push({
-      key: 'fbads-chuachia', name: 'Facebook Ads — chưa chia cho ai', target: 0, total: leftover,
-      weeks: pool.weeks.map((w, wi) => w - shareWeeks[wi].reduce((s, v) => s + v, 0)), kind: 'fbads',
-    });
-  }
 
   // ── Doanh thu của kênh không còn trong danh sách kênh → không được rơi mất ──
   actual.forEach((v, key) => {

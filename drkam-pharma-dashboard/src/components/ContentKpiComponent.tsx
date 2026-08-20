@@ -31,7 +31,6 @@ import { CONTENT_KPI_ITEMS, targetResolver, hasSavedTargets, BadgeKind } from '.
 import {
   CHANNEL_GROUPS, ChannelKpiRow, channelKpiRows, channelTargetResolver,
 } from '../lib/contentChannelKpi';
-import { contentStaff } from '../lib/staff';
 import { contentEmployeeRoster, employeeTargetsFromChannels, UNASSIGNED_LABEL } from '../lib/contentEmployeeKpi';
 import { MonthPicker, shiftMonthKey } from './dashboardKit';
 
@@ -87,9 +86,7 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
   }));
   // BẢNG MỚI — mỗi kênh đang quản lý 1 dòng (TikTok AI tách chi tiết từng kênh).
   const chTargetOf = useMemo(() => channelTargetResolver(targets, period), [targets, period]);
-  // Nhân sự team Content — kênh gộp Facebook Ads tách thành mỗi người một dòng.
-  const staffNames = useMemo(() => contentStaff(employees).map((e) => e.name), [employees]);
-  const chRows = useMemo(() => channelKpiRows(channels, [], staffNames), [channels, staffNames]);
+  const chRows = useMemo(() => channelKpiRows(channels), [channels]);
   const chLines = chRows.map((row) => ({
     row,
     line: mkLine({ id: row.itemId, label: row.name, kind: 'channel', badge: row.badge, saved: chTargetOf(row.key) }),
@@ -99,7 +96,7 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
   // Facebook Ads), để vừa nhập là thấy chỉ tiêu tháng của từng nhân viên.
   const chValueOf = (chKey: string) =>
     chLines.find((x) => x.row.key === chKey)?.line.value ?? 0;
-  const empKpi = employeeTargetsFromChannels(channels, chValueOf, staffNames);
+  const empKpi = employeeTargetsFromChannels(channels, chValueOf);
   const empRows = contentEmployeeRoster(employees, channels)
     .map((e) => ({ ...e, target: empKpi.get(e.key) ?? 0 }))
     .sort((a, b) => b.target - a.target || a.name.localeCompare(b.name, 'vi'));
@@ -294,7 +291,7 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
               Chỉ tiêu doanh thu chi tiết theo từng kênh
             </h3>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              Lấy đúng danh sách kênh đang quản lý — TikTok AI tách riêng từng kênh, Facebook Ads tách theo từng người. Thêm kênh mới là tự có dòng.
+              Lấy đúng danh sách kênh đang quản lý — TikTok AI tách riêng từng kênh. Thêm kênh mới là tự có dòng.
             </p>
           </div>
           <span className="text-[11px] font-bold text-slate-400 tabular-nums">{chLines.length} kênh</span>
@@ -323,10 +320,10 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
                     <React.Fragment key={g.key}>
                       <tr>
                         <td colSpan={4} className="px-4 py-1.5 bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-100">
-                          {g.label} · {items.length} {g.key === 'fb-ads' ? 'người' : 'kênh'} · {fmt(sub)} đ
+                          {g.label} · {items.length} kênh · {fmt(sub)} đ
                           {g.key === 'fb-ads' && (
                             <span className="ml-2 normal-case font-semibold text-slate-400 tracking-normal">
-                              — doanh thu Facebook Ads chia cho từng người theo đúng tỉ lệ KPI này; ai không chạy thì để 0.
+                              — KPI gộp cả team, không chia cho từng người.
                             </span>
                           )}
                         </td>
@@ -356,7 +353,7 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
               Tổng KPI doanh thu theo nhân viên
             </h3>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              Tự cộng từ bảng trên: các kênh người đó phụ trách + phần Facebook Ads của họ. Không nhập ở đây.
+              Tự cộng từ bảng trên: KPI các kênh người đó phụ trách. Facebook Ads là KPI gộp của team nên không tính cho ai.
             </p>
           </div>
           <span className="text-[11px] font-bold text-slate-400 tabular-nums">{fmt(empSum)} đ</span>

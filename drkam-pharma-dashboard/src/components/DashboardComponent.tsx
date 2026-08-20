@@ -19,10 +19,8 @@ import {
 import { employeeBreakdown, EmployeeRow } from '../lib/contentEmployeeKpi';
 // BẢNG MỚI — chi tiết từng kênh (migration 0020); bảng cũ bên dưới giữ nguyên để đối chiếu.
 import {
-  allocateByWeights, CHANNEL_GROUPS, channelKpiRows, channelTargetResolver, fbAdsWeights,
-  FB_ADS_KEY, revenueByChannel,
+  CHANNEL_GROUPS, channelKpiRows, channelTargetResolver, revenueByChannel,
 } from '../lib/contentChannelKpi';
-import { contentStaff } from '../lib/staff';
 
 interface DashboardComponentProps {
   reports: DailyReport[];
@@ -189,7 +187,6 @@ export default function DashboardComponent(props: DashboardComponentProps) {
         <TheoKenh
           reports={props.reports}
           channels={props.channels}
-          employees={props.employees}
           kpiTargets={props.kpiTargets}
           monthKey={monthKey}
           onMonthChange={setMonthKey}
@@ -716,7 +713,7 @@ function TheoNhanVien({ reports, channels, employees, kpiTargets, monthKey, onMo
         <div>
           <span className="text-sm font-bold text-slate-600">KPI &amp; tiến độ từng nhân viên · tháng {m}/{y}</span>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            KPI của một người = tổng chỉ tiêu các kênh họ phụ trách + phần Facebook Ads được chia · bấm vào dòng để xem chi tiết kênh.
+            KPI của một người = tổng chỉ tiêu các kênh họ phụ trách · bấm vào dòng để xem chi tiết từng kênh.
           </p>
         </div>
         <MonthPicker value={monthKey} onChange={onMonthChange} />
@@ -751,7 +748,7 @@ function TheoNhanVien({ reports, channels, employees, kpiTargets, monthKey, onMo
         )}
         <div className="px-5 py-2.5 border-t border-slate-100 text-[10px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
           <span>Vạch xám trên thanh = nhịp kỳ vọng đến ngày {dayNow}/{days}.</span>
-          <span>Doanh thu Facebook Ads là cục chung, chia cho từng người theo đúng tỉ lệ KPI của họ.</span>
+          <span>Facebook Ads là kênh gộp của cả team nên nằm ở dòng “Chưa gán người phụ trách”.</span>
           <span>Gán người phụ trách kênh ở tab <b>Quản lý kênh</b>; đặt KPI ở màn <b>KPI tháng — Team Content</b>.</span>
         </div>
       </div>
@@ -894,10 +891,9 @@ function EmployeeRowCard({ row, open, onToggle, ratio, daysLeft, monthKey, muted
 /* ════════════════════════════════════════════════════════════════
    TAB — THEO KÊNH (bảng KPI mới, chi tiết từng kênh)
    ════════════════════════════════════════════════════════════════ */
-function TheoKenh({ reports, channels, employees, kpiTargets, monthKey, onMonthChange }: {
+function TheoKenh({ reports, channels, kpiTargets, monthKey, onMonthChange }: {
   reports: DailyReport[];
   channels: AffiliateChannel[];
-  employees: Employee[];
   kpiTargets: ContentKpiTarget[];
   monthKey: string;
   onMonthChange: (v: string) => void;
@@ -917,7 +913,6 @@ function TheoKenh({ reports, channels, employees, kpiTargets, monthKey, onMonthC
       <ChannelDetailReport
         reports={monthReportsOf(reports, monthKey)}
         channels={channels}
-        employees={employees}
         kpiTargets={kpiTargets}
         monthKey={monthKey}
       />
@@ -937,47 +932,20 @@ function TheoKenh({ reports, channels, employees, kpiTargets, monthKey, onMonthC
    tắt doanh thu nhưng trong tháng vẫn có số thì vẫn hiện (nhóm "Khác")
    để không nuốt mất doanh thu đã nhập.
    ════════════════════════════════════════════════════════════════ */
-function ChannelDetailReport({ reports, channels, employees, kpiTargets, monthKey }: {
+function ChannelDetailReport({ reports, channels, kpiTargets, monthKey }: {
   reports: DailyReport[];          // báo cáo ĐÃ lọc theo tháng đang xem
   channels: AffiliateChannel[];
-  employees: Employee[];
   kpiTargets: ContentKpiTarget[];
   monthKey: string;
 }) {
   const weekLabel = (i: number) => weekLabelOf(monthKey, i);
   const targetOf = channelTargetResolver(kpiTargets, monthKey);
   const actual = revenueByChannel(reports, (r) => weekIndex(Number(r.date.split('/')[0])));
-  const staffNames = contentStaff(employees).map((e) => e.name);
-  const base = channelKpiRows(channels, reports.filter((r) => r.revenue).map((r) => r.channelName), staffNames)
-    .map((c) => ({ ...c, target: targetOf(c.key) }));
-
-  // Facebook Ads là 1 cục doanh thu chung → chia cho từng người theo tỉ lệ KPI.
-  const pool = actual.get(FB_ADS_KEY) ?? { total: 0, weeks: [0, 0, 0, 0] };
-  const shares = base.filter((r) => r.poolKey === FB_ADS_KEY);
-  const weights = shares.map((r) => r.target);
-  const shareTotals = allocateByWeights(pool.total, weights);
-  const shareWeeks = pool.weeks.map((w) => allocateByWeights(w, weights));
-  const shareIndex = new Map(shares.map((r, i) => [r.key, i]));
-
-  const rows = base.map((c) => {
-    if (c.poolKey === FB_ADS_KEY) {
-      const i = shareIndex.get(c.key)!;
-      return { ...c, total: shareTotals[i], weeks: shareWeeks.map((w) => w[i]) };
-    }
-    const got = actual.get(c.key);
-    return { ...c, total: got?.total ?? 0, weeks: got?.weeks ?? [0, 0, 0, 0] };
-  });
-
-  // Chưa ai có KPI Facebook Ads → doanh thu cục đó chưa chia được, hiện riêng
-  // một dòng để tổng bảng vẫn khớp doanh thu thực tế.
-  const leftover = pool.total - shareTotals.reduce((s, v) => s + v, 0);
-  if (leftover > 0) {
-    rows.push({
-      key: 'fbads-chuachia', itemId: '', name: 'Facebook Ads — chưa chia cho ai', manager: '',
-      group: 'fb-ads', badge: 'fb', poolKey: undefined, target: 0, total: leftover,
-      weeks: pool.weeks.map((w, wi) => w - shareWeeks[wi].reduce((s, v) => s + v, 0)),
+  const rows = channelKpiRows(channels, reports.filter((r) => r.revenue).map((r) => r.channelName))
+    .map((c) => {
+      const got = actual.get(c.key);
+      return { ...c, target: targetOf(c.key), total: got?.total ?? 0, weeks: got?.weeks ?? [0, 0, 0, 0] };
     });
-  }
 
   const grandTarget = rows.reduce((s, r) => s + r.target, 0);
   const grandTotal = rows.reduce((s, r) => s + r.total, 0);
@@ -1018,7 +986,7 @@ function ChannelDetailReport({ reports, channels, employees, kpiTargets, monthKe
                 <React.Fragment key={g.key}>
                   <tr>
                     <td colSpan={9} className="bg-slate-100/70 px-4 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-200">
-                      {g.label} · {items.length} {g.key === 'fb-ads' ? 'người' : 'kênh'} · {vndShort(sub)}{subTarget ? ` / ${vndShort(subTarget)}` : ''}
+                      {g.label} · {items.length} kênh · {vndShort(sub)}{subTarget ? ` / ${vndShort(subTarget)}` : ''}
                     </td>
                   </tr>
                   {items.map((r) => {
@@ -1059,10 +1027,7 @@ function ChannelDetailReport({ reports, channels, employees, kpiTargets, monthKe
         </table>
       </div>
       <div className="px-4 py-2 text-[10px] text-slate-400 border-t border-slate-100 flex flex-wrap gap-x-4 gap-y-1">
-        <span>
-          Mục tiêu lấy từ bảng KPI mới (màn “KPI tháng — Team Content”) · doanh số cộng theo ngày ·
-          Facebook Ads là doanh thu chung, chia cho từng người theo đúng tỉ lệ KPI của họ.
-        </span>
+        <span>Mục tiêu lấy từ bảng KPI mới (màn “KPI tháng — Team Content”) · doanh số cộng theo ngày.</span>
         {notSet > 0 && <span className="text-amber-600 font-semibold">{notSet} kênh chưa đặt chỉ tiêu tháng này</span>}
       </div>
     </div>
