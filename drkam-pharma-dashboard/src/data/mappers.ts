@@ -22,6 +22,7 @@ import {
   ContentMediaOrder,
   AdsContentOrder,
   ContentKpiTarget,
+  WebReport,
 } from '../types';
 
 type ChannelRow = Database['public']['Tables']['channels']['Row'];
@@ -39,6 +40,7 @@ type AdsFbTargetRow = Database['public']['Tables']['ads_fb_targets']['Row'];
 type ContentMediaOrderRow = Database['public']['Tables']['content_media_orders']['Row'];
 type AdsContentOrderRow = Database['public']['Tables']['ads_content_orders']['Row'];
 type ContentKpiTargetRow = Database['public']['Tables']['content_kpi_targets']['Row'];
+type WebReportRow = Database['public']['Tables']['web_reports']['Row'];
 
 /**
  * Quy ước nguồn doanh thu (source_platform) suy từ loại kênh của báo cáo.
@@ -837,4 +839,29 @@ export function contentKpiTargetToUpdate(
   if (patch.targetValue !== undefined) u.target_value = patch.targetValue || 0;
   if (patch.note !== undefined) u.note = patch.note ?? null;
   return u;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  BÁO CÁO WEB (web_reports, migration 0021)
+//  Chỉ có lượt truy cập nhập tay; số bài viết đếm từ checklist "SEO WEB".
+// ════════════════════════════════════════════════════════════════
+export function webReportFromRow(r: WebReportRow): WebReport {
+  return {
+    id: r.id,
+    date: toUiDate(r.report_date),
+    traffic: r.traffic ?? 0,
+    note: r.note ?? undefined,
+  };
+}
+
+export function webReportToInsert(
+  rep: WebReport,
+  createdBy: string,
+): Database['public']['Tables']['web_reports']['Insert'] {
+  return {
+    report_date: toDbDate(rep.date),
+    traffic: rep.traffic || 0,
+    note: rep.note ?? null,
+    created_by: createdBy,
+  };
 }

@@ -20,6 +20,7 @@ import {
   ContentMediaOrder,
   AdsContentOrder,
   ContentKpiTarget,
+  WebReport,
 } from '../types';
 import {
   channelFromRow,
@@ -58,6 +59,8 @@ import {
   adsContentOrderToUpdate,
   contentKpiTargetFromRow,
   contentKpiTargetToInsert,
+  webReportFromRow,
+  webReportToInsert,
 } from './mappers';
 
 function db() {
@@ -607,4 +610,34 @@ export async function saveContentKpiTargets(
     );
   }
   return data.map(contentKpiTargetFromRow);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  BÁO CÁO WEB (web_reports, migration 0021)
+//  1 ngày = 1 dòng: upsert theo report_date nên nhập lại cùng ngày là ghi đè,
+//  không sinh dòng trùng (giống cách nhập doanh thu Facebook Ads).
+// ════════════════════════════════════════════════════════════════
+export async function loadWebReports(): Promise<WebReport[]> {
+  const { data, error } = await db()
+    .from('web_reports')
+    .select('*')
+    .order('report_date', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(webReportFromRow);
+}
+
+export async function upsertWebReport(rep: WebReport, createdBy: string): Promise<WebReport> {
+  const { data, error } = await db()
+    .from('web_reports')
+    .upsert(webReportToInsert(rep, createdBy), { onConflict: 'report_date' })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return webReportFromRow(data);
+}
+
+export async function deleteWebReport(id: string): Promise<void> {
+  const { data, error } = await db().from('web_reports').delete().eq('id', id).select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error(NO_ROW_MSG);
 }

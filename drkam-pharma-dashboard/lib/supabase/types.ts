@@ -371,6 +371,24 @@ export interface Database {
         Relationships: [];
       };
       // ── KPI tháng team Content (migration 0015) ──
+      // ── BÁO CÁO WEB (migration 0021) ──
+      web_reports: {
+        Row: {
+          id: string;
+          report_date: string;
+          traffic: number;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['web_reports']['Row'],
+          'id' | 'created_at' | 'updated_at'
+        > & { id?: string; created_at?: string; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['web_reports']['Insert']>;
+        Relationships: [];
+      };
       content_kpi_targets: {
         Row: {
           id: string;
