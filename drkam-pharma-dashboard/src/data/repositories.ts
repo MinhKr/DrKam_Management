@@ -736,6 +736,24 @@ export async function saveContentKpiTargets(
   return data.map(contentKpiTargetFromRow);
 }
 
+/**
+ * DỌN KPI CỦA MỘT KÊNH VỪA BỊ XOÁ (quy tắc chốt với user 03/09/2026):
+ *   • Dòng chỉ tiêu = 0 (chưa đặt / không đặt)  → XOÁ luôn, mọi tháng.
+ *   • Dòng của THÁNG TƯƠNG LAI                  → XOÁ, vì kênh không còn thì
+ *                                                  tháng sau không còn chỉ tiêu.
+ *   • Dòng của THÁNG HIỆN TẠI và các tháng CŨ có số → GIỮ, để xoá kênh giữa
+ *     tháng vẫn còn chỉ tiêu mà đối chiếu; sang tháng sau tự hết vì không có
+ *     dòng nào cho tháng mới.
+ */
+export async function deleteChannelKpiTargets(itemId: string, currentPeriod: string): Promise<void> {
+  const { error } = await db()
+    .from('content_kpi_targets')
+    .delete()
+    .eq('item_id', itemId)
+    .or(`target_value.eq.0,period.gt.${currentPeriod}`);
+  if (error) throw error;
+}
+
 // ════════════════════════════════════════════════════════════════
 //  BÁO CÁO WEB (web_reports, migration 0021)
 //  1 ngày = 1 dòng: upsert theo report_date nên nhập lại cùng ngày là ghi đè,

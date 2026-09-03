@@ -704,6 +704,13 @@ export default function ChannelManagementComponent({
                     <span>Kênh biến mất khỏi danh sách nên doanh thu cũ sẽ nằm ở nhóm <b>“Khác”</b> và dòng <b>“Chưa gán người phụ trách”</b> ở Tổng quan.</span>
                   </li>
                   <li className="flex items-start gap-1.5">
+                    <span className="material-symbols-outlined text-[15px] text-slate-400 mt-px">flag</span>
+                    <span>
+                      KPI của kênh: chưa đặt (0đ) thì <b>xóa luôn</b>; đã đặt cho tháng này thì <b>giữ tới hết tháng</b>
+                      để đối chiếu, sang tháng sau tự hết.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
                     <span className="material-symbols-outlined text-[15px] text-slate-400 mt-px">lightbulb</span>
                     <span>Chỉ muốn ngừng dùng kênh? Sửa kênh và <b>tắt “Theo dõi doanh thu”</b> — kênh vẫn còn, số cũ vẫn thuộc về người phụ trách.</span>
                   </li>
@@ -718,7 +725,9 @@ export default function ChannelManagementComponent({
                 />
               </>
             ) : (
-              <p className="text-[12px] text-slate-500 mt-2">Kênh chưa có báo cáo nào nên xóa sẽ không mất dữ liệu.</p>
+              <p className="text-[12px] text-slate-500 mt-2">
+                Kênh chưa có báo cáo nào nên xóa sẽ không mất dữ liệu. KPI chưa đặt của kênh cũng được dọn luôn.
+              </p>
             )}
 
             <div className="pt-4 flex justify-end gap-2">

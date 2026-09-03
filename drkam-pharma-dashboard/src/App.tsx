@@ -56,6 +56,7 @@ import ContentKpiComponent from './components/ContentKpiComponent';
 import WebReportComponent from './components/WebReportComponent';
 import { countAlerts } from './lib/orders';
 import { isContentChannel } from './lib/channels';
+import { channelItemId } from './lib/contentChannelKpi';
 import { FacebookIcon, TikTokIcon } from './components/BrandIcons';
 
 import { isSupabaseConfigured } from '@/lib/supabase/client';
@@ -724,34 +725,53 @@ export default function App() {
     addAuditLog('Hệ thống', `Đăng ký kênh affiliate mới: "${newChan.name}" phân loại [${newChan.channelType}] do ${newChan.managerName} phụ trách.`);
   };
 
+  /**
+   * Xoá kênh.
+   *
+   * Sau migration 0022 (daily_reports.channel_id → ON DELETE SET NULL), xoá kênh
+   * KHÔNG làm mất báo cáo cũ: mỗi dòng báo cáo đã lưu sẵn channel_name nên Tổng
+   * quan vẫn cộng đủ doanh thu lịch sử (kênh hiện ở nhóm "Khác").
+   *
+   * KPI của kênh dọn theo quy tắc chốt với user 03/09/2026:
+   *   • chỉ tiêu 0 (chưa đặt / không đặt) → xoá luôn khỏi bảng KPI;
+   *   • tháng HIỆN TẠI đã có số           → giữ, để xoá kênh giữa tháng vẫn đối
+   *                                          chiếu được;
+   *   • tháng SAU                          → tự hết, vì không có dòng KPI nào
+   *                                          được tạo cho tháng mới.
+   */
   const handleDeleteChannel = async (id: string) => {
     const target = channels.find(c => c.id === id);
-    // Kênh đã có báo cáo thì KHÔNG xóa (DB cũng chặn bằng FK on delete restrict) —
-    // xóa là mất lịch sử doanh thu. Muốn ngừng dùng thì đặt trạng thái "Đã khóa".
-    if (target) {
-      const used = reports.filter(r => r.channelName === target.name).length;
-      if (used > 0) {
-        alert(`Kênh "${target.name}" đang có ${used} báo cáo nên không xóa được (giữ lịch sử doanh thu).\n`
-          + 'Hãy chuyển trạng thái kênh sang "Đã khóa" nếu không dùng nữa.');
-        return;
-      }
-    }
+    const now = new Date();
+    const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const kpiItemId = target ? channelItemId(target.name) : '';
+    /** Dòng KPI của kênh này còn được giữ lại không (dùng cho cả 2 chế độ). */
+    const keepKpi = (t: ContentKpiTarget) =>
+      !(t.itemId === kpiItemId && (t.targetValue <= 0 || t.period > period));
+
     if (cloud) {
       try {
         await repo.deleteChannel(id);
+        if (kpiItemId) await repo.deleteChannelKpiTargets(kpiItemId, period);
       } catch (e) {
         if (errCode(e) === '23503') {
-          alert(`Kênh "${target?.name ?? ''}" đang có báo cáo nên không xóa được. Hãy chuyển trạng thái sang "Đã khóa".`);
+          alert(`Không xóa được kênh "${target?.name ?? ''}" vì cơ sở dữ liệu đang chặn để giữ báo cáo cũ.
+`
+            + 'Hãy chạy migration 0022_keep_history_on_delete.sql rồi thử lại — sau đó xóa kênh không làm mất báo cáo.');
         } else {
           alert('Xóa kênh thất bại: ' + errMsg(e));
         }
         return;
       }
+      setContentKpiTargets(prev => prev.filter(keepKpi));
       setChannels(prev => prev.filter(c => c.id !== id));
-      if (target) addAuditLog('Hệ thống', `Hủy liên kết kênh affiliate: "${target.name}" khỏi hệ thống DrKam.`);
+      if (target) {
+        addAuditLog('Hệ thống',
+          `Xóa kênh "${target.name}" — báo cáo cũ giữ nguyên; KPI chưa đặt và KPI tháng sau được dọn.`);
+      }
       return;
     }
     setChannels(prev => prev.filter(c => c.id !== id));
+    setContentKpiTargets(prev => prev.filter(keepKpi));
     if (target) {
       setEmployees(prev => prev.map(emp => {
         if (emp.name === target.managerName) {
@@ -759,7 +779,7 @@ export default function App() {
         }
         return emp;
       }));
-      addAuditLog('Hệ thống', `Hủy liên kết kênh affiliate: "${target.name}" khỏi hệ thống phẫu DrKam.`);
+      addAuditLog('Hệ thống', `Xóa kênh "${target.name}" khỏi danh sách (báo cáo cũ giữ nguyên).`);
     }
   };
 
