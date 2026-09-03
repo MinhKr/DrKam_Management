@@ -1380,6 +1380,7 @@ export default function App() {
             channels={channels}
             employees={employees}
             checklists={checklists}
+            webReports={webReports}
             session={session}
             currentUserId={currentUserId}
             kpiTargets={contentKpiTargets}
@@ -1616,6 +1617,7 @@ export default function App() {
             channels={channels}
             employees={employees}
             checklists={checklists}
+            webReports={webReports}
             session={session}
             currentUserId={currentUserId}
             kpiTargets={contentKpiTargets}

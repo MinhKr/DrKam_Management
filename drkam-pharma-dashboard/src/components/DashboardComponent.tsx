@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DailyReport, AffiliateChannel, Employee, ChecklistItem, UserSession, ContentKpiTarget } from '../types';
+import { DailyReport, AffiliateChannel, Employee, ChecklistItem, UserSession, ContentKpiTarget, WebReport } from '../types';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
@@ -17,6 +17,10 @@ import {
 } from '../lib/contentKpi';
 // KPI doanh thu THEO NGƯỜI (migration 0019) — thực hiện suy từ kênh phụ trách.
 import { employeeBreakdown, EmployeeRow } from '../lib/contentEmployeeKpi';
+// Báo cáo web (migration 0021) — traffic nhập tay + số bài viết đếm từ Checklist.
+import {
+  seoPostsByDate, trafficByDate, webTargetResolver, WEB_POSTS_ID, WEB_TRAFFIC_ID,
+} from '../lib/webReport';
 // BẢNG MỚI — chi tiết từng kênh (migration 0020); bảng cũ bên dưới giữ nguyên để đối chiếu.
 import {
   CHANNEL_GROUPS, channelKpiRows, channelTargetResolver, revenueByChannel,
@@ -27,6 +31,7 @@ interface DashboardComponentProps {
   channels: AffiliateChannel[];
   employees: Employee[];
   checklists: ChecklistItem[];
+  webReports: WebReport[];
   session: UserSession;
   currentUserId: string | null;
   kpiTargets: ContentKpiTarget[];
@@ -65,6 +70,13 @@ const vndShort = (v: number) => {
   if (v >= 1_000) return Math.round(v / 1_000) + 'K';
   return String(Math.round(v));
 };
+/** Số nguyên rút gọn cho traffic / số bài (không phải tiền nên không dùng vndShort). */
+const intShort = (v: number) => {
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1).replace('.0', '') + 'tr';
+  if (v >= 10_000) return Math.round(v / 1_000) + 'K';
+  return new Intl.NumberFormat('vi-VN').format(Math.round(v));
+};
+
 const pct = (actual: number, target: number) => (target > 0 ? Math.round((actual / target) * 1000) / 10 : null);
 const pctColor = (p: number | null) =>
   p == null ? 'text-slate-400 bg-slate-50'
@@ -167,6 +179,8 @@ export default function DashboardComponent(props: DashboardComponentProps) {
         <BaoCaoChung
           reports={props.reports}
           channels={props.channels}
+          checklists={props.checklists}
+          webReports={props.webReports}
           kpiTargets={props.kpiTargets}
           monthKey={monthKey}
           onMonthChange={setMonthKey}
@@ -212,9 +226,11 @@ export default function DashboardComponent(props: DashboardComponentProps) {
 /* ════════════════════════════════════════════════════════════════
    TAB 1 — BÁO CÁO CHUNG (tháng: KPI + biểu đồ + bảng kênh × tuần)
    ════════════════════════════════════════════════════════════════ */
-function BaoCaoChung({ reports, channels, kpiTargets, monthKey, onMonthChange, onGotoView }: {
+function BaoCaoChung({ reports, channels, checklists, webReports, kpiTargets, monthKey, onMonthChange, onGotoView }: {
   reports: DailyReport[];
   channels: AffiliateChannel[];
+  checklists: ChecklistItem[];
+  webReports: WebReport[];
   kpiTargets: ContentKpiTarget[];
   monthKey: string;
   onMonthChange: (v: string) => void;
@@ -269,6 +285,21 @@ function BaoCaoChung({ reports, channels, kpiTargets, monthKey, onMonthChange, o
     v.total += reach;
   });
 
+  // WEB / SEO — traffic nhập tay (web_reports) + số bài viết đếm từ dòng "SEO WEB"
+  // của Checklist ngày; chỉ tiêu lấy ở màn KPI tháng (mục Chỉ tiêu Web / SEO).
+  const webTargetOf = webTargetResolver(kpiTargets, monthKey);
+  const webTrafficByDay = trafficByDate(webReports, monthKey);
+  const webPostsByDay = seoPostsByDate(checklists, monthKey);
+  const webRows = [
+    { id: WEB_TRAFFIC_ID, label: 'Lượt truy cập web', icon: 'trending_up', unit: 'lượt', byDay: webTrafficByDay },
+    { id: WEB_POSTS_ID, label: 'Số bài viết SEO WEB', icon: 'article', unit: 'bài', byDay: webPostsByDay },
+  ].map((w) => {
+    const weeks = [0, 0, 0, 0];
+    let total = 0;
+    w.byDay.forEach((v, d) => { weeks[weekIndex(Number(d.split('/')[0]))] += v; total += v; });
+    return { ...w, weeks, total, target: webTargetOf(w.id) };
+  });
+
   const revTikTok = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('tt')).reduce((s, r) => s + r.revenue, 0);
   const revFacebook = monthReports.filter((r) => catKeyOf(r, chMeta).startsWith('fb')).reduce((s, r) => s + r.revenue, 0);
   // KPI theo nền tảng: TikTok gồm badge 'tiktok' + 'koc' (KOC là kênh TikTok), Facebook gồm badge 'fb'.
@@ -319,6 +350,13 @@ function BaoCaoChung({ reports, channels, kpiTargets, monthKey, onMonthChange, o
           target={fbTarget} pctVal={pct(revFacebook, fbTarget)} />
         <KpiCard label="Hạng mục đạt KPI" value={`${reached}/${withTarget.length}`} icon="target" tone="green"
           sub={withTarget.length ? 'Số hạng mục ≥ 100% chỉ tiêu' : 'Chưa đặt chỉ tiêu'} subTone="muted" />
+      </div>
+
+      {/* Web / SEO — số nhanh; nhập & xem chi tiết ở mục "Báo cáo web" */}
+      <div className="grid grid-cols-2 gap-3">
+        {webRows.map((w) => (
+          <WebMiniCard key={w.id} label={w.label} icon={w.icon} unit={w.unit} total={w.total} target={w.target} />
+        ))}
       </div>
 
       {/* Biểu đồ 1 — Thực hiện vs Mục tiêu (thanh tiến độ tự vẽ) */}
@@ -435,11 +473,44 @@ function BaoCaoChung({ reports, channels, kpiTargets, monthKey, onMonthChange, o
                   </tr>
                 );
               })}
+
+              {/* Dải ngăn cách — WEB / SEO (nhập ở mục "Báo cáo web") */}
+              <tr>
+                <td colSpan={8} className="bg-violet-600 text-white px-4 py-2 text-[11px] font-bold uppercase tracking-wider">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[15px]">language</span>
+                    Web / SEO · traffic nhập tay theo ngày · số bài viết đếm từ Checklist
+                  </span>
+                </td>
+              </tr>
+              {webRows.map((w) => {
+                const wp = pct(w.total, w.target);
+                return (
+                  <tr key={w.id} className="hover:bg-violet-50/30">
+                    <td className="sticky left-0 z-10 bg-white px-4 py-2 font-semibold text-slate-700 border-b border-slate-50">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-[13px]">{w.icon}</span>
+                        </span>
+                        {w.label}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-400 border-b border-slate-50">{w.target ? intShort(w.target) : '—'}</td>
+                    <td className="px-3 py-2 text-right font-bold text-slate-900 border-b border-slate-50">{w.total ? intShort(w.total) : '—'}</td>
+                    <td className="px-3 py-2 text-center border-b border-slate-50">
+                      <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${pctColor(wp)}`}>{wp == null ? '—' : wp + '%'}</span>
+                    </td>
+                    {w.weeks.map((v, i) => (
+                      <td key={i} className="px-3 py-2 text-right text-slate-500 font-mono border-b border-slate-50">{v ? intShort(v) : '—'}</td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
         <div className="px-4 py-2 flex items-center gap-4 text-[10px] text-slate-400 border-t border-slate-100">
-          <span>T1 (1–7) · T2 (8–14) · T3 (15–21) · T4 (22–cuối tháng) · Doanh số cộng theo ngày · View/Reach cộng theo tuần</span>
+          <span>T1 (1–7) · T2 (8–14) · T3 (15–21) · T4 (22–cuối tháng) · Doanh số &amp; web cộng theo ngày · View/Reach cộng theo tuần</span>
           <button onClick={() => onGotoView('kenh')} className="ml-auto text-[#D32027] font-bold hover:underline flex items-center gap-1">
             Xem chi tiết theo kênh <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
           </button>
@@ -633,6 +704,37 @@ function ItemBadge({ kind }: { kind: BadgeKind }) {
     <span className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 text-[8px] font-extrabold tracking-tight">KOC</span>
   );
   return <span className="w-6 h-6 rounded-full bg-slate-300 shrink-0" />;
+}
+
+/** Thẻ số nhanh của Web / SEO — traffic và số bài viết đều là SỐ ĐẾM, không phải tiền. */
+function WebMiniCard({ label, icon, unit, total, target }: {
+  label: string; icon: string; unit: string; total: number; target: number;
+}) {
+  const p = pct(total, target);
+  return (
+    <div className="bg-white rounded-2xl p-4 border border-slate-200/70 soft-shadow flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+        <span className="w-8 h-8 rounded-lg flex items-center justify-center bg-violet-50 text-violet-600">
+          <span className="material-symbols-outlined text-[18px]">{icon}</span>
+        </span>
+      </div>
+      <div className="flex items-end justify-between gap-2">
+        <div className="text-lg font-extrabold text-slate-900 tracking-tight tabular-nums">
+          {new Intl.NumberFormat('vi-VN').format(total)} <span className="text-xs font-bold text-slate-400">{unit}</span>
+        </div>
+        <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-extrabold ${pctColor(p)}`}>
+          {p == null ? '—' : p + '%'}
+        </span>
+      </div>
+      <div className="text-[11px] font-semibold text-slate-400 tabular-nums">
+        / KPI {target ? new Intl.NumberFormat('vi-VN').format(target) : '—'} {unit}
+      </div>
+      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div className="h-full rounded-full bg-violet-600 transition-all duration-500" style={{ width: `${Math.min(p ?? 0, 100)}%` }} />
+      </div>
+    </div>
+  );
 }
 
 // ── Thẻ KPI ─────────────────────────────────────────────────────────────────
