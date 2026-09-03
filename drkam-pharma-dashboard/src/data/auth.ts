@@ -27,7 +27,15 @@ export async function getCurrentSession(): Promise<UserSession | null> {
     .single();
   const profile = data as ProfileRow | null;
 
-  if (profile?.status === 'Đã khóa') {
+  // Hồ sơ đã bị XOÁ khỏi profiles (nhân sự nghỉ hẳn) — tài khoản đăng nhập ở
+  // auth.users có thể vẫn còn, nhưng KHÔNG được coi là người của hệ thống nữa.
+  // Thiếu chốt này thì người đã xoá vẫn vào được app với vai trò 'Nhân viên'.
+  if (!profile) {
+    await client.auth.signOut();
+    throw new Error('Tài khoản không còn trong hệ thống (đã bị xóa). Vui lòng liên hệ Admin.');
+  }
+
+  if (profile.status === 'Đã khóa') {
     await client.auth.signOut();
     throw new Error('Tài khoản đã bị khóa. Vui lòng liên hệ Admin.');
   }

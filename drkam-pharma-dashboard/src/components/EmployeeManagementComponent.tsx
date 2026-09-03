@@ -455,8 +455,18 @@ export default function EmployeeManagementComponent({
                 </li>
               )}
               <li className="flex items-start gap-1.5">
+                <span className="material-symbols-outlined text-[15px] text-green-600 mt-px">lock</span>
+                <span>
+                  <b className="text-slate-700">Không đăng nhập vào app được nữa</b> — mất hồ sơ là bị chặn ngay ở màn đăng nhập
+                  và cũng không đọc được số liệu.
+                </span>
+              </li>
+              <li className="flex items-start gap-1.5">
                 <span className="material-symbols-outlined text-[15px] text-slate-400 mt-px">info</span>
-                <span>Tài khoản đăng nhập vẫn còn trên Supabase &gt; Authentication (trình duyệt không xoá được). Muốn chặn đăng nhập ngay thì dùng <b>Nghỉ việc</b>.</span>
+                <span>
+                  Tài khoản email vẫn nằm ở Supabase &gt; Authentication &gt; Users (trình duyệt không xoá được).
+                  Muốn dọn sạch thì xoá thủ công <b>{deleting.email}</b> ở đó.
+                </span>
               </li>
             </ul>
 
