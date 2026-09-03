@@ -23,7 +23,7 @@ import {
 } from '../lib/webReport';
 // BẢNG MỚI — chi tiết từng kênh (migration 0020); bảng cũ bên dưới giữ nguyên để đối chiếu.
 import {
-  CHANNEL_GROUPS, channelKpiRows, channelTargetResolver, revenueByChannel,
+  CHANNEL_GROUPS, channelKpiRows, channelTargetResolver, deletedChannelKpiRows, revenueByChannel,
 } from '../lib/contentChannelKpi';
 
 interface DashboardComponentProps {
@@ -1043,7 +1043,10 @@ function ChannelDetailReport({ reports, channels, kpiTargets, monthKey }: {
   const weekLabel = (i: number) => weekLabelOf(monthKey, i);
   const targetOf = channelTargetResolver(kpiTargets, monthKey);
   const actual = revenueByChannel(reports, (r) => weekIndex(Number(r.date.split('/')[0])));
-  const rows = channelKpiRows(channels, reports.filter((r) => r.revenue).map((r) => r.channelName))
+  const live = channelKpiRows(channels, reports.filter((r) => r.revenue).map((r) => r.channelName));
+  // Kênh đã xoá nhưng tháng đang xem vẫn có chỉ tiêu → vẫn phải hiện, nếu không
+  // tổng mục tiêu của tháng cũ sẽ hụt so với lúc đặt KPI.
+  const rows = [...live, ...deletedChannelKpiRows(kpiTargets, monthKey, new Set(live.map((r) => r.key)))]
     .map((c) => {
       const got = actual.get(c.key);
       return { ...c, target: targetOf(c.key), total: got?.total ?? 0, weeks: got?.weeks ?? [0, 0, 0, 0] };

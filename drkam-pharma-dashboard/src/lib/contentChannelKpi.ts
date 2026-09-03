@@ -115,6 +115,36 @@ export function channelKpiRows(
 }
 
 /**
+ * KPI của những KÊNH ĐÃ BỊ XOÁ (hoặc đổi tên) — chỉ tiêu vẫn nằm trong DB vì
+ * item_id khớp theo TÊN kênh, nhưng kênh không còn trong danh sách nên bảng KPI
+ * và Tổng quan sẽ không dựng được dòng cho nó.
+ *
+ * Nếu bỏ qua, con số đó BIẾN MẤT ÂM THẦM khỏi tổng KPI tháng — người dùng không
+ * hiểu vì sao tổng hụt. Vì vậy vẫn dựng dòng (nhóm "Khác", nhãn lấy từ tên đã
+ * lưu lúc đặt KPI) để nhìn thấy và sửa/đưa về 0 được.
+ *
+ * `existingKeys` là các kênh đã có dòng — tránh dựng trùng.
+ */
+export function deletedChannelKpiRows(
+  targets: ContentKpiTarget[],
+  period: string,
+  existingKeys: Set<string>,
+): ChannelKpiRow[] {
+  return targets
+    .filter((t) => t.period === period && isChannelItem(t.itemId) && t.targetValue > 0)
+    .map((t) => ({ key: t.itemId.slice(CH_ITEM_PREFIX.length), label: t.itemLabel }))
+    .filter((x) => x.key && !existingKeys.has(x.key))
+    .map((x) => ({
+      key: x.key,
+      itemId: CH_ITEM_PREFIX + x.key,
+      name: x.label || x.key,
+      manager: '',
+      group: 'other' as ChannelGroupKey,
+      badge: 'other' as BadgeKind,
+    }));
+}
+
+/**
  * Chỉ tiêu tháng của từng kênh ở BẢNG MỚI (0 = chưa đặt).
  * Không có số mặc định trong code: bảng mới là bảng đặt lại từ đầu, đoán bừa sẽ
  * làm % đạt sai — chưa đặt thì hiện "—".
