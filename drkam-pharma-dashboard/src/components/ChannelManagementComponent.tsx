@@ -20,14 +20,16 @@
 // ║  2 quy tắc dữ liệu (App.tsx thực thi, ở đây chỉ cảnh báo trước):         ║
 // ║   • ĐỔI TÊN kênh sẽ cập nhật luôn tên trong toàn bộ báo cáo cũ — vì app  ║
 // ║     nối báo cáo với kênh bằng TÊN, không phải id.                        ║
-// ║   • Kênh ĐÃ CÓ BÁO CÁO thì không xóa được (giữ lịch sử doanh thu).       ║
+// ║   • Kênh ĐÃ CÓ BÁO CÁO vẫn xóa được (migration 0022 đổi FK sang SET      ║
+// ║     NULL) — BÁO CÁO CŨ KHÔNG MẤT vì mỗi dòng đã lưu sẵn channel_name.    ║
+// ║     Nhưng phải gõ đúng tên kênh để xác nhận, vì doanh thu cũ sẽ rơi vào  ║
+// ║     nhóm "Khác" / "Chưa gán người phụ trách" ở Tổng quan.                ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 import React, { useMemo, useState } from 'react';
 import { AffiliateChannel, DailyReport, Employee, UserSession } from '../types';
 import { FacebookIcon, TikTokIcon } from './BrandIcons';
 import { isContentChannel, managerOf } from '../lib/channels';
 import { contentStaff } from '../lib/staff';
-import ConfirmDialog from './ConfirmDialog';
 
 interface ChannelManagementProps {
   channels: AffiliateChannel[];
@@ -114,6 +116,7 @@ export default function ChannelManagementComponent({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [deleting, setDeleting] = useState<AffiliateChannel | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [notification, setNotification] = useState('');
   const notify = (m: string) => { setNotification(m); setTimeout(() => setNotification(''), 4000); };
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -250,7 +253,10 @@ export default function ChannelManagementComponent({
   };
 
   const deletingReports = deleting ? reportCountOf(deleting) : 0;
-  const blockedDelete = deletingReports > 0;
+  // Kênh còn báo cáo vẫn xóa được nhưng phải gõ đúng tên để xác nhận (chốt với
+  // user 03/09/2026): dữ liệu cũ được giữ, song doanh thu sẽ mất người phụ trách.
+  const needTypedConfirm = deletingReports > 0;
+  const canConfirmDelete = !needTypedConfirm || deleteConfirmText.trim() === (deleting?.name ?? '').trim();
 
   return (
     <div className="flex flex-col gap-6 text-slate-800">
@@ -354,7 +360,7 @@ export default function ChannelManagementComponent({
             Hiển thị <span className="text-slate-900">{filtered.length}</span> / {managed.length} kênh
           </p>
           <p className="text-[11px] text-slate-400 italic hidden sm:block">
-            Kênh đã có báo cáo không xóa được — giữ lịch sử doanh thu.
+            Xóa kênh không làm mất báo cáo cũ — lịch sử doanh thu luôn được giữ.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -475,9 +481,11 @@ export default function ChannelManagementComponent({
                             <span className="material-symbols-outlined text-lg">edit</span>
                           </button>
                           <button
-                            onClick={() => setDeleting(c)}
+                            onClick={() => { setDeleting(c); setDeleteConfirmText(''); }}
                             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title={reportCountOf(c) > 0 ? 'Kênh đã có báo cáo — không xóa được' : 'Xóa kênh'}
+                            title={reportCountOf(c) > 0
+                              ? `Xóa kênh (còn ${reportCountOf(c)} báo cáo — báo cáo cũ vẫn được giữ)`
+                              : 'Xóa kênh'}
                           >
                             <span className="material-symbols-outlined text-lg">delete</span>
                           </button>
@@ -670,26 +678,70 @@ export default function ChannelManagementComponent({
       )}
 
       {/* ── XÓA KÊNH ── */}
-      <ConfirmDialog
-        open={!!deleting}
-        title={blockedDelete ? 'Không xóa được kênh' : 'Xóa kênh'}
-        message={
-          blockedDelete
-            ? `Kênh "${deleting?.name}" đang có ${deletingReports} báo cáo. Xóa sẽ mất lịch sử doanh thu nên hệ thống chặn lại.`
-            : `Xóa kênh "${deleting?.name}" khỏi hệ thống? Kênh chưa có báo cáo nào nên xóa sẽ không mất dữ liệu.`
-        }
-        confirmText={blockedDelete ? 'Đã hiểu' : 'Xóa kênh'}
-        cancelText="Đóng"
-        danger={!blockedDelete}
-        onConfirm={() => {
-          if (!blockedDelete && deleting) {
-            onDeleteChannel(deleting.id);
-            notify(`Đã xóa kênh "${deleting.name}".`);
-          }
-          setDeleting(null);
-        }}
-        onCancel={() => setDeleting(null)}
-      />
+      {deleting && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-100 p-6 animate-fade-in">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+                <span className="material-symbols-outlined">warning</span>
+              </span>
+              <h3 className="text-lg font-bold text-slate-900 font-display">Xóa kênh?</h3>
+            </div>
+
+            <p className="text-sm text-slate-600">
+              Xóa kênh <b>{deleting.name}</b> khỏi danh sách đang quản lý.
+            </p>
+
+            {needTypedConfirm ? (
+              <>
+                <ul className="mt-3 space-y-1.5 text-[12px] text-slate-500">
+                  <li className="flex items-start gap-1.5">
+                    <span className="material-symbols-outlined text-[15px] text-green-600 mt-px">check_circle</span>
+                    <span><b className="text-slate-700">{deletingReports} báo cáo cũ vẫn được giữ nguyên</b> — doanh thu lịch sử không mất, Tổng quan vẫn cộng đủ.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="material-symbols-outlined text-[15px] text-amber-600 mt-px">error</span>
+                    <span>Kênh biến mất khỏi danh sách nên doanh thu cũ sẽ nằm ở nhóm <b>“Khác”</b> và dòng <b>“Chưa gán người phụ trách”</b> ở Tổng quan.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="material-symbols-outlined text-[15px] text-slate-400 mt-px">lightbulb</span>
+                    <span>Chỉ muốn ngừng dùng kênh? Sửa kênh và <b>tắt “Theo dõi doanh thu”</b> — kênh vẫn còn, số cũ vẫn thuộc về người phụ trách.</span>
+                  </li>
+                </ul>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-4 mb-1">
+                  Gõ đúng tên kênh để xác nhận
+                </label>
+                <input
+                  type="text" value={deleteConfirmText} placeholder={deleting.name}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                />
+              </>
+            ) : (
+              <p className="text-[12px] text-slate-500 mt-2">Kênh chưa có báo cáo nào nên xóa sẽ không mất dữ liệu.</p>
+            )}
+
+            <div className="pt-4 flex justify-end gap-2">
+              <button onClick={() => setDeleting(null)}
+                className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                Hủy
+              </button>
+              <button
+                disabled={!canConfirmDelete}
+                onClick={() => {
+                  onDeleteChannel(deleting.id);
+                  notify(needTypedConfirm
+                    ? `Đã xóa kênh "${deleting.name}" — ${deletingReports} báo cáo cũ vẫn được giữ.`
+                    : `Đã xóa kênh "${deleting.name}".`);
+                  setDeleting(null);
+                }}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                Xóa kênh
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

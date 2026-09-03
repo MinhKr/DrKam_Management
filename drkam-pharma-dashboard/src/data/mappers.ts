@@ -254,6 +254,23 @@ export function employeeFromRow(r: ProfileRow): Employee {
   };
 }
 
+/**
+ * Patch hồ sơ nhân sự (UI) → cột DB. Chỉ map trường CÓ trong patch.
+ * KHÔNG map `email`: email là tài khoản đăng nhập nằm ở auth.users, đổi ở đây
+ * chỉ làm lệch dữ liệu — muốn đổi phải đổi trên Supabase Auth.
+ */
+export function employeeToUpdate(
+  p: Partial<Employee>,
+): Database['public']['Tables']['profiles']['Update'] {
+  const u: Database['public']['Tables']['profiles']['Update'] = {};
+  if (p.name !== undefined) u.name = p.name.trim();
+  if (p.role !== undefined) u.role = p.role;
+  if (p.department !== undefined) u.department = p.department.trim() || null;
+  if (p.status !== undefined) u.status = p.status;
+  if (p.avatar !== undefined) u.avatar = p.avatar || null;
+  return u;
+}
+
 // ── TARGETS ───────────────────────────────────────────────────
 export function targetFromRow(r: TargetRow): TeamTarget {
   return {

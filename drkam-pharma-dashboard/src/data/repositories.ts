@@ -3,7 +3,7 @@
  * Mọi hàm yêu cầu Supabase đã cấu hình (kiểm tra isSupabaseConfigured trước khi gọi).
  * Khi chưa cấu hình, createClient() trả null → các hàm này ném lỗi rõ ràng.
  */
-import { createClient } from '@/lib/supabase/client';
+import { createClient, createSignUpClient } from '@/lib/supabase/client';
 import {
   AffiliateChannel,
   DailyReport,
@@ -61,6 +61,7 @@ import {
   contentKpiTargetToInsert,
   webReportFromRow,
   webReportToInsert,
+  employeeToUpdate,
 } from './mappers';
 
 function db() {
@@ -214,9 +215,108 @@ export async function setEmployeeStatus(
   if (error) throw error;
 }
 
-export async function deleteEmployee(id: string): Promise<void> {
-  const { error } = await db().from('profiles').delete().eq('id', id);
+/**
+ * Sửa hồ sơ nhân sự (tên · vai trò · phòng ban · trạng thái).
+ * Email KHÔNG sửa được ở đây — đó là tài khoản đăng nhập trên Supabase Auth.
+ */
+export async function updateEmployee(id: string, patch: Partial<Employee>): Promise<Employee> {
+  const { data, error } = await db()
+    .from('profiles')
+    .update(employeeToUpdate(patch))
+    .eq('id', id)
+    .select('*')
+    .single();
   if (error) throw error;
+  return employeeFromRow(data);
+}
+
+/**
+ * XOÁ HẲN hồ sơ nhân sự.
+ *
+ * Sau migration 0022, mọi bảng dữ liệu trỏ tới profiles bằng ON DELETE SET NULL
+ * nên BÁO CÁO CŨ KHÔNG MẤT — dòng báo cáo giữ nguyên, chỉ rơi mất liên kết hồ
+ * sơ (tên người đã lưu sẵn trong từng dòng).
+ *
+ * Lưu ý: chỉ xoá dòng `profiles`. TÀI KHOẢN ĐĂNG NHẬP ở auth.users vẫn còn (xoá
+ * nó cần service_role, không làm được từ trình duyệt) — muốn chặn đăng nhập thì
+ * dùng "Nghỉ việc" (status = 'Đã khóa') hoặc xoá user trên Supabase Dashboard.
+ */
+export async function deleteEmployee(id: string): Promise<void> {
+  const { data, error } = await db().from('profiles').delete().eq('id', id).select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(
+      'không có dòng nào bị xoá — tài khoản của bạn không có quyền xoá nhân sự (chỉ Admin).',
+    );
+  }
+}
+
+/**
+ * TẠO TÀI KHOẢN NHÂN SỰ MỚI.
+ *
+ * `profiles.id` là khoá ngoại tới auth.users nên KHÔNG thể insert thẳng vào
+ * profiles: phải tạo user ở Supabase Auth trước. Ở đây dùng client phụ
+ * (persistSession=false) để signUp — phiên của Admin đang đăng nhập không bị
+ * thay. Trigger handle_new_user() sẽ tự sinh dòng profiles từ user metadata
+ * (name/role), sau đó ta cập nhật nốt phòng ban / avatar bằng quyền Admin.
+ *
+ * Trả về hồ sơ vừa tạo + cờ `needsEmailConfirm` = true khi project đang bật xác
+ * nhận email (người mới phải xác nhận mới đăng nhập được).
+ */
+export async function createEmployeeAccount(
+  emp: Omit<Employee, 'id' | 'channelCount'>,
+  password: string,
+): Promise<{ employee: Employee; needsEmailConfirm: boolean }> {
+  const signUpClient = createSignUpClient();
+  if (!signUpClient) throw new Error('Chưa cấu hình Supabase.');
+
+  const { data, error } = await signUpClient.auth.signUp({
+    email: emp.email.trim().toLowerCase(),
+    password,
+    options: { data: { name: emp.name.trim(), role: emp.role } },
+  });
+  if (error) {
+    const msg = /signups? not allowed|disabled/i.test(error.message)
+      ? 'Project đang TẮT đăng ký tài khoản. Bật Authentication > Sign In / Providers > Allow new users to sign up, '
+        + 'hoặc tạo tay ở Authentication > Users > Add user.'
+      : error.message;
+    throw new Error(msg);
+  }
+  const userId = data.user?.id;
+  if (!userId) throw new Error('Supabase không trả về tài khoản vừa tạo.');
+
+  // Trigger đã tạo dòng profiles — cập nhật thêm phòng ban/trạng thái/avatar.
+  // Nếu vì lý do nào đó chưa có dòng thì tự insert (Admin có quyền ghi profiles).
+  const patch = { name: emp.name, role: emp.role, department: emp.department, status: emp.status, avatar: emp.avatar };
+  const { data: updated, error: upErr } = await db()
+    .from('profiles')
+    .update(employeeToUpdate(patch))
+    .eq('id', userId)
+    .select('*');
+  if (upErr) throw upErr;
+
+  let row = updated?.[0];
+  if (!row) {
+    const { data: inserted, error: insErr } = await db()
+      .from('profiles')
+      .insert({
+        id: userId,
+        name: emp.name.trim(),
+        email: emp.email.trim().toLowerCase(),
+        role: emp.role,
+        department: emp.department || null,
+        status: emp.status,
+        avatar: emp.avatar || null,
+        channel_count: 0,
+        team_id: null,
+      })
+      .select('*')
+      .single();
+    if (insErr) throw insErr;
+    row = inserted;
+  }
+
+  return { employee: employeeFromRow(row), needsEmailConfirm: !data.session };
 }
 
 // ── TARGETS (KPI) ─────────────────────────────────────────────
