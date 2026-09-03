@@ -820,21 +820,43 @@ export default function App() {
     addAuditLog('Bảo mật', `Cập nhật trạng thái nhân viên "${emp.name}" chuyển sang: ${nextStatus}.`);
   };
 
+  /**
+   * Xoá hồ sơ nhân sự.
+   *
+   * TRƯỚC KHI XOÁ phải gỡ tên họ khỏi các KÊNH họ đang phụ trách: cột
+   * channels.manager_name là chữ (không phải khoá ngoại) nên xoá hồ sơ xong tên
+   * vẫn nằm đó, kênh trông như vẫn có người phụ trách. Gỡ ra thì kênh chuyển
+   * sang "Chưa gán" — Admin nhìn tab Quản lý kênh là biết phải giao lại cho ai.
+   * Kênh và toàn bộ báo cáo cũ KHÔNG bị xoá (migration 0022).
+   */
   const handleDeleteEmployee = async (empId: string) => {
     const target = employees.find(e => e.id === empId);
+    const owned = target
+      ? channels.filter(c => (c.managerName ?? '').trim() === target.name.trim())
+      : [];
     if (cloud) {
       try {
+        for (const c of owned) {
+          await repo.updateChannel(c.id, { managerName: '', managerAvatar: '' }, null);
+        }
         await repo.deleteEmployee(empId);
       } catch (e) {
         alert('Xóa nhân sự thất bại: ' + errMsg(e));
         return;
       }
     }
+    if (owned.length > 0) {
+      setChannels(prev => prev.map(c => (
+        owned.some(o => o.id === c.id) ? { ...c, managerName: '', managerAvatar: '' } : c
+      )));
+    }
     setEmployees(prev => prev.filter(e => e.id !== empId));
     if (target) {
       // Migration 0022: FK tới profiles đã chuyển sang ON DELETE SET NULL nên
       // báo cáo/checklist cũ của người này KHÔNG bị xoá theo.
-      addAuditLog('Bảo mật', `Xóa hồ sơ nhân sự "${target.name}" (báo cáo cũ giữ nguyên).`);
+      addAuditLog('Bảo mật',
+        `Xóa hồ sơ nhân sự "${target.name}" — báo cáo cũ giữ nguyên`
+        + (owned.length > 0 ? `, ${owned.length} kênh chuyển sang "Chưa gán".` : '.'));
     }
   };
 

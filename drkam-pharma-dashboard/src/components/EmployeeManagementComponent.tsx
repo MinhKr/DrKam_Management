@@ -450,7 +450,8 @@ export default function EmployeeManagementComponent({
                   <span className="material-symbols-outlined text-[15px] text-amber-600 mt-px">error</span>
                   <span>
                     Đang phụ trách <b className="text-slate-700">{channelNamesOf(deleting).length} kênh</b> ({channelNamesOf(deleting).join(', ')}).
-                    Nên giao lại cho người khác ở tab <b>Quản lý kênh</b> trước, nếu không KPI của các kênh này thành “chưa gán”.
+                    <b className="text-slate-700"> Kênh không bị xoá</b> — chỉ chuyển sang “Chưa gán”, doanh thu các kênh này
+                    sẽ nằm ở dòng “Chưa gán người phụ trách” cho tới khi Admin giao lại ở tab <b>Quản lý kênh</b>.
                   </span>
                 </li>
               )}
