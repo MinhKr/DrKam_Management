@@ -774,7 +774,7 @@ export default function App() {
   ) => {
     if (cloud) {
       try {
-        const { employee, needsEmailConfirm } = await repo.createEmployeeAccount(emp, password);
+        const { employee, needsEmailConfirm } = await repo.createEmployeeAccount(emp, password, currentUserId);
         setEmployees(prev => [...prev.filter(e => e.id !== employee.id), employee]);
         addAuditLog('Bảo mật', `Tạo tài khoản mới "${employee.name}" (${employee.role} · ${employee.department || 'chưa đặt phòng ban'}).`);
         alert(needsEmailConfirm

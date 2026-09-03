@@ -371,6 +371,21 @@ export interface Database {
         Relationships: [];
       };
       // ── KPI tháng team Content (migration 0015) ──
+      // ── LỜI MỜI TẠO TÀI KHOẢN (migration 0023) — chỉ Admin ghi ──
+      signup_invites: {
+        Row: {
+          email: string;
+          name: string;
+          role: 'Admin' | 'Leader' | 'Nhân viên';
+          department: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['signup_invites']['Row'], 'created_at'>
+          & { created_at?: string };
+        Update: Partial<Database['public']['Tables']['signup_invites']['Insert']>;
+        Relationships: [];
+      };
       // ── BÁO CÁO WEB (migration 0021) ──
       web_reports: {
         Row: {

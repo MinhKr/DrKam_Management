@@ -266,16 +266,40 @@ export async function deleteEmployee(id: string): Promise<void> {
 export async function createEmployeeAccount(
   emp: Omit<Employee, 'id' | 'channelCount'>,
   password: string,
+  createdBy?: string | null,
 ): Promise<{ employee: Employee; needsEmailConfirm: boolean }> {
   const signUpClient = createSignUpClient();
   if (!signUpClient) throw new Error('Chưa cấu hình Supabase.');
 
+  const email = emp.email.trim().toLowerCase();
+
+  // B1: ghi LỜI MỜI (migration 0023) — chỉ Admin ghi được. Trigger tạo hồ sơ sẽ
+  // đọc lời mời này để đặt đúng vai trò/phòng ban và mở khoá tài khoản. Không có
+  // lời mời thì người đăng ký chỉ ra một hồ sơ "Đã khóa" (chặn người lạ tự vào).
+  const { error: invErr } = await db()
+    .from('signup_invites')
+    .upsert({
+      email,
+      name: emp.name.trim(),
+      role: emp.role,
+      department: emp.department || null,
+      created_by: createdBy ?? null,
+    });
+  if (invErr) {
+    throw new Error(
+      'Không ghi được lời mời tạo tài khoản (chỉ Admin mới được): ' + invErr.message
+      + ' — nếu lỗi nói thiếu bảng signup_invites thì hãy chạy migration 0023.',
+    );
+  }
+
   const { data, error } = await signUpClient.auth.signUp({
-    email: emp.email.trim().toLowerCase(),
+    email,
     password,
-    options: { data: { name: emp.name.trim(), role: emp.role } },
+    options: { data: { name: emp.name.trim() } },
   });
   if (error) {
+    // Dọn lời mời để lần sau tạo lại không vướng dòng cũ.
+    await db().from('signup_invites').delete().eq('email', email);
     const msg = /signups? not allowed|disabled/i.test(error.message)
       ? 'Project đang TẮT đăng ký tài khoản. Bật Authentication > Sign In / Providers > Allow new users to sign up, '
         + 'hoặc tạo tay ở Authentication > Users > Add user.'
@@ -302,7 +326,7 @@ export async function createEmployeeAccount(
       .insert({
         id: userId,
         name: emp.name.trim(),
-        email: emp.email.trim().toLowerCase(),
+        email,
         role: emp.role,
         department: emp.department || null,
         status: emp.status,
