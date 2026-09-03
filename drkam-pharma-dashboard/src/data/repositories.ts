@@ -241,6 +241,35 @@ export async function updateEmployee(id: string, patch: Partial<Employee>): Prom
  * nó cần service_role, không làm được từ trình duyệt) — muốn chặn đăng nhập thì
  * dùng "Nghỉ việc" (status = 'Đã khóa') hoặc xoá user trên Supabase Dashboard.
  */
+/**
+ * XOÁ TRỌN VẸN nhân sự: gọi API route /api/admin/delete-user để xoá TÀI KHOẢN
+ * ĐĂNG NHẬP (auth.users) bằng service role — dòng profiles bị xoá kèm theo
+ * (khoá ngoại cascade), còn báo cáo cũ vẫn giữ (migration 0022).
+ *
+ * Trả về `authDeleted`:
+ *   • true  → đã xoá sạch, không phải làm gì thêm trên Supabase.
+ *   • false → server chưa cấu hình SUPABASE_SERVICE_ROLE_KEY; nơi gọi tự lùi về
+ *     deleteEmployee() (chỉ xoá hồ sơ) và nhắc Admin xoá tay tài khoản email.
+ */
+export async function deleteEmployeeAccount(id: string): Promise<{ authDeleted: boolean }> {
+  let res: Response;
+  try {
+    res = await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: id }),
+    });
+  } catch {
+    return { authDeleted: false };   // không gọi được server → dùng cách cũ
+  }
+  if (res.status === 501 || res.status === 404) return { authDeleted: false };
+  if (!res.ok) {
+    const msg = await res.json().catch(() => ({}));
+    throw new Error(msg?.error || `Xoá tài khoản đăng nhập thất bại (HTTP ${res.status}).`);
+  }
+  return { authDeleted: true };
+}
+
 export async function deleteEmployee(id: string): Promise<void> {
   const { data, error } = await db().from('profiles').delete().eq('id', id).select('id');
   if (error) throw error;

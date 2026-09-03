@@ -854,15 +854,25 @@ export default function App() {
     const owned = target
       ? channels.filter(c => (c.managerName ?? '').trim() === target.name.trim())
       : [];
+    let authDeleted = false;
     if (cloud) {
       try {
         for (const c of owned) {
           await repo.updateChannel(c.id, { managerName: '', managerAvatar: '' }, null);
         }
-        await repo.deleteEmployee(empId);
+        // Ưu tiên xoá TRỌN VẸN (cả tài khoản đăng nhập) qua API route dùng
+        // service role; server chưa cấu hình khoá đó thì lùi về xoá hồ sơ.
+        ({ authDeleted } = await repo.deleteEmployeeAccount(empId));
+        if (!authDeleted) await repo.deleteEmployee(empId);
       } catch (e) {
         alert('Xóa nhân sự thất bại: ' + errMsg(e));
         return;
+      }
+      if (!authDeleted && target) {
+        alert(`Đã xoá hồ sơ "${target.name}" và chặn mọi quyền truy cập.
+`
+          + `Riêng tài khoản email ${target.email} vẫn nằm ở Supabase > Authentication > Users `
+          + '(server chưa cấu hình SUPABASE_SERVICE_ROLE_KEY) — xoá tay ở đó nếu muốn dọn sạch.');
       }
     }
     if (owned.length > 0) {
@@ -875,7 +885,7 @@ export default function App() {
       // Migration 0022: FK tới profiles đã chuyển sang ON DELETE SET NULL nên
       // báo cáo/checklist cũ của người này KHÔNG bị xoá theo.
       addAuditLog('Bảo mật',
-        `Xóa hồ sơ nhân sự "${target.name}" — báo cáo cũ giữ nguyên`
+        `Xóa nhân sự "${target.name}"${authDeleted ? ' (cả tài khoản đăng nhập)' : ' (hồ sơ)'} — báo cáo cũ giữ nguyên`
         + (owned.length > 0 ? `, ${owned.length} kênh chuyển sang "Chưa gán".` : '.'));
     }
   };

@@ -463,10 +463,11 @@ export default function EmployeeManagementComponent({
                 </span>
               </li>
               <li className="flex items-start gap-1.5">
-                <span className="material-symbols-outlined text-[15px] text-slate-400 mt-px">info</span>
+                <span className="material-symbols-outlined text-[15px] text-slate-400 mt-px">delete_forever</span>
                 <span>
-                  Tài khoản email vẫn nằm ở Supabase &gt; Authentication &gt; Users (trình duyệt không xoá được).
-                  Muốn dọn sạch thì xoá thủ công <b>{deleting.email}</b> ở đó.
+                  Tài khoản đăng nhập <b>{deleting.email}</b> cũng được xoá luôn khỏi Supabase.
+                  Nếu server chưa cấu hình khoá quản trị, app sẽ báo lại để anh/chị xoá tay ở
+                  Authentication &gt; Users.
                 </span>
               </li>
             </ul>
