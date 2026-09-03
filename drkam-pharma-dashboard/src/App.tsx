@@ -29,7 +29,8 @@ import {
   AdsFbTarget,
   ContentMediaOrder,
   AdsContentOrder,
-  ContentKpiTarget
+  ContentKpiTarget,
+  WebReport
 } from './types';
 
 import LoginComponent from './components/LoginComponent';
@@ -52,6 +53,7 @@ import AdsFbKpiComponent from './components/AdsFbKpiComponent';
 import OrderMediaComponent from './components/OrderMediaComponent';
 import OrderAdsContentComponent from './components/OrderAdsContentComponent';
 import ContentKpiComponent from './components/ContentKpiComponent';
+import WebReportComponent from './components/WebReportComponent';
 import { countAlerts } from './lib/orders';
 import { isContentChannel } from './lib/channels';
 import { FacebookIcon, TikTokIcon } from './components/BrandIcons';
@@ -71,7 +73,7 @@ function migrateDemoData() {
       ['drkam_session', 'drkam_channels', 'drkam_reports', 'drkam_employees', 'drkam_targets', 'drkam_logs', 'drkam_fb_pages',
        'drkam_checklists', 'drkam_media_daily', 'drkam_media_logs', 'drkam_media_kpi', 'drkam_media_improvements',
        'drkam_adsfb_logs', 'drkam_adsfb_targets',
-       'drkam_orders_media', 'drkam_orders_adscontent', 'drkam_content_kpi']
+       'drkam_orders_media', 'drkam_orders_adscontent', 'drkam_content_kpi', 'drkam_web_reports']
         .forEach((k) => localStorage.removeItem(k));
       localStorage.setItem('drkam_seed_version', SEED_VERSION);
     }
@@ -224,6 +226,13 @@ export default function App() {
     catch { return []; }
   });
 
+  // ── BÁO CÁO WEB (migration 0021) ──
+  // Lượt truy cập nhập tay theo ngày; số bài viết đếm từ checklist "SEO WEB".
+  const [webReports, setWebReports] = useState<WebReport[]>(() => {
+    try { const stored = localStorage.getItem('drkam_web_reports'); return stored ? JSON.parse(stored) : []; }
+    catch { return []; }
+  });
+
   // Active view tab state ("overview", "tiktok-brand"/"tiktok-real-koc"/"tiktok-ai-koc", "fb-koc"/"fb-brand", "channels", "employees", "chi-tieu", "stats", "logs")
   // Mặc định luôn mở mục Tổng quan mỗi khi vào app.
   const [activeTab, setActiveTab] = useState('overview');
@@ -319,6 +328,12 @@ export default function App() {
     localStorage.setItem('drkam_content_kpi', JSON.stringify(contentKpiTargets));
   }, [contentKpiTargets, cloud]);
 
+  // Báo cáo web (demo: localStorage).
+  useEffect(() => {
+    if (cloud) return;
+    localStorage.setItem('drkam_web_reports', JSON.stringify(webReports));
+  }, [webReports, cloud]);
+
   // Chế độ DB thật: khôi phục phiên đăng nhập + nạp toàn bộ dữ liệu khi mở app.
   useEffect(() => {
     if (!cloud) return;
@@ -412,6 +427,13 @@ export default function App() {
           if (active) setContentKpiTargets(ckt);
         } catch (e) {
           console.warn('Tải KPI team Content thất bại (có thể chưa chạy migration 0015):', errMsg(e));
+        }
+        // Báo cáo web — tách riêng để chưa chạy migration 0021 thì các màn khác vẫn chạy.
+        try {
+          const web = await repo.loadWebReports();
+          if (active) setWebReports(web);
+        } catch (e) {
+          console.warn('Tải báo cáo web thất bại (có thể chưa chạy migration 0021):', errMsg(e));
         }
         // Nhật ký chỉ Admin xem được (RLS) — bỏ qua lỗi với vai trò khác.
         try {
@@ -1135,6 +1157,32 @@ export default function App() {
     addAuditLog('KPI Content', `Đặt KPI tháng ${period.slice(5)}/${period.slice(0, 4)} — tổng doanh thu ${total.toLocaleString('vi-VN')} đ · ${emp} nhân viên có chỉ tiêu.`);
   };
 
+  /**
+   * Lưu lượt truy cập web của MỘT NGÀY — upsert theo ngày (1 ngày 1 dòng) nên
+   * nhập lại cùng ngày là ghi đè, không sinh dòng trùng.
+   */
+  const handleSaveWebReport = async (rep_: WebReport) => {
+    let saved = rep_;
+    if (cloud) {
+      try {
+        if (!currentUserId) throw new Error('Chưa xác định người dùng đăng nhập.');
+        saved = await repo.upsertWebReport(rep_, currentUserId);
+      } catch (e) { alert('Lưu báo cáo web thất bại: ' + errMsg(e)); return; }
+    }
+    setWebReports(prev => [...prev.filter(r => r.date !== saved.date), saved]);
+    addAuditLog('Báo cáo web', `Lưu lượt truy cập ngày ${saved.date}: ${saved.traffic.toLocaleString('vi-VN')}.`);
+  };
+
+  const handleDeleteWebReport = async (id: string) => {
+    const target = webReports.find(r => r.id === id);
+    if (cloud) {
+      try { await repo.deleteWebReport(id); }
+      catch (e) { alert('Xóa báo cáo web thất bại: ' + errMsg(e)); return; }
+    }
+    setWebReports(prev => prev.filter(r => r.id !== id));
+    if (target) addAuditLog('Báo cáo web', `Xóa lượt truy cập ngày ${target.date}.`);
+  };
+
   // Cờ phân quyền hiển thị Media.
   const isMediaUser = session.department === 'Media' && session.role !== 'Admin';
   const isAdsFbUser = session.department === 'Ads Facebook' && session.role !== 'Admin';
@@ -1152,6 +1200,7 @@ export default function App() {
   const ORDER_TABS = [ORDER_MEDIA_TAB, ORDER_CONTENT_TAB];
   // KPI tháng team Content — team Content đặt chỉ tiêu cho các kênh ở Tổng quan.
   const CONTENT_KPI_TAB = 'content-kpi';
+  const WEB_REPORT_TAB = 'web-report';
   // Quản lý kênh — nơi duy nhất CRUD danh sách kênh của team Content.
   const CHANNELS_TAB = 'channels';
 
@@ -1165,7 +1214,7 @@ export default function App() {
 
     // TẠM KHOÁ mọi mục ngoài TikTok & Facebook cho MỌI vai trò (giữ nguyên code, chỉ chặn truy cập).
     // Mở lại sau: thêm tab vào ALLOWED_TABS hoặc bỏ chặn này.
-    const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'fb-ads', 'checklist', CONTENT_KPI_TAB, CHANNELS_TAB, ...ORDER_TABS];
+    const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'fb-ads', 'checklist', CONTENT_KPI_TAB, CHANNELS_TAB, WEB_REPORT_TAB, ...ORDER_TABS];
     // Admin xem thêm cả module Media + Ads Facebook.
     const allowed = isAdmin ? [...ALLOWED_TABS, ...MEDIA_TABS, ...ADS_FB_TABS, ...ADS_FB_ADMIN_TABS] : ALLOWED_TABS;
     if (!allowed.includes(tab)) return false;
@@ -1331,6 +1380,7 @@ export default function App() {
             channels={channels}
             employees={employees}
             checklists={checklists}
+            webReports={webReports}
             session={session}
             currentUserId={currentUserId}
             kpiTargets={contentKpiTargets}
@@ -1472,6 +1522,17 @@ export default function App() {
             onUpdateTarget={handleUpdateAdsFbTarget}
           />
         );
+      case WEB_REPORT_TAB:
+        return (
+          <WebReportComponent
+            webReports={webReports}
+            checklists={checklists}
+            kpiTargets={contentKpiTargets}
+            session={session}
+            onSaveReport={handleSaveWebReport}
+            onDeleteReport={handleDeleteWebReport}
+          />
+        );
       case CONTENT_KPI_TAB:
         return (
           <ContentKpiComponent
@@ -1556,6 +1617,7 @@ export default function App() {
             channels={channels}
             employees={employees}
             checklists={checklists}
+            webReports={webReports}
             session={session}
             currentUserId={currentUserId}
             kpiTargets={contentKpiTargets}
@@ -1887,6 +1949,23 @@ export default function App() {
                   <span>Checklist</span>
                 </div>
                 {!canAccessTab('checklist') && <span className="material-symbols-outlined text-[14px]">lock</span>}
+              </button>
+
+              {/* Báo cáo web — traffic nhập tay + số bài viết đếm từ Checklist. */}
+              <button
+                onClick={() => navigateToTab(WEB_REPORT_TAB)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                  activeTab === WEB_REPORT_TAB
+                    ? 'bg-rose-50 text-[#D32027]'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-lg flex items-center justify-center text-violet-600 bg-violet-50 flex-shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">language</span>
+                  </span>
+                  <span>Báo cáo web</span>
+                </div>
               </button>
 
               {/* KPI tháng team Content — đặt chỉ tiêu cho các kênh ở Tổng quan. */}

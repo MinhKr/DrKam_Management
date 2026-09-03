@@ -32,6 +32,7 @@ import {
   CHANNEL_GROUPS, ChannelKpiRow, channelKpiRows, channelTargetResolver,
 } from '../lib/contentChannelKpi';
 import { contentEmployeeRoster, employeeTargetsFromChannels, UNASSIGNED_LABEL } from '../lib/contentEmployeeKpi';
+import { WEB_KPI_ITEMS, webTargetResolver } from '../lib/webReport';
 import { MonthPicker, shiftMonthKey } from './dashboardKit';
 
 interface Props {
@@ -103,9 +104,17 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
   const empUnassigned = empKpi.get('') ?? 0;
   const empSum = empRows.reduce((s2, r) => s2 + r.target, 0);
 
+  // Chỉ tiêu Web / SEO (migration 0021) — lưu chung bảng KPI với kind='viewreach',
+  // item_id 'web-traffic' / 'web-posts' nên không đụng 2 hạng mục view/reach cũ.
+  const webSavedFor = useMemo(() => webTargetResolver(targets, period), [targets, period]);
+  const webLines = WEB_KPI_ITEMS.map((i) => ({
+    unit: i.unit,
+    line: mkLine({ id: i.id, label: i.label, kind: 'viewreach', badge: 'other', saved: webSavedFor(i.id) }),
+  }));
+
   const revLines = lines.filter((l) => l.kind === 'revenue');
   const vrLines = lines.filter((l) => l.kind === 'viewreach');
-  const allLines = [...lines, ...chLines.map((x) => x.line)];
+  const allLines = [...lines, ...chLines.map((x) => x.line), ...webLines.map((x) => x.line)];
   const dirtyLines = allLines.filter((l) => l.dirty);
 
   const chTotal = chLines.reduce((s, x) => s + x.line.value, 0);
@@ -133,7 +142,7 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
     }));
     onSave(period, rows);
     setDraft({});
-    flash(`Đã lưu KPI ${monthLabel(period)} — ${chLines.length} kênh (bảng mới) + ${lines.length} hạng mục bảng cũ.`);
+    flash(`Đã lưu KPI ${monthLabel(period)} — ${chLines.length} kênh (bảng mới) + ${webLines.length} hạng mục web + ${lines.length} hạng mục bảng cũ.`);
   };
 
   /** Lấy KPI tháng trước làm nháp — vẫn phải bấm "Lưu KPI" mới ghi. */
@@ -148,6 +157,7 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
     setDraft({
       ...Object.fromEntries(CONTENT_KPI_ITEMS.map((i) => [i.id, String(prevOf(i.id))])),
       ...Object.fromEntries(chRows.map((r) => [r.itemId, String(prevChOf(r.key))])),
+      ...Object.fromEntries(WEB_KPI_ITEMS.map((i) => [i.id, String(webTargetResolver(targets, prev)(i.id))])),
     });
   };
 
@@ -441,6 +451,31 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
                 <td className={`${CELL} text-right tabular-nums text-slate-400`}>{fmt(Math.round(totalTarget / 4))}</td>
               </tr>
             </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Chỉ tiêu Web / SEO — dùng ở màn "Báo cáo web" */}
+      <div className="bg-white rounded-2xl border border-slate-200/60 soft-shadow overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-100">
+          <h3 className="text-sm font-bold text-slate-800 font-display flex items-center gap-2">
+            <span className="material-symbols-outlined text-violet-600 text-[18px]">language</span>
+            Chỉ tiêu Web / SEO
+          </h3>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Chấm ở màn <b>Báo cáo web</b>: lượt truy cập nhập tay theo ngày · số bài viết đếm từ dòng “SEO WEB” của Checklist.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-separate border-spacing-0 min-w-[560px]">
+            <thead>
+              <tr>
+                <th className={TH_NAME}>Hạng mục</th>
+                <th className={TH}>KPI tháng</th>
+                <th className={TH}>≈ Mục tiêu tuần</th>
+              </tr>
+            </thead>
+            <tbody>{webLines.map((w) => renderRow(w.line, w.unit))}</tbody>
           </table>
         </div>
       </div>

@@ -249,6 +249,16 @@ export interface ContentKpiTarget {
   note?: string;
 }
 
+// Báo cáo web (SEO) — 1 dòng / 1 NGÀY (migration 0021).
+// Chỉ lưu lượt truy cập nhập tay; SỐ BÀI VIẾT không nằm ở đây mà đếm từ dòng
+// "SEO WEB" của checklist ngày (xem src/lib/webReport.ts).
+export interface WebReport {
+  id: string;
+  date: string;      // dd/mm/yyyy
+  traffic: number;   // lượt truy cập trong ngày
+  note?: string;
+}
+
 export type OrderPriority = 'CAO' | 'TRUNG BÌNH' | 'THẤP';
 export const ORDER_PRIORITIES: OrderPriority[] = ['CAO', 'TRUNG BÌNH', 'THẤP'];
 
