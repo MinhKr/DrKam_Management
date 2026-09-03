@@ -56,6 +56,7 @@ import ContentKpiComponent from './components/ContentKpiComponent';
 import WebReportComponent from './components/WebReportComponent';
 import { countAlerts } from './lib/orders';
 import { isContentChannel } from './lib/channels';
+import { channelItemId } from './lib/contentChannelKpi';
 import { FacebookIcon, TikTokIcon } from './components/BrandIcons';
 
 import { isSupabaseConfigured } from '@/lib/supabase/client';
@@ -724,34 +725,53 @@ export default function App() {
     addAuditLog('Hệ thống', `Đăng ký kênh affiliate mới: "${newChan.name}" phân loại [${newChan.channelType}] do ${newChan.managerName} phụ trách.`);
   };
 
+  /**
+   * Xoá kênh.
+   *
+   * Sau migration 0022 (daily_reports.channel_id → ON DELETE SET NULL), xoá kênh
+   * KHÔNG làm mất báo cáo cũ: mỗi dòng báo cáo đã lưu sẵn channel_name nên Tổng
+   * quan vẫn cộng đủ doanh thu lịch sử (kênh hiện ở nhóm "Khác").
+   *
+   * KPI của kênh dọn theo quy tắc chốt với user 03/09/2026:
+   *   • chỉ tiêu 0 (chưa đặt / không đặt) → xoá luôn khỏi bảng KPI;
+   *   • tháng HIỆN TẠI đã có số           → giữ, để xoá kênh giữa tháng vẫn đối
+   *                                          chiếu được;
+   *   • tháng SAU                          → tự hết, vì không có dòng KPI nào
+   *                                          được tạo cho tháng mới.
+   */
   const handleDeleteChannel = async (id: string) => {
     const target = channels.find(c => c.id === id);
-    // Kênh đã có báo cáo thì KHÔNG xóa (DB cũng chặn bằng FK on delete restrict) —
-    // xóa là mất lịch sử doanh thu. Muốn ngừng dùng thì đặt trạng thái "Đã khóa".
-    if (target) {
-      const used = reports.filter(r => r.channelName === target.name).length;
-      if (used > 0) {
-        alert(`Kênh "${target.name}" đang có ${used} báo cáo nên không xóa được (giữ lịch sử doanh thu).\n`
-          + 'Hãy chuyển trạng thái kênh sang "Đã khóa" nếu không dùng nữa.');
-        return;
-      }
-    }
+    const now = new Date();
+    const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const kpiItemId = target ? channelItemId(target.name) : '';
+    /** Dòng KPI của kênh này còn được giữ lại không (dùng cho cả 2 chế độ). */
+    const keepKpi = (t: ContentKpiTarget) =>
+      !(t.itemId === kpiItemId && (t.targetValue <= 0 || t.period > period));
+
     if (cloud) {
       try {
         await repo.deleteChannel(id);
+        if (kpiItemId) await repo.deleteChannelKpiTargets(kpiItemId, period);
       } catch (e) {
         if (errCode(e) === '23503') {
-          alert(`Kênh "${target?.name ?? ''}" đang có báo cáo nên không xóa được. Hãy chuyển trạng thái sang "Đã khóa".`);
+          alert(`Không xóa được kênh "${target?.name ?? ''}" vì cơ sở dữ liệu đang chặn để giữ báo cáo cũ.
+`
+            + 'Hãy chạy migration 0022_keep_history_on_delete.sql rồi thử lại — sau đó xóa kênh không làm mất báo cáo.');
         } else {
           alert('Xóa kênh thất bại: ' + errMsg(e));
         }
         return;
       }
+      setContentKpiTargets(prev => prev.filter(keepKpi));
       setChannels(prev => prev.filter(c => c.id !== id));
-      if (target) addAuditLog('Hệ thống', `Hủy liên kết kênh affiliate: "${target.name}" khỏi hệ thống DrKam.`);
+      if (target) {
+        addAuditLog('Hệ thống',
+          `Xóa kênh "${target.name}" — báo cáo cũ giữ nguyên; KPI chưa đặt và KPI tháng sau được dọn.`);
+      }
       return;
     }
     setChannels(prev => prev.filter(c => c.id !== id));
+    setContentKpiTargets(prev => prev.filter(keepKpi));
     if (target) {
       setEmployees(prev => prev.map(emp => {
         if (emp.name === target.managerName) {
@@ -759,20 +779,49 @@ export default function App() {
         }
         return emp;
       }));
-      addAuditLog('Hệ thống', `Hủy liên kết kênh affiliate: "${target.name}" khỏi hệ thống phẫu DrKam.`);
+      addAuditLog('Hệ thống', `Xóa kênh "${target.name}" khỏi danh sách (báo cáo cũ giữ nguyên).`);
     }
   };
 
   // Employees
-  const handleAddEmployee = (newEmp: Employee) => {
+  /**
+   * Thêm nhân sự — tạo LUÔN tài khoản đăng nhập (Supabase Auth) rồi cập nhật hồ
+   * sơ. Dùng client phụ không lưu phiên nên Admin đang đăng nhập không bị đá ra.
+   */
+  const handleCreateEmployee = async (
+    emp: Omit<Employee, 'id' | 'channelCount'>,
+    password: string,
+  ) => {
     if (cloud) {
-      // Tạo nhân sự mới cần tạo tài khoản qua Supabase Auth (quyền admin/service role),
-      // không thực hiện trực tiếp từ trình duyệt — sẽ bổ sung ở bước sau.
-      alert('Thêm nhân sự ở chế độ DB thật cần tạo tài khoản qua Supabase Auth (Admin). Tính năng này sẽ được bổ sung sau.');
+      try {
+        const { employee, needsEmailConfirm } = await repo.createEmployeeAccount(emp, password, currentUserId);
+        setEmployees(prev => [...prev.filter(e => e.id !== employee.id), employee]);
+        addAuditLog('Bảo mật', `Tạo tài khoản mới "${employee.name}" (${employee.role} · ${employee.department || 'chưa đặt phòng ban'}).`);
+        alert(needsEmailConfirm
+          ? `Đã tạo hồ sơ "${employee.name}", nhưng project đang BẬT xác nhận email nên tài khoản chưa đăng nhập được. `
+            + 'Vào Supabase > Authentication > Users để xác nhận (Confirm user), hoặc tắt xác nhận email.'
+          : `Đã tạo tài khoản "${employee.name}" — email ${employee.email}, mật khẩu tạm ${password}.`);
+      } catch (e) {
+        alert('Tạo tài khoản thất bại: ' + errMsg(e));
+      }
       return;
     }
-    setEmployees(prev => [...prev, newEmp]);
-    addAuditLog('Bảo mật', `Đã tuyển dụng/phân quyền tài khoản mới cho: "${newEmp.name}" (${newEmp.role})`);
+    // Chế độ demo (localStorage): chỉ thêm vào danh sách.
+    const local: Employee = { ...emp, id: 'emp_' + Date.now(), channelCount: 0 };
+    setEmployees(prev => [...prev, local]);
+    addAuditLog('Bảo mật', `Đã thêm tài khoản mới cho: "${local.name}" (${local.role})`);
+  };
+
+  /** Sửa hồ sơ nhân sự (tên · vai trò · phòng ban). Email thuộc Auth nên không đổi ở đây. */
+  const handleUpdateEmployee = async (id: string, patch: Partial<Employee>) => {
+    const before = employees.find(e => e.id === id);
+    let saved: Employee | null = null;
+    if (cloud) {
+      try { saved = await repo.updateEmployee(id, patch); }
+      catch (e) { alert('Cập nhật hồ sơ thất bại: ' + errMsg(e)); return; }
+    }
+    setEmployees(prev => prev.map(e => (e.id === id ? (saved ?? { ...e, ...patch }) : e)));
+    addAuditLog('Bảo mật', `Cập nhật hồ sơ nhân sự "${before?.name ?? id}".`);
   };
 
   const handleToggleEmployeeStatus = async (empId: string) => {
@@ -791,19 +840,53 @@ export default function App() {
     addAuditLog('Bảo mật', `Cập nhật trạng thái nhân viên "${emp.name}" chuyển sang: ${nextStatus}.`);
   };
 
+  /**
+   * Xoá hồ sơ nhân sự.
+   *
+   * TRƯỚC KHI XOÁ phải gỡ tên họ khỏi các KÊNH họ đang phụ trách: cột
+   * channels.manager_name là chữ (không phải khoá ngoại) nên xoá hồ sơ xong tên
+   * vẫn nằm đó, kênh trông như vẫn có người phụ trách. Gỡ ra thì kênh chuyển
+   * sang "Chưa gán" — Admin nhìn tab Quản lý kênh là biết phải giao lại cho ai.
+   * Kênh và toàn bộ báo cáo cũ KHÔNG bị xoá (migration 0022).
+   */
   const handleDeleteEmployee = async (empId: string) => {
     const target = employees.find(e => e.id === empId);
+    const owned = target
+      ? channels.filter(c => (c.managerName ?? '').trim() === target.name.trim())
+      : [];
+    let authDeleted = false;
     if (cloud) {
       try {
-        await repo.deleteEmployee(empId);
+        for (const c of owned) {
+          await repo.updateChannel(c.id, { managerName: '', managerAvatar: '' }, null);
+        }
+        // Ưu tiên xoá TRỌN VẸN (cả tài khoản đăng nhập) qua API route dùng
+        // service role; server chưa cấu hình khoá đó thì lùi về xoá hồ sơ.
+        ({ authDeleted } = await repo.deleteEmployeeAccount(empId));
+        if (!authDeleted) await repo.deleteEmployee(empId);
       } catch (e) {
         alert('Xóa nhân sự thất bại: ' + errMsg(e));
         return;
       }
+      if (!authDeleted && target) {
+        alert(`Đã xoá hồ sơ "${target.name}" và chặn mọi quyền truy cập.
+`
+          + `Riêng tài khoản email ${target.email} vẫn nằm ở Supabase > Authentication > Users `
+          + '(server chưa cấu hình SUPABASE_SERVICE_ROLE_KEY) — xoá tay ở đó nếu muốn dọn sạch.');
+      }
+    }
+    if (owned.length > 0) {
+      setChannels(prev => prev.map(c => (
+        owned.some(o => o.id === c.id) ? { ...c, managerName: '', managerAvatar: '' } : c
+      )));
     }
     setEmployees(prev => prev.filter(e => e.id !== empId));
     if (target) {
-      addAuditLog('Bảo mật', `Xóa vĩnh viễn quyền truy cập tài khoản của: "${target.name}".`);
+      // Migration 0022: FK tới profiles đã chuyển sang ON DELETE SET NULL nên
+      // báo cáo/checklist cũ của người này KHÔNG bị xoá theo.
+      addAuditLog('Bảo mật',
+        `Xóa nhân sự "${target.name}"${authDeleted ? ' (cả tài khoản đăng nhập)' : ' (hồ sơ)'} — báo cáo cũ giữ nguyên`
+        + (owned.length > 0 ? `, ${owned.length} kênh chuyển sang "Chưa gán".` : '.'));
     }
   };
 
@@ -1203,6 +1286,8 @@ export default function App() {
   const WEB_REPORT_TAB = 'web-report';
   // Quản lý kênh — nơi duy nhất CRUD danh sách kênh của team Content.
   const CHANNELS_TAB = 'channels';
+  // Quản lý nhân sự — CHỈ ADMIN (chốt với user 03/09/2026).
+  const EMPLOYEES_TAB = 'employees';
 
   // Role permissions checking helper
   const canAccessTab = (tab: string) => {
@@ -1216,7 +1301,9 @@ export default function App() {
     // Mở lại sau: thêm tab vào ALLOWED_TABS hoặc bỏ chặn này.
     const ALLOWED_TABS = ['overview', 'tiktok-brand', 'tiktok-real-koc', 'tiktok-ai-koc', 'fb-koc', 'fb-brand', 'fb-ads', 'checklist', CONTENT_KPI_TAB, CHANNELS_TAB, WEB_REPORT_TAB, ...ORDER_TABS];
     // Admin xem thêm cả module Media + Ads Facebook.
-    const allowed = isAdmin ? [...ALLOWED_TABS, ...MEDIA_TABS, ...ADS_FB_TABS, ...ADS_FB_ADMIN_TABS] : ALLOWED_TABS;
+    const allowed = isAdmin
+      ? [...ALLOWED_TABS, ...MEDIA_TABS, ...ADS_FB_TABS, ...ADS_FB_ADMIN_TABS, EMPLOYEES_TAB]
+      : ALLOWED_TABS;
     if (!allowed.includes(tab)) return false;
 
     // (Phân quyền theo vai trò trước đây — giữ lại để khôi phục khi mở khoá:)
@@ -1583,7 +1670,10 @@ export default function App() {
         return (
           <EmployeeManagementComponent
             employees={employees}
-            onAddEmployee={handleAddEmployee}
+            channels={channels}
+            session={session}
+            onCreateEmployee={handleCreateEmployee}
+            onUpdateEmployee={handleUpdateEmployee}
             onToggleEmployeeStatus={handleToggleEmployeeStatus}
             onDeleteEmployee={handleDeleteEmployee}
           />
@@ -1984,6 +2074,26 @@ export default function App() {
                   <span>KPI team Content</span>
                 </div>
               </button>
+
+              {/* Quản lý nhân sự — CHỈ ADMIN. */}
+              {isAdmin && (
+                <button
+                  onClick={() => navigateToTab(EMPLOYEES_TAB)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                    activeTab === EMPLOYEES_TAB
+                      ? 'bg-rose-50 text-[#D32027]'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-700 bg-slate-100 flex-shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">badge</span>
+                    </span>
+                    <span>Quản lý nhân sự</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400">{employees.length}</span>
+                </button>
+              )}
 
               {renderOrderNav()}
 

@@ -3,7 +3,7 @@
  * Mọi hàm yêu cầu Supabase đã cấu hình (kiểm tra isSupabaseConfigured trước khi gọi).
  * Khi chưa cấu hình, createClient() trả null → các hàm này ném lỗi rõ ràng.
  */
-import { createClient } from '@/lib/supabase/client';
+import { createClient, createSignUpClient } from '@/lib/supabase/client';
 import {
   AffiliateChannel,
   DailyReport,
@@ -61,6 +61,7 @@ import {
   contentKpiTargetToInsert,
   webReportFromRow,
   webReportToInsert,
+  employeeToUpdate,
 } from './mappers';
 
 function db() {
@@ -214,9 +215,161 @@ export async function setEmployeeStatus(
   if (error) throw error;
 }
 
-export async function deleteEmployee(id: string): Promise<void> {
-  const { error } = await db().from('profiles').delete().eq('id', id);
+/**
+ * Sửa hồ sơ nhân sự (tên · vai trò · phòng ban · trạng thái).
+ * Email KHÔNG sửa được ở đây — đó là tài khoản đăng nhập trên Supabase Auth.
+ */
+export async function updateEmployee(id: string, patch: Partial<Employee>): Promise<Employee> {
+  const { data, error } = await db()
+    .from('profiles')
+    .update(employeeToUpdate(patch))
+    .eq('id', id)
+    .select('*')
+    .single();
   if (error) throw error;
+  return employeeFromRow(data);
+}
+
+/**
+ * XOÁ HẲN hồ sơ nhân sự.
+ *
+ * Sau migration 0022, mọi bảng dữ liệu trỏ tới profiles bằng ON DELETE SET NULL
+ * nên BÁO CÁO CŨ KHÔNG MẤT — dòng báo cáo giữ nguyên, chỉ rơi mất liên kết hồ
+ * sơ (tên người đã lưu sẵn trong từng dòng).
+ *
+ * Lưu ý: chỉ xoá dòng `profiles`. TÀI KHOẢN ĐĂNG NHẬP ở auth.users vẫn còn (xoá
+ * nó cần service_role, không làm được từ trình duyệt) — muốn chặn đăng nhập thì
+ * dùng "Nghỉ việc" (status = 'Đã khóa') hoặc xoá user trên Supabase Dashboard.
+ */
+/**
+ * XOÁ TRỌN VẸN nhân sự: gọi API route /api/admin/delete-user để xoá TÀI KHOẢN
+ * ĐĂNG NHẬP (auth.users) bằng service role — dòng profiles bị xoá kèm theo
+ * (khoá ngoại cascade), còn báo cáo cũ vẫn giữ (migration 0022).
+ *
+ * Trả về `authDeleted`:
+ *   • true  → đã xoá sạch, không phải làm gì thêm trên Supabase.
+ *   • false → server chưa cấu hình SUPABASE_SERVICE_ROLE_KEY; nơi gọi tự lùi về
+ *     deleteEmployee() (chỉ xoá hồ sơ) và nhắc Admin xoá tay tài khoản email.
+ */
+export async function deleteEmployeeAccount(id: string): Promise<{ authDeleted: boolean }> {
+  let res: Response;
+  try {
+    res = await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: id }),
+    });
+  } catch {
+    return { authDeleted: false };   // không gọi được server → dùng cách cũ
+  }
+  if (res.status === 501 || res.status === 404) return { authDeleted: false };
+  if (!res.ok) {
+    const msg = await res.json().catch(() => ({}));
+    throw new Error(msg?.error || `Xoá tài khoản đăng nhập thất bại (HTTP ${res.status}).`);
+  }
+  return { authDeleted: true };
+}
+
+export async function deleteEmployee(id: string): Promise<void> {
+  const { data, error } = await db().from('profiles').delete().eq('id', id).select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(
+      'không có dòng nào bị xoá — tài khoản của bạn không có quyền xoá nhân sự (chỉ Admin).',
+    );
+  }
+}
+
+/**
+ * TẠO TÀI KHOẢN NHÂN SỰ MỚI.
+ *
+ * `profiles.id` là khoá ngoại tới auth.users nên KHÔNG thể insert thẳng vào
+ * profiles: phải tạo user ở Supabase Auth trước. Ở đây dùng client phụ
+ * (persistSession=false) để signUp — phiên của Admin đang đăng nhập không bị
+ * thay. Trigger handle_new_user() sẽ tự sinh dòng profiles từ user metadata
+ * (name/role), sau đó ta cập nhật nốt phòng ban / avatar bằng quyền Admin.
+ *
+ * Trả về hồ sơ vừa tạo + cờ `needsEmailConfirm` = true khi project đang bật xác
+ * nhận email (người mới phải xác nhận mới đăng nhập được).
+ */
+export async function createEmployeeAccount(
+  emp: Omit<Employee, 'id' | 'channelCount'>,
+  password: string,
+  createdBy?: string | null,
+): Promise<{ employee: Employee; needsEmailConfirm: boolean }> {
+  const signUpClient = createSignUpClient();
+  if (!signUpClient) throw new Error('Chưa cấu hình Supabase.');
+
+  const email = emp.email.trim().toLowerCase();
+
+  // B1: ghi LỜI MỜI (migration 0023) — chỉ Admin ghi được. Trigger tạo hồ sơ sẽ
+  // đọc lời mời này để đặt đúng vai trò/phòng ban và mở khoá tài khoản. Không có
+  // lời mời thì người đăng ký chỉ ra một hồ sơ "Đã khóa" (chặn người lạ tự vào).
+  const { error: invErr } = await db()
+    .from('signup_invites')
+    .upsert({
+      email,
+      name: emp.name.trim(),
+      role: emp.role,
+      department: emp.department || null,
+      created_by: createdBy ?? null,
+    });
+  if (invErr) {
+    throw new Error(
+      'Không ghi được lời mời tạo tài khoản (chỉ Admin mới được): ' + invErr.message
+      + ' — nếu lỗi nói thiếu bảng signup_invites thì hãy chạy migration 0023.',
+    );
+  }
+
+  const { data, error } = await signUpClient.auth.signUp({
+    email,
+    password,
+    options: { data: { name: emp.name.trim() } },
+  });
+  if (error) {
+    // Dọn lời mời để lần sau tạo lại không vướng dòng cũ.
+    await db().from('signup_invites').delete().eq('email', email);
+    const msg = /signups? not allowed|disabled/i.test(error.message)
+      ? 'Project đang TẮT đăng ký tài khoản. Bật Authentication > Sign In / Providers > Allow new users to sign up, '
+        + 'hoặc tạo tay ở Authentication > Users > Add user.'
+      : error.message;
+    throw new Error(msg);
+  }
+  const userId = data.user?.id;
+  if (!userId) throw new Error('Supabase không trả về tài khoản vừa tạo.');
+
+  // Trigger đã tạo dòng profiles — cập nhật thêm phòng ban/trạng thái/avatar.
+  // Nếu vì lý do nào đó chưa có dòng thì tự insert (Admin có quyền ghi profiles).
+  const patch = { name: emp.name, role: emp.role, department: emp.department, status: emp.status, avatar: emp.avatar };
+  const { data: updated, error: upErr } = await db()
+    .from('profiles')
+    .update(employeeToUpdate(patch))
+    .eq('id', userId)
+    .select('*');
+  if (upErr) throw upErr;
+
+  let row = updated?.[0];
+  if (!row) {
+    const { data: inserted, error: insErr } = await db()
+      .from('profiles')
+      .insert({
+        id: userId,
+        name: emp.name.trim(),
+        email,
+        role: emp.role,
+        department: emp.department || null,
+        status: emp.status,
+        avatar: emp.avatar || null,
+        channel_count: 0,
+        team_id: null,
+      })
+      .select('*')
+      .single();
+    if (insErr) throw insErr;
+    row = inserted;
+  }
+
+  return { employee: employeeFromRow(row), needsEmailConfirm: !data.session };
 }
 
 // ── TARGETS (KPI) ─────────────────────────────────────────────
@@ -610,6 +763,24 @@ export async function saveContentKpiTargets(
     );
   }
   return data.map(contentKpiTargetFromRow);
+}
+
+/**
+ * DỌN KPI CỦA MỘT KÊNH VỪA BỊ XOÁ (quy tắc chốt với user 03/09/2026):
+ *   • Dòng chỉ tiêu = 0 (chưa đặt / không đặt)  → XOÁ luôn, mọi tháng.
+ *   • Dòng của THÁNG TƯƠNG LAI                  → XOÁ, vì kênh không còn thì
+ *                                                  tháng sau không còn chỉ tiêu.
+ *   • Dòng của THÁNG HIỆN TẠI và các tháng CŨ có số → GIỮ, để xoá kênh giữa
+ *     tháng vẫn còn chỉ tiêu mà đối chiếu; sang tháng sau tự hết vì không có
+ *     dòng nào cho tháng mới.
+ */
+export async function deleteChannelKpiTargets(itemId: string, currentPeriod: string): Promise<void> {
+  const { error } = await db()
+    .from('content_kpi_targets')
+    .delete()
+    .eq('item_id', itemId)
+    .or(`target_value.eq.0,period.gt.${currentPeriod}`);
+  if (error) throw error;
 }
 
 // ════════════════════════════════════════════════════════════════

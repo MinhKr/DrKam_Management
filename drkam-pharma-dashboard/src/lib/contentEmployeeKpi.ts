@@ -183,7 +183,9 @@ export function employeeBreakdown(
   // ── Doanh thu của kênh không còn trong danh sách kênh → không được rơi mất ──
   actual.forEach((v, key) => {
     if (seen.has(key)) return;
-    unassigned.lines.push({ key, name: key, target: 0, total: v.total, weeks: v.weeks, kind: 'other' });
+    // Kênh đã xoá/đổi tên: chỉ tiêu vẫn tra được theo tên nên cộng luôn vào dòng
+    // "Chưa gán" — tổng mục tiêu không bị hụt so với bảng Theo kênh.
+    unassigned.lines.push({ key, name: key, target: chTargetOf(key), total: v.total, weeks: v.weeks, kind: 'other' });
   });
 
   const finish = (r: EmployeeRow) => {

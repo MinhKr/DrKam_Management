@@ -29,7 +29,7 @@ import { UserSession, ContentKpiTarget, AffiliateChannel, Employee } from '../ty
 import { CONTENT_KPI_ITEMS, targetResolver, hasSavedTargets, BadgeKind } from '../lib/contentKpi';
 // Bảng KPI MỚI — chi tiết từng kênh (migration 0020), chạy song song bảng cũ.
 import {
-  CHANNEL_GROUPS, ChannelKpiRow, channelKpiRows, channelTargetResolver,
+  CHANNEL_GROUPS, ChannelKpiRow, channelKpiRows, channelTargetResolver, deletedChannelKpiRows,
 } from '../lib/contentChannelKpi';
 import { contentEmployeeRoster, employeeTargetsFromChannels, UNASSIGNED_LABEL } from '../lib/contentEmployeeKpi';
 import { WEB_KPI_ITEMS, webTargetResolver } from '../lib/webReport';
@@ -87,7 +87,13 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
   }));
   // BẢNG MỚI — mỗi kênh đang quản lý 1 dòng (TikTok AI tách chi tiết từng kênh).
   const chTargetOf = useMemo(() => channelTargetResolver(targets, period), [targets, period]);
-  const chRows = useMemo(() => channelKpiRows(channels), [channels]);
+  const chRows = useMemo(() => {
+    const live = channelKpiRows(channels);
+    // Kênh đã xoá mà tháng này vẫn còn chỉ tiêu → giữ dòng để số không bốc hơi
+    // khỏi tổng; Admin sửa hoặc đưa về 0 rồi Lưu là dọn được.
+    const gone = deletedChannelKpiRows(targets, period, new Set(live.map((r) => r.key)));
+    return [...live, ...gone];
+  }, [channels, targets, period]);
   const chLines = chRows.map((row) => ({
     row,
     line: mkLine({ id: row.itemId, label: row.name, kind: 'channel', badge: row.badge, saved: chTargetOf(row.key) }),
@@ -331,6 +337,11 @@ export default function ContentKpiComponent({ targets, channels, employees, sess
                       <tr>
                         <td colSpan={4} className="px-4 py-1.5 bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-100">
                           {g.label} · {items.length} kênh · {fmt(sub)} đ
+                          {g.key === 'other' && (
+                            <span className="ml-2 normal-case font-semibold text-amber-600 tracking-normal">
+                              — kênh không còn trong danh sách (đã xoá/đổi tên): đưa về 0 nếu không dùng nữa.
+                            </span>
+                          )}
                           {g.key === 'fb-ads' && (
                             <span className="ml-2 normal-case font-semibold text-slate-400 tracking-normal">
                               — KPI gộp cả team, không chia cho từng người.
